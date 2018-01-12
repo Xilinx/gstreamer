@@ -151,6 +151,8 @@ extrapolate_stride (const GstVideoFormatInfo * finfo, gint plane, gint stride)
     case GST_VIDEO_FORMAT_NV16:
     case GST_VIDEO_FORMAT_NV61:
     case GST_VIDEO_FORMAT_NV24:
+    case GST_VIDEO_FORMAT_NV12_10LE32:
+    case GST_VIDEO_FORMAT_NV16_10LE32:
     case GST_VIDEO_FORMAT_P010_10LE:
     case GST_VIDEO_FORMAT_P010_10BE:
     case GST_VIDEO_FORMAT_P016_LE:
@@ -170,7 +172,7 @@ static gboolean
 gst_kms_allocator_memory_create (GstKMSAllocator * allocator,
     GstKMSMemory * kmsmem, GstVideoInfo * vinfo)
 {
-  gint i, ret, h;
+  gint i, ret, w, h;
   struct drm_mode_create_dumb arg = { 0, };
   guint32 fmt;
   gint num_planes = GST_VIDEO_INFO_N_PLANES (vinfo);
@@ -188,7 +190,8 @@ gst_kms_allocator_memory_create (GstKMSAllocator * allocator,
 
   fmt = gst_drm_format_from_video (GST_VIDEO_INFO_FORMAT (vinfo));
   arg.bpp = gst_drm_bpp_from_drm (fmt);
-  arg.width = GST_VIDEO_INFO_WIDTH (vinfo);
+  w = GST_VIDEO_INFO_WIDTH (vinfo);
+  arg.width = gst_drm_width_from_drm (fmt, w);
   h = GST_VIDEO_INFO_HEIGHT (vinfo);
   arg.height = gst_drm_height_from_drm (fmt, h);
 
