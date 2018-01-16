@@ -165,6 +165,8 @@ static const GstV4L2FormatDesc gst_v4l2_formats[] = {
   {V4L2_PIX_FMT_NV24, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_NV42, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_MM21, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_XV15, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_XV20, TRUE, GST_V4L2_RAW},
 
   /* Bayer formats - see http://www.siliconimaging.com/RGB%20Bayer.htm */
   {V4L2_PIX_FMT_SBGGR8, TRUE, GST_V4L2_RAW},
@@ -1101,6 +1103,8 @@ gst_v4l2_object_format_get_rank (const struct v4l2_fmtdesc *fmt)
     case V4L2_PIX_FMT_MM21:    /* NV12 Y 16x32, UV 16x16 tile */
     case V4L2_PIX_FMT_NV12M_8L128:
     case V4L2_PIX_FMT_NV12M_10BE_8L128:
+    case V4L2_PIX_FMT_XV15:
+    case V4L2_PIX_FMT_XV20:
       rank = YUV_ODD_BASE_RANK;
       break;
 
@@ -1431,6 +1435,12 @@ gst_v4l2_object_v4l2fourcc_to_video_format (guint32 fourcc)
     case V4L2_PIX_FMT_NV24:
       format = GST_VIDEO_FORMAT_NV24;
       break;
+    case V4L2_PIX_FMT_XV15:
+      format = GST_VIDEO_FORMAT_NV12_10LE32;
+      break;
+    case V4L2_PIX_FMT_XV20:
+      format = GST_VIDEO_FORMAT_NV16_10LE32;
+      break;
     default:
       format = GST_VIDEO_FORMAT_UNKNOWN;
       break;
@@ -1577,7 +1587,9 @@ gst_v4l2_object_v4l2fourcc_to_bare_struct (guint32 fourcc)
     case V4L2_PIX_FMT_UYVY:
     case V4L2_PIX_FMT_YUV422P:
     case V4L2_PIX_FMT_YVYU:
-    case V4L2_PIX_FMT_YUV411P:{
+    case V4L2_PIX_FMT_YUV411P:
+    case V4L2_PIX_FMT_XV15:
+    case V4L2_PIX_FMT_XV20:{
       GstVideoFormat format;
       format = gst_v4l2_object_v4l2fourcc_to_video_format (fourcc);
       if (format != GST_VIDEO_FORMAT_UNKNOWN)
@@ -1857,6 +1869,12 @@ gst_v4l2_object_get_caps_info (GstV4l2Object * v4l2object, GstCaps * caps,
         break;
       case GST_VIDEO_FORMAT_NV12_64Z32:
         fourcc_nc = V4L2_PIX_FMT_NV12MT;
+        break;
+      case GST_VIDEO_FORMAT_NV12_10LE32:
+        fourcc = V4L2_PIX_FMT_XV15;
+        break;
+      case GST_VIDEO_FORMAT_NV16_10LE32:
+        fourcc = V4L2_PIX_FMT_XV20;
         break;
       case GST_VIDEO_FORMAT_NV12_16L32S:
         fourcc_nc = V4L2_PIX_FMT_MM21;
