@@ -56,6 +56,10 @@ struct _GstOMXH264Enc
   gboolean constrained_intra_prediction;
   guint32 loop_filter_mode;
   guint8 ref_frames;
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  guint32 gop_length;
+#endif
+
 
   GList *headers;
 };

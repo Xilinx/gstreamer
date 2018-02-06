@@ -54,6 +54,7 @@ struct _GstOMXH265Enc
   guint32 b_frames;
   gboolean constrained_intra_prediction;
   guint32 loop_filter_mode;
+  guint32 gop_length;
 #endif
 
   GList *headers;
