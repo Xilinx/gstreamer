@@ -90,9 +90,42 @@ enum
 {
   PROP_0,
   PROP_INTERNAL_ENTROPY_BUFFERS,
+  PROP_LATENCY_MODE,
 };
 
 #define GST_OMX_VIDEO_DEC_INTERNAL_ENTROPY_BUFFERS_DEFAULT (5)
+#define GST_OMX_VIDEO_DEC_LATENCY_MODE_DEFAULT          (0xffffffff)
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#define GST_TYPE_OMX_VIDEO_DEC_LATENCY_MODE (gst_omx_video_dec_latency_mode_get_type ())
+typedef enum
+{
+  LATENCY_MODE_NORMAL,
+  LATENCY_MODE_REDUCED,
+  LATENCY_MODE_LOW,
+} GstOMXVideoDecLatencyMode;
+
+static GType
+gst_omx_video_dec_latency_mode_get_type (void)
+{
+  static GType qtype = 0;
+
+  if (qtype == 0) {
+    static const GEnumValue values[] = {
+      {LATENCY_MODE_NORMAL, "Normal mode", "normal"},
+      {LATENCY_MODE_REDUCED, "Low ref dpb mode(reduced-latency)",
+          "reduced-latency"},
+      {LATENCY_MODE_LOW, "Low latency mode", "low-latency"},
+
+      {0xffffffff, "Component Default", "default"},
+      {0, NULL, NULL}
+    };
+
+    qtype = g_enum_register_static ("GstOMXVideoDecLatencyMode", values);
+  }
+  return qtype;
+}
+#endif
 
 /* class initialization */
 
@@ -117,6 +150,9 @@ gst_omx_video_dec_set_property (GObject * object, guint prop_id,
     case PROP_INTERNAL_ENTROPY_BUFFERS:
       self->internal_entropy_buffers = g_value_get_uint (value);
       break;
+    case PROP_LATENCY_MODE:
+      self->latency_mode = g_value_get_enum (value);
+      break;
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -136,6 +172,9 @@ gst_omx_video_dec_get_property (GObject * object, guint prop_id,
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
     case PROP_INTERNAL_ENTROPY_BUFFERS:
       g_value_set_uint (value, self->internal_entropy_buffers);
+      break;
+    case PROP_LATENCY_MODE:
+      g_value_set_enum (value, self->latency_mode);
       break;
 #endif
     default:
@@ -164,6 +203,13 @@ gst_omx_video_dec_class_init (GstOMXVideoDecClass * klass)
           2, 16, GST_OMX_VIDEO_DEC_INTERNAL_ENTROPY_BUFFERS_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_LATENCY_MODE,
+      g_param_spec_enum ("latency-mode", "latency mode",
+          "Decoder latency mode",
+          GST_TYPE_OMX_VIDEO_DEC_LATENCY_MODE,
+          GST_OMX_VIDEO_DEC_LATENCY_MODE_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 #endif
 
   element_class->change_state =
@@ -209,6 +255,7 @@ gst_omx_video_dec_init (GstOMXVideoDec * self)
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   self->internal_entropy_buffers =
       GST_OMX_VIDEO_DEC_INTERNAL_ENTROPY_BUFFERS_DEFAULT;
+  self->latency_mode = GST_OMX_VIDEO_DEC_LATENCY_MODE_DEFAULT;
 #endif
 
   gst_video_decoder_set_packetized (GST_VIDEO_DECODER (self), TRUE);
@@ -253,6 +300,43 @@ set_zynqultrascaleplus_props (GstOMXVideoDec * self)
         (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoInternalEntropyBuffers,
         &entropy_buffers);
     CHECK_ERR ("internal entropy buffers");
+  }
+
+  if (self->latency_mode != GST_OMX_VIDEO_DEC_LATENCY_MODE_DEFAULT) {
+    OMX_ALG_VIDEO_PARAM_DECODED_PICTURE_BUFFER picture_buffer;
+    OMX_ALG_VIDEO_PARAM_SUBFRAME subframe_mode;
+    GST_OMX_INIT_STRUCT (&picture_buffer);
+    GST_OMX_INIT_STRUCT (&subframe_mode);
+    picture_buffer.nPortIndex = self->dec_in_port->index;
+    subframe_mode.nPortIndex = self->dec_in_port->index;
+
+    if (self->latency_mode == LATENCY_MODE_NORMAL) {
+      picture_buffer.eDecodedPictureBufferMode = OMX_ALG_DPB_NORMAL;
+      subframe_mode.bEnableSubframe = FALSE;
+    } else if (self->latency_mode == LATENCY_MODE_REDUCED) {
+      picture_buffer.eDecodedPictureBufferMode = OMX_ALG_DPB_NO_REORDERING;
+      subframe_mode.bEnableSubframe = FALSE;
+    } else {
+      /* Handle low latency mode */
+      picture_buffer.eDecodedPictureBufferMode = OMX_ALG_DPB_NO_REORDERING;
+      subframe_mode.bEnableSubframe = TRUE;
+    }
+
+    GST_DEBUG_OBJECT (self, "setting decoded picture buffer mode to %d",
+        picture_buffer.eDecodedPictureBufferMode);
+    err =
+        gst_omx_component_set_parameter (self->dec,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoDecodedPictureBuffer,
+        &picture_buffer);
+    CHECK_ERR ("decodec picture buffer");
+
+
+    GST_DEBUG_OBJECT (self, "setting sub frame mode to %d",
+        subframe_mode.bEnableSubframe);
+    err =
+        gst_omx_component_set_parameter (self->dec,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoSubframe, &subframe_mode);
+    CHECK_ERR ("sub frame mode");
   }
 
   return TRUE;
