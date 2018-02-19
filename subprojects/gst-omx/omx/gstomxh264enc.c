@@ -623,6 +623,7 @@ update_param_avc (GstOMXH264Enc * self,
   return TRUE;
 }
 
+#ifndef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
 static gboolean
 set_avc_intra_period (GstOMXH264Enc * self)
 {
@@ -677,6 +678,37 @@ set_avc_intra_period (GstOMXH264Enc * self)
 
   return TRUE;
 }
+#else
+static gboolean
+set_alg_decoding_refresh (GstOMXH264Enc * self)
+{
+  OMX_ALG_VIDEO_PARAM_INSTANTANEOUS_DECODING_REFRESH config_idr;
+  OMX_ERRORTYPE err;
+
+  GST_OMX_INIT_STRUCT (&config_idr);
+  config_idr.nPortIndex = GST_OMX_VIDEO_ENC (self)->enc_out_port->index;
+
+  GST_DEBUG_OBJECT (self, "nIDRPeriod:%u",
+      (guint) config_idr.nInstantaneousDecodingRefreshFrequency);
+
+  config_idr.nInstantaneousDecodingRefreshFrequency = self->periodicty_idr;
+
+  err =
+      gst_omx_component_set_parameter (GST_OMX_VIDEO_ENC (self)->enc,
+      (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoInstantaneousDecodingRefresh,
+      &config_idr);
+  if (err != OMX_ErrorNone) {
+    GST_ERROR_OBJECT (self,
+        "can't set OMX_IndexConfigVideoAVCIntraPeriod %s (0x%08x)",
+        gst_omx_error_to_string (err), err);
+    return FALSE;
+  }
+
+  return TRUE;
+}
+#endif
+
+
 
 #ifdef USE_OMX_TARGET_RPI
 static gboolean
@@ -771,6 +803,7 @@ gst_omx_h264_enc_set_format (GstOMXVideoEnc * enc, GstOMXPort * port,
   }
 #endif
 
+#ifndef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   /* Configure GOP pattern */
   if (self->periodicty_idr !=
       GST_OMX_H264_VIDEO_ENC_PERIODICITY_OF_IDR_FRAMES_DEFAULT
@@ -778,6 +811,13 @@ gst_omx_h264_enc_set_format (GstOMXVideoEnc * enc, GstOMXPort * port,
       GST_OMX_H264_VIDEO_ENC_INTERVAL_OF_CODING_INTRA_FRAMES_DEFAULT) {
     set_avc_intra_period (self);
   }
+#else
+  if (self->periodicty_idr !=
+      GST_OMX_H264_VIDEO_ENC_PERIODICITY_OF_IDR_FRAMES_DEFAULT) {
+    set_alg_decoding_refresh (self);
+  }
+#endif
+
 #ifdef USE_OMX_TARGET_RPI
   /* The Pi uses a specific OMX setting to configure the intra period */
 
