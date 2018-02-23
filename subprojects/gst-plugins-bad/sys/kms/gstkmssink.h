@@ -53,11 +53,13 @@ struct _GstKMSSink {
   gint conn_id;
   gint crtc_id;
   gint plane_id;
+  gint primary_plane_id;
   guint pipe;
 
   /* crtc data */
   guint16 hdisplay, vdisplay;
   guint32 buffer_id;
+  gpointer saved_crtc;
 
   /* capabilities */
   gboolean has_prime_import;
@@ -69,6 +71,7 @@ struct _GstKMSSink {
   gboolean restore_crtc;
   GstStructure *connector_props;
   GstStructure *plane_props;
+  gboolean fullscreen_enabled;
 
   GstVideoInfo vinfo;
   GstCaps *allowed_caps;
@@ -84,7 +87,6 @@ struct _GstKMSSink {
   gchar *bus_id;
 
   guint32 mm_width, mm_height;
-  gpointer saved_crtc;
   GstPoll *poll;
   GstPollFD pollfd;
 
