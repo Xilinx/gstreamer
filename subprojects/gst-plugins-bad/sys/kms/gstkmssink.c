@@ -97,6 +97,7 @@ enum
   PROP_DISPLAY_HEIGHT,
   PROP_CONNECTOR_PROPS,
   PROP_PLANE_PROPS,
+  PROP_FULLSCREEN_OVERLAY,
   PROP_N,
 };
 
@@ -194,12 +195,60 @@ kms_open (gchar ** driver)
   return fd;
 }
 
+static guint64
+find_property_value_for_plane_id (gint fd, gint plane_id, const char *prop_name)
+{
+  drmModeObjectPropertiesPtr properties;
+  drmModePropertyPtr property;
+  gint i, prop_value;
+
+  properties = drmModeObjectGetProperties (fd, plane_id, DRM_MODE_OBJECT_PLANE);
+
+  for (i = 0; i < properties->count_props; i++) {
+    property = drmModeGetProperty (fd, properties->props[i]);
+    if (!strcmp (property->name, prop_name)) {
+      prop_value = properties->prop_values[i];
+      drmModeFreeProperty (property);
+      drmModeFreeObjectProperties (properties);
+      return prop_value;
+    }
+  }
+
+  return -1;
+
+}
+
+static gboolean
+set_property_value_for_plane_id (gint fd, gint plane_id, const char *prop_name,
+    gint value)
+{
+  drmModeObjectPropertiesPtr properties;
+  drmModePropertyPtr property;
+  gint i;
+  gboolean ret = FALSE;
+
+  properties = drmModeObjectGetProperties (fd, plane_id, DRM_MODE_OBJECT_PLANE);
+
+  for (i = 0; i < properties->count_props && !ret; i++) {
+    property = drmModeGetProperty (fd, properties->props[i]);
+    if (!strcmp (property->name, prop_name)) {
+      drmModeObjectSetProperty (fd, plane_id,
+          DRM_MODE_OBJECT_PLANE, property->prop_id, value);
+      ret = TRUE;
+    }
+    drmModeFreeProperty (property);
+  }
+
+  drmModeFreeObjectProperties (properties);
+  return ret;
+}
+
 static drmModePlane *
 find_plane_for_crtc (int fd, drmModeRes * res, drmModePlaneRes * pres,
-    int crtc_id)
+    int crtc_id, int plane_type)
 {
   drmModePlane *plane;
-  int i, pipe;
+  int i, pipe, value;
 
   plane = NULL;
   pipe = -1;
@@ -215,6 +264,11 @@ find_plane_for_crtc (int fd, drmModeRes * res, drmModePlaneRes * pres,
 
   for (i = 0; i < pres->count_planes; i++) {
     plane = drmModeGetPlane (fd, pres->planes[i]);
+    if (plane_type != -1) {
+      value = find_property_value_for_plane_id (fd, pres->planes[i], "type");
+      if (plane_type != value)
+        continue;
+    }
     if (plane->possible_crtcs & (1 << pipe))
       return plane;
     drmModeFreePlane (plane);
@@ -468,6 +522,17 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
 
   err = drmModeSetCrtc (self->fd, self->crtc_id, fb_id, 0, 0,
       (uint32_t *) & self->conn_id, 1, mode);
+
+/* Since at the moment force-modesetting doesn't support scaling */
+  GST_OBJECT_LOCK (self);
+  self->hdisplay = mode->hdisplay;
+  self->vdisplay = mode->vdisplay;
+  self->render_rect.x = 0;
+  self->render_rect.y = 0;
+  self->render_rect.w = self->hdisplay;
+  self->render_rect.h = self->vdisplay;
+  GST_OBJECT_UNLOCK (self);
+
   if (err)
     goto modesetting_failed;
 
@@ -504,6 +569,50 @@ modesetting_failed:
     GST_ERROR_OBJECT (self, "Failed to set mode: %s", g_strerror (errno));
     goto bail;
   }
+}
+
+static gboolean
+set_crtc_to_plane_size (GstKMSSink * self, GstVideoInfo * vinfo)
+{
+  const gchar *format;
+  gint j;
+  GstVideoFormat fmt;
+  gboolean ret;
+  GstVideoInfo vinfo_crtc;
+  drmModePlane *primary_plane;
+
+  primary_plane = drmModeGetPlane (self->fd, self->primary_plane_id);
+
+  ret =
+      set_property_value_for_plane_id (self->fd, self->primary_plane_id,
+      "alpha", 0);
+  if (!ret)
+    GST_ERROR_OBJECT (self, "Unable to reset alpha value of base plane");
+
+  for (j = 0; j < primary_plane->count_formats; j++) {
+    fmt = gst_video_format_from_drm (primary_plane->formats[j]);
+    if (fmt == GST_VIDEO_FORMAT_UNKNOWN) {
+      GST_INFO_OBJECT (self, "ignoring format %" GST_FOURCC_FORMAT,
+          GST_FOURCC_ARGS (primary_plane->formats[j]));
+      continue;
+    } else {
+      break;
+    }
+  }
+  if (primary_plane)
+    drmModeFreePlane (primary_plane);
+
+  gst_video_info_set_format (&vinfo_crtc, fmt, vinfo->width, vinfo->height);
+  GST_VIDEO_INFO_FPS_N (&vinfo_crtc) = GST_VIDEO_INFO_FPS_N (vinfo);
+  GST_VIDEO_INFO_FPS_D (&vinfo_crtc) = GST_VIDEO_INFO_FPS_D (vinfo);
+  format = gst_video_format_to_string (vinfo_crtc.finfo->format);
+
+  GST_DEBUG_OBJECT (self,
+      "Format for modesetting = %s, width = %d and height = %d", format,
+      vinfo->width, vinfo->height);
+  ret = configure_mode_setting (self, &vinfo_crtc);
+
+  return ret;
 }
 
 static gboolean
@@ -716,9 +825,10 @@ gst_kms_sink_start (GstBaseSink * bsink)
   drmModeConnector *conn;
   drmModeCrtc *crtc;
   drmModePlaneRes *pres;
-  drmModePlane *plane;
+  drmModePlane *plane = NULL, *primary_plane = NULL;
   gboolean universal_planes;
   gboolean ret;
+  gint plane_type = -1;
 
   self = GST_KMS_SINK (bsink);
   universal_planes = FALSE;
@@ -752,10 +862,12 @@ gst_kms_sink_start (GstBaseSink * bsink)
     goto connector_failed;
 
   crtc = find_crtc_for_connector (self->fd, res, conn, &self->pipe);
+
   if (!crtc)
     goto crtc_failed;
 
-  if (!crtc->mode_valid || self->modesetting_enabled) {
+  if ((!crtc->mode_valid || self->modesetting_enabled)
+      && !self->fullscreen_enabled) {
     GST_DEBUG_OBJECT (self, "enabling modesetting");
     self->modesetting_enabled = TRUE;
     universal_planes = TRUE;
@@ -763,6 +875,11 @@ gst_kms_sink_start (GstBaseSink * bsink)
 
   if (crtc->mode_valid && self->modesetting_enabled && self->restore_crtc) {
     self->saved_crtc = (drmModeCrtc *) crtc;
+  }
+
+  if (self->fullscreen_enabled) {
+    universal_planes = TRUE;
+    plane_type = DRM_PLANE_TYPE_OVERLAY;
   }
 
 retry_find_plane:
@@ -775,11 +892,23 @@ retry_find_plane:
     goto plane_resources_failed;
 
   if (self->plane_id == -1)
-    plane = find_plane_for_crtc (self->fd, res, pres, crtc->crtc_id);
+    plane =
+        find_plane_for_crtc (self->fd, res, pres, crtc->crtc_id, plane_type);
   else
     plane = drmModeGetPlane (self->fd, self->plane_id);
+
   if (!plane)
     goto plane_failed;
+
+  if (self->fullscreen_enabled == 1) {
+    primary_plane =
+        find_plane_for_crtc (self->fd, res, pres, crtc->crtc_id,
+        DRM_PLANE_TYPE_PRIMARY);
+    if (!primary_plane)
+      goto primary_plane_failed;
+    self->primary_plane_id = primary_plane->plane_id;
+    self->saved_crtc = (drmModeCrtc *) crtc;
+  }
 
   if (!ensure_allowed_caps (self, conn, plane, res))
     goto allowed_caps_failed;
@@ -828,9 +957,11 @@ retry_find_plane:
 bail:
   if (plane)
     drmModeFreePlane (plane);
+  if (primary_plane)
+    drmModeFreePlane (primary_plane);
   if (pres)
     drmModeFreePlaneResources (pres);
-  if (crtc != self->saved_crtc)
+  if (crtc != self->saved_crtc && !self->fullscreen_enabled)
     drmModeFreeCrtc (crtc);
   if (conn)
     drmModeFreeConnector (conn);
@@ -902,6 +1033,12 @@ plane_failed:
     }
   }
 
+primary_plane_failed:
+  {
+    GST_ELEMENT_ERROR (self, RESOURCE, SETTINGS,
+        ("Could not find primary plane for crtc"), (NULL));
+    goto bail;
+  }
 allowed_caps_failed:
   {
     GST_ELEMENT_ERROR (self, RESOURCE, SETTINGS,
@@ -922,6 +1059,13 @@ gst_kms_sink_stop (GstBaseSink * bsink)
   if (self->allocator)
     gst_kms_allocator_clear_cache (self->allocator);
 
+  if (self->fullscreen_enabled) {
+    err = set_property_value_for_plane_id (self->fd, self->primary_plane_id,
+        "alpha", 255);
+    if (!err)
+      GST_ERROR_OBJECT (self, "Unable to reset alpha value of primary plane");
+  }
+
   gst_buffer_replace (&self->last_buffer, NULL);
   gst_caps_replace (&self->allowed_caps, NULL);
   gst_object_replace ((GstObject **) & self->pool, NULL);
@@ -930,6 +1074,9 @@ gst_kms_sink_stop (GstBaseSink * bsink)
   gst_poll_remove_fd (self->poll, &self->pollfd);
   gst_poll_restart (self->poll);
   gst_poll_fd_init (&self->pollfd);
+
+
+  g_clear_pointer (&self->tmp_kmsmem, gst_memory_unref);
 
   if (self->saved_crtc) {
     drmModeCrtc *crtc = (drmModeCrtc *) self->saved_crtc;
@@ -1148,6 +1295,9 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   }
 
   if (self->modesetting_enabled && !configure_mode_setting (self, &vinfo))
+    goto modesetting_failed;
+
+  if (self->fullscreen_enabled && !set_crtc_to_plane_size (self, &vinfo))
     goto modesetting_failed;
 
   GST_OBJECT_LOCK (self);
@@ -1688,7 +1838,10 @@ sync_frame:
     self->last_height = GST_VIDEO_SINK_HEIGHT (self);
     self->last_vinfo = self->vinfo;
   }
-  g_clear_pointer (&self->tmp_kmsmem, gst_memory_unref);
+
+  /* For fullscreen_enabled, tmp_kmsmem is used just to set CRTC mode */
+  if (self->modesetting_enabled)
+    g_clear_pointer (&self->tmp_kmsmem, gst_memory_unref);
 
   GST_OBJECT_UNLOCK (self);
   res = GST_FLOW_OK;
@@ -1827,6 +1980,9 @@ gst_kms_sink_set_property (GObject * object, guint prop_id,
 
       break;
     }
+    case PROP_FULLSCREEN_OVERLAY:
+      sink->fullscreen_enabled = g_value_get_boolean (value);
+      break;
     default:
       if (!gst_video_overlay_set_property (object, PROP_N, prop_id, value))
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -1879,6 +2035,8 @@ gst_kms_sink_get_property (GObject * object, guint prop_id,
       break;
     case PROP_PLANE_PROPS:
       gst_value_set_structure (value, sink->plane_props);
+    case PROP_FULLSCREEN_OVERLAY:
+      g_value_set_boolean (value, sink->fullscreen_enabled);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -2077,6 +2235,18 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
       g_param_spec_boxed ("plane-properties", "Connector Plane",
       "Additional properties for the plane",
       GST_TYPE_STRUCTURE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
+
+   /** kmssink:fullscreen-overlay:
+   *
+   * If the output connector is already active, the sink automatically uses an
+   * overlay plane. Enforce mode setting in the kms sink and output to the
+   * base plane to override the automatic behavior.
+   */
+  g_properties[PROP_FULLSCREEN_OVERLAY] =
+      g_param_spec_boolean ("fullscreen-overlay",
+      "Fullscreen mode",
+      "When enabled, the sink sets CRTC size same as input video size", FALSE,
+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
 
   g_object_class_install_properties (gobject_class, PROP_N, g_properties);
 
