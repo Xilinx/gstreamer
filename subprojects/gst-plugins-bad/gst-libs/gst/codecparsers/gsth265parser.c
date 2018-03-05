@@ -306,6 +306,10 @@ static const struct h265_profile_string h265_profiles[] = {
   {GST_H265_PROFILE_SCALABLE_MONOCHROME_16, "scalable-monochrome-16"},
   {GST_H265_PROFILE_SCALABLE_MAIN_444, "scalable-main-444"},
   {GST_H265_PROFILE_3D_MAIN, "3d-main"},
+  /* Xilinx specific */
+  {GST_H265_PROFILE_MAIN_422_XILINX, "main-422"},
+  {GST_H265_PROFILE_MONOCHROME_10_XILINX, "monochrome-10"},
+  {GST_H265_PROFILE_MAIN_422_INTRA_XILINX, "main-422-intra"},
 };
 
 /****** Parsing functions *****/
@@ -3808,6 +3812,13 @@ get_format_range_extension_profile (const GstH265ProfileTierLevel * ptl)
         0, 1, 1, 1, 0, 0, 0, 1, 1, FALSE, 19},
     {GST_H265_PROFILE_MAIN_444_16_STILL_PICTURE,
         0, 0, 0, 0, 0, 0, 0, 1, 1, FALSE, 20},
+    /* Xilinx specific */
+    /* main-422-10 + max_8bit_constraint_flag */
+    {GST_H265_PROFILE_MAIN_422_XILINX, 1, 1, 1, 1, 0, 0, 0, 0, TRUE, 4},
+    /* monochrome-12 + max_10bit_constraint_flag */
+    {GST_H265_PROFILE_MONOCHROME_10_XILINX, 1, 1, 0, 1, 1, 1, 0, 0, TRUE, 1},
+    /* main-422-10-intra + max_8bit_constraint_flag  */
+    {GST_H265_PROFILE_MAIN_422_INTRA_XILINX, 1, 1, 1, 1, 0, 0, 1, 0, FALSE, 12},
   };
 
   return get_extension_profile (profiles, G_N_ELEMENTS (profiles), ptl);
