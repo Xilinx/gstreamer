@@ -2024,17 +2024,17 @@ gst_v4l2_object_get_caps_info (GstV4l2Object * v4l2object, GstCaps * caps,
   }
 
 
-  /* Prefer the non-contiguous if supported */
-  v4l2object->prefered_non_contiguous = TRUE;
+  /* Prefer the contiguous if supported */
+  v4l2object->prefered_non_contiguous = FALSE;
 
-  if (fourcc_nc)
-    fmt = gst_v4l2_object_get_format_from_fourcc (v4l2object, fourcc_nc);
+  if (fourcc)
+    fmt = gst_v4l2_object_get_format_from_fourcc (v4l2object, fourcc);
   else if (fourcc == 0)
     goto unhandled_format;
 
   if (fmt == NULL) {
-    fmt = gst_v4l2_object_get_format_from_fourcc (v4l2object, fourcc);
-    v4l2object->prefered_non_contiguous = FALSE;
+    fmt = gst_v4l2_object_get_format_from_fourcc (v4l2object, fourcc_nc);
+    v4l2object->prefered_non_contiguous = TRUE;
   }
 
   if (fmt == NULL)
