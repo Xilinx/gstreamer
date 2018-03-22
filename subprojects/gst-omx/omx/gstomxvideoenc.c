@@ -1602,8 +1602,19 @@ gst_omx_video_enc_ensure_nb_out_buffers (GstOMXVideoEnc * self)
 static gboolean
 gst_omx_video_enc_allocate_out_buffers (GstOMXVideoEnc * self)
 {
+  GstEvent *event;
+  guint nb_buffers;
+
   if (gst_omx_port_allocate_buffers (self->enc_out_port) != OMX_ErrorNone)
     return FALSE;
+
+  nb_buffers = self->enc_out_port->port_def.nBufferCountActual;
+
+  event = gst_event_new_custom (GST_EVENT_CUSTOM_DOWNSTREAM,
+      gst_structure_new ("buffers-allocated",
+          "nb-buffers", G_TYPE_UINT, nb_buffers, NULL));
+
+  gst_pad_push_event (GST_VIDEO_DECODER_SRC_PAD (self), event);
 
   return TRUE;
 }
@@ -1871,6 +1882,7 @@ gst_omx_video_enc_start (GstVideoEncoder * encoder)
 
   self->last_upstream_ts = 0;
   self->downstream_flow_ret = GST_FLOW_OK;
+  self->nb_upstream_buffers = 0;
   self->nb_downstream_buffers = 0;
   self->in_pool_used = FALSE;
 
@@ -2127,7 +2139,16 @@ gst_omx_video_enc_ensure_nb_in_buffers (GstOMXVideoEnc * self)
 {
   GstOMXVideoEncClass *klass = GST_OMX_VIDEO_ENC_GET_CLASS (self);
 
-  if ((klass->cdata.hacks & GST_OMX_HACK_ENSURE_BUFFER_COUNT_ACTUAL)) {
+  if (self->input_allocation == GST_OMX_BUFFER_ALLOCATION_USE_BUFFER_DYNAMIC &&
+      self->nb_upstream_buffers > self->enc_in_port->port_def.nBufferCountMin) {
+    GST_DEBUG_OBJECT (self,
+        "Upstream allocated %d buffers, allocate as many input buffers as we are using dynamic buffer mode",
+        self->nb_upstream_buffers);
+
+    if (!gst_omx_port_update_buffer_count_actual (self->enc_in_port,
+            self->nb_upstream_buffers))
+      return FALSE;
+  } else if ((klass->cdata.hacks & GST_OMX_HACK_ENSURE_BUFFER_COUNT_ACTUAL)) {
     if (!gst_omx_port_ensure_buffer_count_actual (self->enc_in_port, 0))
       return FALSE;
   }
@@ -3720,12 +3741,30 @@ handle_longterm_event (GstOMXVideoEnc * self, GstEvent * event)
 static gboolean
 gst_omx_video_enc_sink_event (GstVideoEncoder * encoder, GstEvent * event)
 {
+  GstOMXVideoEnc *self = GST_OMX_VIDEO_ENC (encoder);
+
   switch (GST_EVENT_TYPE (event)) {
     case GST_EVENT_CUSTOM_DOWNSTREAM:
     {
+      if (gst_event_has_name (event, "buffers-allocated")) {
+        const GstStructure *s;
+
+        s = gst_event_get_structure (event);
+        if (!gst_structure_get_uint (s, "nb-buffers",
+                &self->nb_upstream_buffers)) {
+          GST_WARNING_OBJECT (self,
+              "buffers-allocated event missing 'nb-buffers' field");
+          return TRUE;
+        } else {
+          GST_DEBUG_OBJECT (self, "Upstream allocated %d buffers",
+              self->nb_upstream_buffers);
+        }
+
+        gst_event_unref (event);
+        return TRUE;
+      }
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-      GstOMXVideoEnc *self = GST_OMX_VIDEO_ENC (encoder);
-      if (gst_event_has_name (event, OMX_ALG_GST_EVENT_INSERT_LONGTERM)
+      else if (gst_event_has_name (event, OMX_ALG_GST_EVENT_INSERT_LONGTERM)
           || gst_event_has_name (event, OMX_ALG_GST_EVENT_USE_LONGTERM))
         return handle_longterm_event (self, event);
 #endif
