@@ -95,6 +95,8 @@ struct _GstOMXVideoDec
   /* TRUE if decoder is producing dmabuf */
   gboolean dmabuf;
   GstOMXBufferAllocation input_allocation;
+  /* Number of buffers allocated upstream */
+  guint nb_upstream_buffers;
 
   /* properties */
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS

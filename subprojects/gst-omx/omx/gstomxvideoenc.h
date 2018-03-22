@@ -105,6 +105,8 @@ struct _GstOMXVideoEnc
   GstOMXBufferAllocation input_allocation;
   /* TRUE if encoder is passing dmabuf's fd directly to the OMX component */
   gboolean input_dmabuf;
+  /* Number of buffers allocated upstream */
+  guint nb_upstream_buffers;
   /* Number of buffers requested downstream */
   guint nb_downstream_buffers;
 
