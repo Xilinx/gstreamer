@@ -29,6 +29,7 @@ v4l2_sources = [
   'gstv4l2vp8enc.c',
   'gstv4l2vp9codec.c',
   'gstv4l2vp9enc.c',
+  'gstxilinxscd.c',
   'v4l2_calls.c',
   'v4l2-utils.c',
   'tuner.c',
