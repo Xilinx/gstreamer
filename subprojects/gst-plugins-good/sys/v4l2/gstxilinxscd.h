@@ -52,15 +52,9 @@ struct _GstXilinxScd
 
   /* < private > */
   GstV4l2Object *v4l2output;
-  GstV4l2Object *v4l2capture;
 
   /* pads */
-  GstCaps *probed_srccaps;
   GstCaps *probed_sinkcaps;
-
-  /* Selected caps */
-  GstCaps *incaps;
-  GstCaps *outcaps;
 };
 
 struct _GstXilinxScdClass
@@ -70,11 +64,6 @@ struct _GstXilinxScdClass
 };
 
 GType gst_xilinx_scd_get_type (void);
-
-gboolean gst_xilinx_scd_is_transform (GstCaps * sink_caps, GstCaps * src_caps);
-gboolean gst_xilinx_scd_register (GstPlugin * plugin,
-    const gchar * basename,
-    const gchar * device_path, GstCaps * sink_caps, GstCaps * src_caps);
 
 G_END_DECLS
 #endif /* __GST_XILINX_SCD_H__ */

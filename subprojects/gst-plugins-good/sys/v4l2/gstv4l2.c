@@ -57,6 +57,7 @@
 #include "gstv4l2vp8enc.h"
 #include "gstv4l2vp9enc.h"
 #include "gstv4l2transform.h"
+#include "gstxilinxscd.h"
 
 GST_DEBUG_CATEGORY_EXTERN (v4l2_debug);
 #define GST_CAT_DEFAULT v4l2_debug
@@ -266,6 +267,7 @@ plugin_init (GstPlugin * plugin)
   ret |= GST_ELEMENT_REGISTER (v4l2sink, plugin);
   ret |= GST_ELEMENT_REGISTER (v4l2radio, plugin);
   ret |= GST_DEVICE_PROVIDER_REGISTER (v4l2deviceprovider, plugin);
+  ret |= GST_DEVICE_PROVIDER_REGISTER (xilinxscd, plugin);
 
   return ret;
 }
