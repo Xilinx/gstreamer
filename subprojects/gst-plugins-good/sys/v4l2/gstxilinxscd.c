@@ -235,8 +235,53 @@ gst_xilinx_scd_query (GstBaseTransform * trans, GstPadDirection direction,
 static GstFlowReturn
 gst_xilinx_scd_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
 {
-  /* Nothing to do */
-  return GST_FLOW_OK;
+  GstXilinxScd *self = GST_XILINX_SCD (trans);
+  GstV4l2Object *obj = self->v4l2output;
+  GstBufferPool *bpool = GST_BUFFER_POOL (obj->pool);
+  GstFlowReturn ret;
+
+  GST_DEBUG_OBJECT (self, "handle buffer: %p", buf);
+
+  if (G_UNLIKELY (obj->pool == NULL))
+    goto not_negotiated;
+
+  if (G_UNLIKELY (!gst_buffer_pool_is_active (bpool))) {
+    GstStructure *config;
+
+    /* this pool was not activated, configure and activate */
+    GST_DEBUG_OBJECT (self, "activating pool");
+
+    config = gst_buffer_pool_get_config (bpool);
+    gst_buffer_pool_config_add_option (config,
+        GST_BUFFER_POOL_OPTION_VIDEO_META);
+    gst_buffer_pool_set_config (bpool, config);
+
+    if (!gst_buffer_pool_set_active (bpool, TRUE))
+      goto activate_failed;
+  }
+
+  ret = gst_v4l2_buffer_pool_process (GST_V4L2_BUFFER_POOL (bpool), &buf);
+  if (G_UNLIKELY (ret != GST_FLOW_OK))
+    goto out;
+
+  /* TODO: wait for event */
+
+out:
+  return ret;
+
+  /* ERRORS */
+not_negotiated:
+  {
+    GST_ERROR_OBJECT (self, "not negotiated");
+    return GST_FLOW_NOT_NEGOTIATED;
+  }
+activate_failed:
+  {
+    GST_ELEMENT_ERROR (self, RESOURCE, SETTINGS,
+        (_("Failed to allocated required memory.")),
+        ("Buffer pool activation failed"));
+    return GST_FLOW_ERROR;
+  }
 }
 
 static gboolean
