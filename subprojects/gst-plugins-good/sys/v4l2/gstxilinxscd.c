@@ -40,6 +40,7 @@
 GST_DEBUG_CATEGORY_STATIC (gst_xilinx_scd_debug);
 #define GST_CAT_DEFAULT gst_xilinx_scd_debug
 
+#define SCD_EVENT_TYPE V4L2_EVENT_PRIVATE_START
 
 enum
 {
@@ -106,6 +107,15 @@ gst_xilinx_scd_open (GstXilinxScd * self)
   if (gst_caps_is_empty (self->probed_sinkcaps))
     goto no_input_format;
 
+  gst_poll_fd_init (&self->poll_fd);
+  self->poll_fd.fd = self->v4l2output->video_fd;
+
+  gst_poll_add_fd (self->event_poll, &self->poll_fd);
+  gst_poll_fd_ctl_pri (self->event_poll, &self->poll_fd, TRUE);
+
+  if (!gst_v4l2_subscribe_event (self->v4l2output, SCD_EVENT_TYPE, 0, 0))
+    goto failure;
+
   return TRUE;
 
 no_input_format:
@@ -127,6 +137,8 @@ static void
 gst_xilinx_scd_close (GstXilinxScd * self)
 {
   GST_DEBUG_OBJECT (self, "Closing");
+
+  gst_poll_remove_fd (self->event_poll, &self->poll_fd);
 
   gst_v4l2_object_close (self->v4l2output);
 
@@ -233,17 +245,64 @@ gst_xilinx_scd_query (GstBaseTransform * trans, GstPadDirection direction,
 }
 
 static GstFlowReturn
+gst_xilinx_scd_wait_event (GstXilinxScd * self, struct v4l2_event *event)
+{
+  gint wait_ret;
+  gboolean error = FALSE;
+
+again:
+  GST_LOG_OBJECT (self, "waiting for event");
+  wait_ret = gst_poll_wait (self->event_poll, GST_CLOCK_TIME_NONE);
+  if (G_UNLIKELY (wait_ret < 0)) {
+    switch (errno) {
+      case EBUSY:
+        GST_DEBUG_OBJECT (self, "stop called");
+        return GST_FLOW_FLUSHING;
+      case EAGAIN:
+      case EINTR:
+        goto again;
+      default:
+        error = TRUE;
+    }
+  }
+
+  if (error || gst_poll_fd_has_error (self->event_poll, &self->poll_fd)) {
+    GST_ELEMENT_ERROR (self, RESOURCE, READ, (NULL),
+        ("poll error: %s (%d)", g_strerror (errno), errno));
+    return GST_FLOW_ERROR;
+  }
+
+  if (!gst_v4l2_dqevent (self->v4l2output, event)) {
+    GST_ELEMENT_ERROR (self, RESOURCE, READ, (NULL),
+        ("Failed to dqueue event"));
+    return GST_FLOW_ERROR;
+  }
+
+  if (event->type != SCD_EVENT_TYPE) {
+    GST_WARNING_OBJECT (self, "Received wront type of event: %d (expected: %d)",
+        event->type, SCD_EVENT_TYPE);
+    goto again;
+  }
+
+  return GST_FLOW_OK;
+}
+
+static GstFlowReturn
 gst_xilinx_scd_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
 {
   GstXilinxScd *self = GST_XILINX_SCD (trans);
   GstV4l2Object *obj = self->v4l2output;
   GstBufferPool *bpool = GST_BUFFER_POOL (obj->pool);
   GstFlowReturn ret;
+  struct v4l2_event event;
+  guint8 sc_detected;
 
-  GST_DEBUG_OBJECT (self, "handle buffer: %p", buf);
+  GST_LOG_OBJECT (self, "handle buffer: %p", buf);
 
-  if (G_UNLIKELY (obj->pool == NULL))
-    goto not_negotiated;
+  if (G_UNLIKELY (obj->pool == NULL)) {
+    GST_ERROR_OBJECT (self, "not negotiated");
+    return GST_FLOW_NOT_NEGOTIATED;
+  }
 
   if (G_UNLIKELY (!gst_buffer_pool_is_active (bpool))) {
     GstStructure *config;
@@ -256,32 +315,40 @@ gst_xilinx_scd_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
         GST_BUFFER_POOL_OPTION_VIDEO_META);
     gst_buffer_pool_set_config (bpool, config);
 
-    if (!gst_buffer_pool_set_active (bpool, TRUE))
-      goto activate_failed;
+    if (!gst_buffer_pool_set_active (bpool, TRUE)) {
+      GST_ELEMENT_ERROR (self, RESOURCE, SETTINGS,
+          (_("Failed to allocated required memory.")),
+          ("Buffer pool activation failed"));
+      return GST_FLOW_ERROR;
+    }
   }
 
   ret = gst_v4l2_buffer_pool_process (GST_V4L2_BUFFER_POOL (bpool), &buf);
   if (G_UNLIKELY (ret != GST_FLOW_OK))
-    goto out;
+    return ret;
 
-  /* TODO: wait for event */
+  ret = gst_xilinx_scd_wait_event (self, &event);
+  if (G_UNLIKELY (ret != GST_FLOW_OK))
+    return ret;
 
-out:
+  sc_detected = event.u.data[0];
+  GST_LOG_OBJECT (self, "Received SCD event with data %d", sc_detected);
+
+  if (sc_detected) {
+    GstEvent *event;
+    GstStructure *s;
+
+    GST_DEBUG_OBJECT (self, "scene change detected; sending event");
+
+    s = gst_structure_new ("omx-alg/scene-change",
+        "look-ahead", G_TYPE_UINT, 0, NULL);
+
+    event = gst_event_new_custom (GST_EVENT_CUSTOM_DOWNSTREAM, s);
+
+    gst_pad_send_event (GST_BASE_TRANSFORM_SINK_PAD (self), event);
+  }
+
   return ret;
-
-  /* ERRORS */
-not_negotiated:
-  {
-    GST_ERROR_OBJECT (self, "not negotiated");
-    return GST_FLOW_NOT_NEGOTIATED;
-  }
-activate_failed:
-  {
-    GST_ELEMENT_ERROR (self, RESOURCE, SETTINGS,
-        (_("Failed to allocated required memory.")),
-        ("Buffer pool activation failed"));
-    return GST_FLOW_ERROR;
-  }
 }
 
 static gboolean
@@ -293,6 +360,7 @@ gst_xilinx_scd_sink_event (GstBaseTransform * trans, GstEvent * event)
   switch (GST_EVENT_TYPE (event)) {
     case GST_EVENT_FLUSH_START:
       GST_DEBUG_OBJECT (self, "flush start");
+      gst_poll_set_flushing (self->event_poll, TRUE);
       gst_v4l2_object_unlock (self->v4l2output);
       break;
     default:
@@ -305,6 +373,7 @@ gst_xilinx_scd_sink_event (GstBaseTransform * trans, GstEvent * event)
     case GST_EVENT_FLUSH_STOP:
       /* Buffer should be back now */
       GST_DEBUG_OBJECT (self, "flush stop");
+      gst_poll_set_flushing (self->event_poll, FALSE);
       gst_v4l2_object_unlock_stop (self->v4l2output);
       break;
     default:
@@ -325,6 +394,9 @@ gst_xilinx_scd_change_state (GstElement * element, GstStateChange transition)
       if (!gst_xilinx_scd_open (self))
         return GST_STATE_CHANGE_FAILURE;
       break;
+    case GST_STATE_CHANGE_READY_TO_PAUSED:
+      gst_poll_set_flushing (self->event_poll, FALSE);
+      break;
     default:
       break;
   }
@@ -333,6 +405,7 @@ gst_xilinx_scd_change_state (GstElement * element, GstStateChange transition)
 
   switch (transition) {
     case GST_STATE_CHANGE_PAUSED_TO_READY:
+      gst_poll_set_flushing (self->event_poll, TRUE);
       gst_v4l2_object_unlock (self->v4l2output);
       break;
     case GST_STATE_CHANGE_READY_TO_NULL:
@@ -360,6 +433,7 @@ gst_xilinx_scd_finalize (GObject * object)
 {
   GstXilinxScd *self = GST_XILINX_SCD (object);
 
+  gst_poll_free (self->event_poll);
   gst_v4l2_object_destroy (self->v4l2output);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
@@ -372,6 +446,7 @@ gst_xilinx_scd_init (GstXilinxScd * self)
       GST_OBJECT (GST_BASE_TRANSFORM_SINK_PAD (self)),
       V4L2_BUF_TYPE_VIDEO_OUTPUT, DEFAULT_PROP_DEVICE,
       gst_v4l2_get_output, gst_v4l2_set_output, NULL);
+  self->event_poll = gst_poll_new (TRUE);
   self->v4l2output->no_initial_format = TRUE;
   self->v4l2output->keep_aspect = FALSE;
 

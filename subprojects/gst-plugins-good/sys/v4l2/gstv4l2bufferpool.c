@@ -2345,6 +2345,6 @@ gst_v4l2_buffer_pool_enable_resolution_change (GstV4l2BufferPool * pool)
   /* Make sure we subscribe for the current input */
   gst_v4l2_get_input (pool->obj, &input_id);
 
-  if (gst_v4l2_subscribe_event (pool->obj, V4L2_EVENT_SOURCE_CHANGE, input_id))
+  if (gst_v4l2_subscribe_event (pool->obj, V4L2_EVENT_SOURCE_CHANGE, input_id, 0))
     gst_poll_fd_ctl_pri (pool->poll, &pool->pollfd, TRUE);
 }

@@ -52,6 +52,8 @@ struct _GstXilinxScd
 
   /* < private > */
   GstV4l2Object *v4l2output;
+  GstPoll *event_poll;
+  GstPollFD poll_fd;
 
   /* pads */
   GstCaps *probed_sinkcaps;
