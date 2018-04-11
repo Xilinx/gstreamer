@@ -5655,7 +5655,7 @@ gst_v4l2_object_subscribe_event (GstV4l2Object * v4l2object, guint32 event)
 
   v4l2object->get_in_out_func (v4l2object, &id);
 
-  if (gst_v4l2_subscribe_event (v4l2object, event, id)) {
+  if (gst_v4l2_subscribe_event (v4l2object, event, id, 0)) {
     gst_poll_fd_ctl_pri (v4l2object->poll, &v4l2object->pollfd, TRUE);
     return TRUE;
   }
