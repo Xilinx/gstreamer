@@ -41,6 +41,7 @@ GST_DEBUG_CATEGORY_STATIC (gst_xilinx_scd_debug);
 #define GST_CAT_DEFAULT gst_xilinx_scd_debug
 
 #define SCD_EVENT_TYPE V4L2_EVENT_PRIVATE_START
+#define DRIVER_NAME "xilinx-vipp"
 
 enum
 {
@@ -100,6 +101,13 @@ gst_xilinx_scd_open (GstXilinxScd * self)
 
   if (!gst_v4l2_object_open (self->v4l2output, NULL))
     goto failure;
+
+  if (!g_str_equal (self->v4l2output->vcap.driver, DRIVER_NAME)) {
+    GST_ELEMENT_ERROR (self, RESOURCE, SETTINGS,
+        (_("Wrong driver: %s (expected: %s)"), self->v4l2output->vcap.driver,
+            DRIVER_NAME), (NULL));
+    goto failure;
+  }
 
   self->probed_sinkcaps = gst_v4l2_object_get_caps (self->v4l2output,
       gst_v4l2_object_get_raw_caps ());
