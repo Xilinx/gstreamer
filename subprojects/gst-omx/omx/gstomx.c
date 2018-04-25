@@ -3640,6 +3640,17 @@ gst_omx_error_to_string (OMX_ERRORTYPE err)
     case OMX_ErrorContentPipeCreationFailed:
       return "Content pipe creation failed";
 #endif
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    case OMX_ALG_ErrorNoChannelLeft:
+      return
+          "Maximum number of channel supported at the same time has been exceeded";
+    case OMX_ALG_ErrorChannelResourceUnavailable:
+      return
+          "Component doesn't have enough hardware resources available to process the channel";
+    case OMX_ALG_ErrorChannelLoadDistribution:
+      return
+          "Component has enough hardware resources available but they are used by the other channels in a way that make it impossible for the new channel to access these resources";
+#endif
     default:
       if (err_u >= (guint) OMX_ErrorKhronosExtensions
           && err_u < (guint) OMX_ErrorVendorStartUnused) {
