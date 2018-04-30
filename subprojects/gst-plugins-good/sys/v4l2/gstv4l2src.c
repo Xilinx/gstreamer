@@ -876,6 +876,8 @@ gst_v4l2src_decide_allocation (GstBaseSrc * bsrc, GstQuery * query)
   GstV4l2Src *src = GST_V4L2SRC (bsrc);
   GstBufferPool *bpool = gst_v4l2_object_get_buffer_pool (src->v4l2object);
   gboolean ret = TRUE;
+  GstStructure *config;
+  guint nb_buffers;
 
   if (src->pending_set_fmt) {
     GstCaps *caps = gst_pad_get_current_caps (GST_BASE_SRC_PAD (bsrc));
@@ -940,6 +942,20 @@ gst_v4l2src_decide_allocation (GstBaseSrc * bsrc, GstQuery * query)
     if (!gst_buffer_pool_set_active (bpool, TRUE))
       goto activate_failed;
   }
+
+  config = gst_buffer_pool_get_config (bpool);
+  if (gst_buffer_pool_config_get_params (config, NULL, NULL, &nb_buffers, NULL)) {
+    GstEvent *event;
+
+    event =
+        gst_event_new_custom (GST_EVENT_CUSTOM_DOWNSTREAM,
+        gst_structure_new ("buffers-allocated",
+            "nb-buffers", G_TYPE_UINT, nb_buffers,
+            "pool", GST_TYPE_BUFFER_POOL, bpool, NULL));
+
+    gst_pad_push_event (GST_BASE_SRC_PAD (src), event);
+  }
+  gst_structure_free (config);
 
   if (bpool)
     gst_object_unref (bpool);
