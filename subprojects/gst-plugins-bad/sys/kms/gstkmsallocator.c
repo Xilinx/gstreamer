@@ -456,7 +456,7 @@ gst_kms_allocator_add_fb (GstKMSAllocator * alloc, GstKMSMemory * kmsmem,
     return TRUE;
 
   w = GST_VIDEO_INFO_WIDTH (vinfo);
-  h = GST_VIDEO_INFO_HEIGHT (vinfo);
+  h = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo);
   fmt = gst_drm_format_from_video (GST_VIDEO_INFO_FORMAT (vinfo));
 
   for (i = 0; i < num_planes; i++) {

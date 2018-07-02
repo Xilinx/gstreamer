@@ -513,6 +513,17 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
   for (i = 0; i < conn->count_modes; i++) {
     if (conn->modes[i].vdisplay == GST_VIDEO_INFO_HEIGHT (vinfo) &&
         conn->modes[i].hdisplay == GST_VIDEO_INFO_WIDTH (vinfo)) {
+      if (GST_VIDEO_INFO_INTERLACE_MODE (vinfo) ==
+          GST_VIDEO_INTERLACE_MODE_ALTERNATE) {
+        guint fps;
+
+        if (!(conn->modes[i].flags & DRM_MODE_FLAG_INTERLACE))
+          continue;
+
+        fps = GST_VIDEO_INFO_FPS_N (vinfo) / GST_VIDEO_INFO_FPS_D (vinfo);
+        if (conn->modes[i].vrefresh != fps * 2)
+          continue;
+      }
       mode = &conn->modes[i];
       break;
     }
@@ -602,7 +613,8 @@ set_crtc_to_plane_size (GstKMSSink * self, GstVideoInfo * vinfo)
   if (primary_plane)
     drmModeFreePlane (primary_plane);
 
-  gst_video_info_set_format (&vinfo_crtc, fmt, vinfo->width, vinfo->height);
+  gst_video_info_set_interlaced_format (&vinfo_crtc, fmt,
+      GST_VIDEO_INFO_INTERLACE_MODE (vinfo), vinfo->width, vinfo->height);
   GST_VIDEO_INFO_FPS_N (&vinfo_crtc) = GST_VIDEO_INFO_FPS_N (vinfo);
   GST_VIDEO_INFO_FPS_D (&vinfo_crtc) = GST_VIDEO_INFO_FPS_D (vinfo);
   format = gst_video_format_to_string (vinfo_crtc.finfo->format);
@@ -658,17 +670,44 @@ ensure_allowed_caps (GstKMSSink * self, drmModeConnector * conn,
       format = gst_video_format_to_string (fmt);
 
       if (mode) {
+        gboolean interlaced;
+        gint height;
+
+        height = mode->vdisplay;
+        interlaced = (conn->modes[i].flags & DRM_MODE_FLAG_INTERLACE);
+
+        if (interlaced)
+          /* Expose the frame height in caps, not the field */
+          height *= 2;
+
         caps = gst_caps_new_simple ("video/x-raw",
             "format", G_TYPE_STRING, format,
             "width", G_TYPE_INT, mode->hdisplay,
-            "height", G_TYPE_INT, mode->vdisplay,
+            "height", G_TYPE_INT, height,
             "framerate", GST_TYPE_FRACTION_RANGE, 0, 1, G_MAXINT, 1, NULL);
+
+        if (interlaced) {
+          GstCapsFeatures *feat;
+
+          feat =
+              gst_caps_features_new (GST_CAPS_FEATURE_FORMAT_INTERLACED, NULL);
+          gst_caps_set_features (caps, 0, feat);
+        }
       } else {
-        caps = gst_caps_new_simple ("video/x-raw",
+        GstStructure *s;
+        GstCapsFeatures *feat;
+
+        s = gst_structure_new ("video/x-raw",
             "format", G_TYPE_STRING, format,
             "width", GST_TYPE_INT_RANGE, res->min_width, res->max_width,
             "height", GST_TYPE_INT_RANGE, res->min_height, res->max_height,
             "framerate", GST_TYPE_FRACTION_RANGE, 0, 1, G_MAXINT, 1, NULL);
+
+        /* FIXME: How could we check if res supports interlacing? */
+        caps = gst_caps_new_full (s, gst_structure_copy (s), NULL);
+
+        feat = gst_caps_features_new (GST_CAPS_FEATURE_FORMAT_INTERLACED, NULL);
+        gst_caps_set_features (caps, 1, feat);
       }
       if (!caps)
         continue;
@@ -1299,6 +1338,15 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
 
   if (self->fullscreen_enabled && !set_crtc_to_plane_size (self, &vinfo))
     goto modesetting_failed;
+
+  if (!self->modesetting_enabled && !self->fullscreen_enabled &&
+      GST_VIDEO_INFO_INTERLACE_MODE (&vinfo) ==
+      GST_VIDEO_INTERLACE_MODE_ALTERNATE) {
+    GST_DEBUG_OBJECT (self,
+        "configure mode setting as input is in alternate interlacing mode");
+    if (!configure_mode_setting (self, &vinfo))
+      goto modesetting_failed;
+  }  
 
   GST_OBJECT_LOCK (self);
   if (self->reconfigure) {
