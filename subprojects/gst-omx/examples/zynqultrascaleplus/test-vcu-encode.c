@@ -39,6 +39,8 @@
 #define DEFAULT_ENCODER_TARGET_BITRATE 5000
 #define DEFAULT_ENCODER_B_FRAMES 0
 #define DEFAULT_ENCODER_TYPE "avc"
+#define DEFAULT_LONGTERM_FREQ 0
+#define DEFAULT_LONGTERM_REF 0
 
 #define DYNAMIC_BITRATE_STR "BR"
 #define DYNAMIC_GOP_LENGTH_STR "GL"
@@ -46,6 +48,8 @@
 #define DYNAMIC_ROI_STR "ROI"
 #define DYNAMIC_KEY_FRAME_STR "KF"
 #define DYNAMIC_SCENE_CHANGE_STR "SC"
+#define DYNAMIC_INSERT_LONGTERM_STR "IL"
+#define DYNAMIC_USE_LONGTERM_STR "UL"
 
 #define DYNAMIC_FEATURE_DELIMIT ","
 #define DYNAMIC_PARAM_DELIMIT ":x"
@@ -59,6 +63,8 @@ typedef enum
   DYNAMIC_B_FRAMES,
   DYNAMIC_ROI,
   DYNAMIC_SCENE_CHANGE,
+  DYNAMIC_INSERT_LONGTERM,
+  DYNAMIC_USE_LONGTERM,
 } DynamicFeatureType;
 
 typedef struct
@@ -90,6 +96,8 @@ typedef struct
   guint b_frames;
   guint max_bitrate;
   guint target_bitrate;
+  guint long_term_freq;
+  guint long_term_ref;
 
   gchar *output_filename;
   gchar *input_filename;
@@ -116,6 +124,10 @@ get_dynamic_str_enum (gchar * user_string)
     return DYNAMIC_ROI;
   else if (!g_strcmp0 (user_string, DYNAMIC_SCENE_CHANGE_STR))
     return DYNAMIC_SCENE_CHANGE;
+  else if (!g_strcmp0 (user_string, DYNAMIC_INSERT_LONGTERM_STR))
+    return DYNAMIC_INSERT_LONGTERM;
+  else if (!g_strcmp0 (user_string, DYNAMIC_USE_LONGTERM_STR))
+    return DYNAMIC_USE_LONGTERM;
   else {
     g_print ("Invalid User string \n");
     return -1;
@@ -211,6 +223,12 @@ parse_dynamic_user_string (const char *str, GstElement * encoder)
       dynamic->start_frame = atoi (token[1]);
       dynamic->param.value = atoi (token[2]);
       break;
+    case DYNAMIC_INSERT_LONGTERM:
+      dynamic->start_frame = atoi (token[1]);
+      break;
+    case DYNAMIC_USE_LONGTERM:
+      dynamic->start_frame = atoi (token[1]);
+      break;
     default:
       g_print ("Invalid DynamicFeatureType \n");
       g_strfreev (token);
@@ -218,6 +236,23 @@ parse_dynamic_user_string (const char *str, GstElement * encoder)
   }
   g_strfreev (token);
   return dynamic;
+}
+
+static gboolean
+send_downstream_event (GstPad * pad, GstStructure * s)
+{
+  GstEvent *event;
+  GstPad *peer;
+
+  event = gst_event_new_custom (GST_EVENT_CUSTOM_DOWNSTREAM, s);
+  peer = gst_pad_get_peer (pad);
+
+  if (!gst_pad_send_event (peer, event))
+    g_printerr ("Failed to send custom event\n");
+
+  gst_object_unref (peer);
+
+  return TRUE;
 }
 
 static GstPadProbeReturn
@@ -281,23 +316,36 @@ videoparser_src_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
         break;
       case DYNAMIC_SCENE_CHANGE:
       {
-        GstEvent *event;
         GstStructure *s;
-        GstPad *peer;
 
         g_print ("Scene change at Frame num = %d in %d frames\n",
             dynamic->start_frame, dynamic->param.value);
 
         s = gst_structure_new ("omx-alg/scene-change",
             "look-ahead", G_TYPE_UINT, dynamic->param.value, NULL);
+        send_downstream_event (pad, s);
+      }
+        break;
+      case DYNAMIC_INSERT_LONGTERM:
+      {
+        GstStructure *s;
 
-        event = gst_event_new_custom (GST_EVENT_CUSTOM_DOWNSTREAM, s);
-        peer = gst_pad_get_peer (pad);
+        g_print ("Inserting Longterm picture at Frame num = %d \n",
+            dynamic->start_frame);
 
-        if (!gst_pad_send_event (peer, event))
-          g_printerr ("Failed to send scene-change event\n");
+        s = gst_structure_new_empty ("omx-alg/insert-longterm");
+        send_downstream_event (pad, s);
+      }
+        break;
+      case DYNAMIC_USE_LONGTERM:
+      {
+        GstStructure *s;
 
-        gst_object_unref (peer);
+        g_print ("Using Longterm reference picture for Frame num = %d \n",
+            dynamic->start_frame);
+
+        s = gst_structure_new_empty ("omx-alg/use-longterm");
+        send_downstream_event (pad, s);
       }
         break;
       default:
@@ -349,11 +397,15 @@ main (int argc, char *argv[])
     {"dynamic-str", 'd', 0, G_OPTION_ARG_STRING, &enc.dynamic_str,
           "Dynamic feature string, pattern should be 'Dynamic_feature_str:Frame_number:Value'",
         NULL},
+    {"long-term-ref", 'l', 0, G_OPTION_ARG_INT, &enc.long_term_ref,
+        "Enable longterm reference pictures", NULL},
+    {"long-term-freq", 'u', 0, G_OPTION_ARG_INT, &enc.long_term_freq,
+        "Periodicity of longterm ref pictures", NULL},
     {NULL}
   };
 
   const char *summary =
-      "Dynamic Bitrate Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -o /run/op.h264 -i /run/input.yuv -d BR:100:1000 \nDynamic Bframes Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e hevc -f 30 -c 2 -g 30 -b 4 -o /run/op.h265 -i /run/input.yuv -d BFrm:10:2 \nROI Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -o /run/op.h264 -i /run/input.yuv -d ROI:1200x300:200x200:high \n\nDynamic-string pattern should be:\n'BR:frm_num:new_value_in_kbps' -> Dynamic Bitrate\n'BFrm:frame_num:new_value' -> Dynamic Bframes \n'KF:frame_num' -> Key Frame Insertion \n'GL:frame_num:new_value' -> Dynamic GOP length \n'ROI:XPOSxYPOS:roi_widthxroi_height:roi_type' -> ROI string";
+      "Dynamic Bitrate Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -o /run/op.h264 -i /run/input.yuv -d BR:100:1000 \nDynamic Bframes Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e hevc -f 30 -c 2 -g 30 -b 4 -o /run/op.h265 -i /run/input.yuv -d BFrm:10:2 \nROI Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -o /run/op.h264 -i /run/input.yuv -d ROI:1200x300:200x200:high \n\nDynamic-string pattern should be:\n'BR:frm_num:new_value_in_kbps' -> Dynamic Bitrate\n'BFrm:frame_num:new_value' -> Dynamic Bframes \n'KF:frame_num' -> Key Frame Insertion \n'GL:frame_num:new_value' -> Dynamic GOP length \n'ROI:frame_num:XPOSxYPOS:roi_widthxroi_height:roi_type' -> ROI string \n'IL:frame_num' -> Mark longterm reference picture \n'UL:frame_num -> Use longterm picture ";
 
   /* Set Encoder defalut parameters */
   enc.width = DEFAULT_VIDEO_WIDTH;
@@ -364,6 +416,8 @@ main (int argc, char *argv[])
   enc.b_frames = DEFAULT_ENCODER_B_FRAMES;
   enc.target_bitrate = DEFAULT_ENCODER_TARGET_BITRATE;
   enc.max_bitrate = DEFAULT_ENCODER_TARGET_BITRATE;
+  enc.long_term_ref = DEFAULT_LONGTERM_REF;
+  enc.long_term_freq = DEFAULT_LONGTERM_FREQ;
 
   context = g_option_context_new (" vcu encode test applicaiton");
   g_option_context_set_summary (context, summary);
@@ -412,7 +466,8 @@ main (int argc, char *argv[])
       "format", GST_VIDEO_FORMAT_NV12, "framerate", enc.framerate, 1, NULL);
   g_object_set (G_OBJECT (encoder), "target-bitrate", enc.target_bitrate,
       "b-frames", enc.b_frames, "control-rate", enc.control_rate, "gop-length",
-      enc.gop_length, NULL);
+      enc.gop_length, "long-term-ref", enc.long_term_ref, "long-term-freq",
+      enc.long_term_freq, NULL);
 
   /* set Encoder src caps */
   if (!g_strcmp0 (enc.type, "avc"))
