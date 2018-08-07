@@ -73,6 +73,7 @@ struct _GstKMSSink {
   gboolean fullscreen_enabled;
 
   GstVideoInfo vinfo;
+  GstVideoInfo vinfo_crtc;
   GstCaps *allowed_caps;
   GstBufferPool *pool;
   GstAllocator *allocator;
