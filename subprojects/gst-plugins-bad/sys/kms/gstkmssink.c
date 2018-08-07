@@ -800,6 +800,10 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
   mode = NULL;
   kmsmem = NULL;
 
+  if (self->vinfo_crtc.finfo
+      && gst_video_info_is_equal (&self->vinfo_crtc, vinfo))
+    return TRUE;
+
   if (self->conn_id < 0)
     goto bail;
 
@@ -854,6 +858,7 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
 
   g_clear_pointer (&self->tmp_kmsmem, gst_memory_unref);
   self->tmp_kmsmem = (GstMemory *) kmsmem;
+  self->vinfo_crtc = *vinfo;
 
   ret = TRUE;
 
