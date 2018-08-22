@@ -515,7 +515,7 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
     goto connector_failed;
 
   for (i = 0; i < conn->count_modes; i++) {
-    if (conn->modes[i].vdisplay == GST_VIDEO_INFO_HEIGHT (vinfo) &&
+    if (conn->modes[i].vdisplay == GST_VIDEO_INFO_FIELD_HEIGHT (vinfo) &&
         conn->modes[i].hdisplay == GST_VIDEO_INFO_WIDTH (vinfo)) {
       if (GST_VIDEO_INFO_INTERLACE_MODE (vinfo) ==
           GST_VIDEO_INTERLACE_MODE_ALTERNATE) {
