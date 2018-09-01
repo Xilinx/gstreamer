@@ -486,10 +486,11 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
   drmModeConnector *conn;
   int err;
   gint i;
-  drmModeModeInfo *mode;
+  drmModeModeInfo *mode = NULL;
+  drmModeModeInfo *cached_mode = NULL;
   guint32 fb_id;
   GstKMSMemory *kmsmem;
-
+  guint fps;
   ret = FALSE;
   conn = NULL;
   mode = NULL;
@@ -514,26 +515,33 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
   if (!conn)
     goto connector_failed;
 
+  fps = GST_VIDEO_INFO_FPS_N (vinfo) / GST_VIDEO_INFO_FPS_D (vinfo);
+
   for (i = 0; i < conn->count_modes; i++) {
     if (conn->modes[i].vdisplay == GST_VIDEO_INFO_FIELD_HEIGHT (vinfo) &&
         conn->modes[i].hdisplay == GST_VIDEO_INFO_WIDTH (vinfo)) {
       if (GST_VIDEO_INFO_INTERLACE_MODE (vinfo) ==
           GST_VIDEO_INTERLACE_MODE_ALTERNATE) {
-        guint fps;
 
         if (!(conn->modes[i].flags & DRM_MODE_FLAG_INTERLACE))
           continue;
 
-        fps = GST_VIDEO_INFO_FPS_N (vinfo) / GST_VIDEO_INFO_FPS_D (vinfo);
         if (conn->modes[i].vrefresh != fps * 2)
           continue;
+      } else if (conn->modes[i].vrefresh != fps) {
+        cached_mode = &conn->modes[i];
+        continue;
       }
       mode = &conn->modes[i];
       break;
     }
   }
-  if (!mode)
-    goto mode_failed;
+  if (!mode) {
+    if (cached_mode)
+      mode = cached_mode;
+    else
+      goto mode_failed;
+  }
 
   err = drmModeSetCrtc (self->fd, self->crtc_id, fb_id, 0, 0,
       (uint32_t *) & self->conn_id, 1, mode);
