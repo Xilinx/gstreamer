@@ -226,6 +226,10 @@ gst_omx_video_enc_roi_quality_type (void)
   return qtype;
 }
 
+#define LATENCY_MODE_DEPRECATION_MESSAGE  \
+  "Use a caps filter with 'alignment' field set to 'au' for " \
+  "normal latency and 'nal' for subframe latency " \
+  "(e.g.  ... ! omxh264enc ! video/x-h264,alignment=nal ! ...)."
 #define GST_TYPE_OMX_VIDEO_ENC_LATENCY_MODE (gst_omx_video_enc_latency_mode_get_type ())
 typedef enum
 {
@@ -566,7 +570,7 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
 
   g_object_class_install_property (gobject_class, PROP_LATENCY_MODE,
       g_param_spec_enum ("latency-mode", "latency mode",
-          "Encoder latency mode",
+          "DEPRECATED: " LATENCY_MODE_DEPRECATION_MESSAGE,
           GST_TYPE_OMX_VIDEO_ENC_LATENCY_MODE,
           GST_OMX_VIDEO_ENC_LATENCY_MODE_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
@@ -1517,6 +1521,8 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
       break;
     case PROP_LATENCY_MODE:
       self->latency_mode = g_value_get_enum (value);
+      g_warning ("Property 'latency-mode' is deprecated and have no effect. "
+          LATENCY_MODE_DEPRECATION_MESSAGE);
       break;
     case PROP_LONGTERM_REF:
       self->long_term_ref = g_value_get_boolean (value);
@@ -1653,7 +1659,7 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
       g_value_set_boolean (value, self->prefetch_buffer);
       break;
     case PROP_LATENCY_MODE:
-      g_value_set_enum (value, self->latency_mode);
+      g_value_set_enum (value, ENC_LATENCY_MODE_NORMAL);
       break;
     case PROP_LONGTERM_REF:
       g_value_set_boolean (value, self->long_term_ref);
