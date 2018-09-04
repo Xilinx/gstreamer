@@ -333,24 +333,18 @@ set_zynqultrascaleplus_props (GstOMXVideoDec * self)
 
   if (self->latency_mode != GST_OMX_VIDEO_DEC_LATENCY_MODE_DEFAULT) {
     OMX_ALG_VIDEO_PARAM_DECODED_PICTURE_BUFFER picture_buffer;
-    OMX_ALG_VIDEO_PARAM_SUBFRAME subframe_mode;
     GST_OMX_INIT_STRUCT (&picture_buffer);
-    GST_OMX_INIT_STRUCT (&subframe_mode);
     picture_buffer.nPortIndex = self->dec_in_port->index;
-    subframe_mode.nPortIndex = self->dec_in_port->index;
 
     if (self->latency_mode == LATENCY_MODE_NORMAL) {
       picture_buffer.eDecodedPictureBufferMode = OMX_ALG_DPB_NORMAL;
-      subframe_mode.bEnableSubframe = FALSE;
     } else if (self->latency_mode == LATENCY_MODE_REDUCED) {
       picture_buffer.eDecodedPictureBufferMode = OMX_ALG_DPB_NO_REORDERING;
-      subframe_mode.bEnableSubframe = FALSE;
     } else {
       g_warning ("'latency-mode' 'low' have same effect as 'reduced', "
           LATENCY_MODE_LOW_DEPRECATION_MESSAGE);
       /* Handle low latency mode */
       picture_buffer.eDecodedPictureBufferMode = OMX_ALG_DPB_NO_REORDERING;
-      subframe_mode.bEnableSubframe = TRUE;
     }
 
     GST_DEBUG_OBJECT (self, "setting decoded picture buffer mode to %d",
@@ -360,14 +354,6 @@ set_zynqultrascaleplus_props (GstOMXVideoDec * self)
         (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoDecodedPictureBuffer,
         &picture_buffer);
     CHECK_ERR ("decodec picture buffer");
-
-
-    GST_DEBUG_OBJECT (self, "setting sub frame mode to %d",
-        subframe_mode.bEnableSubframe);
-    err =
-        gst_omx_component_set_parameter (self->dec,
-        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoSubframe, &subframe_mode);
-    CHECK_ERR ("sub frame mode");
   }
   {
     OMX_ALG_VIDEO_PARAM_INPUT_PARSED split_input;
