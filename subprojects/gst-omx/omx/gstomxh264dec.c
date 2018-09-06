@@ -186,6 +186,20 @@ unsupported_level:
 }
 
 static gboolean
+set_subframe_mode (GstOMXVideoDec * self, GstVideoCodecState * state)
+{
+  const GstStructure *s;
+  const gchar *alignment;
+  gboolean enabled;
+
+  s = gst_caps_get_structure (state->caps, 0);
+  alignment = gst_structure_get_string (s, "alignment");
+  enabled = g_strcmp0 (alignment, "nal") == 0;
+
+  return gst_omx_port_set_subframe (self->dec_in_port, enabled);
+}
+
+static gboolean
 gst_omx_h264_dec_set_format (GstOMXVideoDec * dec, GstOMXPort * port,
     GstVideoCodecState * state)
 {
