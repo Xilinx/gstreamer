@@ -104,7 +104,7 @@ struct _GstOMXVideoDec
   /* properties */
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   guint32 internal_entropy_buffers;
-  guint32 latency_mode;
+  gboolean low_latency;
   gboolean split_input;
 #endif
 };

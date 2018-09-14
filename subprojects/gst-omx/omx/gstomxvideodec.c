@@ -91,11 +91,13 @@ enum
 {
   PROP_0,
   PROP_INTERNAL_ENTROPY_BUFFERS,
+  PROP_LOW_LATENCY,
   PROP_LATENCY_MODE,
   PROP_SPLIT_INPUT,
 };
 
 #define GST_OMX_VIDEO_DEC_INTERNAL_ENTROPY_BUFFERS_DEFAULT (5)
+#define GST_OMX_VIDEO_DEC_LOW_LATENCY_DEFAULT              (FALSE)
 #define GST_OMX_VIDEO_DEC_LATENCY_MODE_DEFAULT          (0xffffffff)
 #define GST_OMX_VIDEO_DEC_SPLIT_INPUT_DEFAULT              (FALSE)
 
@@ -160,10 +162,13 @@ gst_omx_video_dec_set_property (GObject * object, guint prop_id,
     case PROP_INTERNAL_ENTROPY_BUFFERS:
       self->internal_entropy_buffers = g_value_get_uint (value);
       break;
+    case PROP_LOW_LATENCY:
+      self->low_latency = g_value_get_boolean (value);
+      break;
     case PROP_LATENCY_MODE:
       g_warning ("Property 'latency-mode' is deprecated. "
           LATENCY_MODE_DEPRECATION_MESSAGE);
-      self->latency_mode = g_value_get_enum (value);
+      self->low_latency = g_value_get_enum (value) != LATENCY_MODE_NORMAL;
       break;
     case PROP_SPLIT_INPUT:
       self->split_input = g_value_get_boolean (value);
@@ -188,8 +193,11 @@ gst_omx_video_dec_get_property (GObject * object, guint prop_id,
     case PROP_INTERNAL_ENTROPY_BUFFERS:
       g_value_set_uint (value, self->internal_entropy_buffers);
       break;
+    case PROP_LOW_LATENCY:
+      g_value_set_boolean (value, self->low_latency);
+      break;
     case PROP_LATENCY_MODE:
-      g_value_set_enum (value, self->latency_mode);
+      g_value_set_enum (value, self->low_latency);
       break;
     case PROP_SPLIT_INPUT:
       g_value_set_boolean (value, self->split_input);
@@ -221,6 +229,17 @@ gst_omx_video_dec_class_init (GstOMXVideoDecClass * klass)
           2, 16, GST_OMX_VIDEO_DEC_INTERNAL_ENTROPY_BUFFERS_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
+
+  /* FIXME: Should be set the buffer read-only ? In that mode, the buffers
+   * comes out while they are still referenced by the DPB, hence normally,
+   * modifying the buffers would cause visual issues in the following
+   * frames. */
+  g_object_class_install_property (gobject_class, PROP_LOW_LATENCY,
+      g_param_spec_boolean ("low-latency", "low latency",
+          "When enabled, buffers will be pushed before they are evicted "
+          "from the DBP, reducing decoding latency.",
+          GST_OMX_VIDEO_DEC_LOW_LATENCY_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property (gobject_class, PROP_LATENCY_MODE,
       g_param_spec_enum ("latency-mode", "latency mode",
@@ -282,8 +301,7 @@ gst_omx_video_dec_init (GstOMXVideoDec * self)
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   self->internal_entropy_buffers =
       GST_OMX_VIDEO_DEC_INTERNAL_ENTROPY_BUFFERS_DEFAULT;
-
-  self->latency_mode = GST_OMX_VIDEO_DEC_LATENCY_MODE_DEFAULT;
+  self->low_latency = GST_OMX_VIDEO_DEC_LOW_LATENCY_DEFAULT;
   self->split_input = GST_OMX_VIDEO_DEC_SPLIT_INPUT_DEFAULT;
 #endif
 
@@ -331,20 +349,15 @@ set_zynqultrascaleplus_props (GstOMXVideoDec * self)
     CHECK_ERR ("internal entropy buffers");
   }
 
-  if (self->latency_mode != GST_OMX_VIDEO_DEC_LATENCY_MODE_DEFAULT) {
+  {
     OMX_ALG_VIDEO_PARAM_DECODED_PICTURE_BUFFER picture_buffer;
     GST_OMX_INIT_STRUCT (&picture_buffer);
     picture_buffer.nPortIndex = self->dec_in_port->index;
 
-    if (self->latency_mode == LATENCY_MODE_NORMAL) {
-      picture_buffer.eDecodedPictureBufferMode = OMX_ALG_DPB_NORMAL;
-    } else if (self->latency_mode == LATENCY_MODE_REDUCED) {
+    if (self->low_latency) {
       picture_buffer.eDecodedPictureBufferMode = OMX_ALG_DPB_NO_REORDERING;
     } else {
-      g_warning ("'latency-mode' 'low' have same effect as 'reduced', "
-          LATENCY_MODE_LOW_DEPRECATION_MESSAGE);
-      /* Handle low latency mode */
-      picture_buffer.eDecodedPictureBufferMode = OMX_ALG_DPB_NO_REORDERING;
+      picture_buffer.eDecodedPictureBufferMode = OMX_ALG_DPB_NORMAL;
     }
 
     GST_DEBUG_OBJECT (self, "setting decoded picture buffer mode to %d",
@@ -2054,7 +2067,6 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
       return;
     }
   }
-
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   if (acq_return == GST_OMX_ACQUIRE_BUFFER_RESOLUTION_CHANGE) {
     GST_DEBUG_OBJECT (self,
@@ -2575,7 +2587,6 @@ gst_omx_video_dec_negotiate (GstOMXVideoDec * self)
     GST_ERROR_OBJECT (self, "Failed to set video port format: %s (0x%08x)",
         gst_omx_error_to_string (err), err);
   }
-
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   {
     GstCapsFeatures *features;
