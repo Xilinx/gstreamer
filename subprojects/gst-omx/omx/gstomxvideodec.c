@@ -100,6 +100,13 @@ enum
 #define GST_OMX_VIDEO_DEC_SPLIT_INPUT_DEFAULT              (FALSE)
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#define LATENCY_MODE_LOW_DEPRECATION_MESSAGE \
+  "use a caps filter with 'alignment' field set to " \
+  "'au' for normal latency and 'nal' for subframe latency " \
+  "(e.g.  ... ! video/x-h264,alignment=nal ! omxh264dec low-latency=1 ! ...)."
+#define LATENCY_MODE_DEPRECATION_MESSAGE \
+  "For 'normal' and 'reduced' mode, use 'low-latency' boolean property " \
+  "instead. For 'low' mode, " LATENCY_MODE_LOW_DEPRECATION_MESSAGE
 #define GST_TYPE_OMX_VIDEO_DEC_LATENCY_MODE (gst_omx_video_dec_latency_mode_get_type ())
 typedef enum
 {
@@ -154,6 +161,8 @@ gst_omx_video_dec_set_property (GObject * object, guint prop_id,
       self->internal_entropy_buffers = g_value_get_uint (value);
       break;
     case PROP_LATENCY_MODE:
+      g_warning ("Property 'latency-mode' is deprecated. "
+          LATENCY_MODE_DEPRECATION_MESSAGE);
       self->latency_mode = g_value_get_enum (value);
       break;
     case PROP_SPLIT_INPUT:
@@ -215,7 +224,7 @@ gst_omx_video_dec_class_init (GstOMXVideoDecClass * klass)
 
   g_object_class_install_property (gobject_class, PROP_LATENCY_MODE,
       g_param_spec_enum ("latency-mode", "latency mode",
-          "Decoder latency mode",
+          "DEPRECATED: " LATENCY_MODE_DEPRECATION_MESSAGE,
           GST_TYPE_OMX_VIDEO_DEC_LATENCY_MODE,
           GST_OMX_VIDEO_DEC_LATENCY_MODE_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
@@ -337,6 +346,8 @@ set_zynqultrascaleplus_props (GstOMXVideoDec * self)
       picture_buffer.eDecodedPictureBufferMode = OMX_ALG_DPB_NO_REORDERING;
       subframe_mode.bEnableSubframe = FALSE;
     } else {
+      g_warning ("'latency-mode' 'low' have same effect as 'reduced', "
+          LATENCY_MODE_LOW_DEPRECATION_MESSAGE);
       /* Handle low latency mode */
       picture_buffer.eDecodedPictureBufferMode = OMX_ALG_DPB_NO_REORDERING;
       subframe_mode.bEnableSubframe = TRUE;
