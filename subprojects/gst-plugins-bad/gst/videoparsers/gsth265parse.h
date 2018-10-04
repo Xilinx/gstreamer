@@ -122,6 +122,10 @@ struct _GstH265Parse
   GstClockTime pending_key_unit_ts;
   GstEvent *force_key_unit_event;
 
+  /* For insertion of AU Delimiter */
+  gboolean aud_needed;
+  gboolean aud_insert;
+
   GstVideoMasteringDisplayInfo mastering_display_info;
   guint mastering_display_info_state;
 
