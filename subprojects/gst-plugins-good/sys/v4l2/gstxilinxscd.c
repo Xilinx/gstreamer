@@ -155,20 +155,50 @@ static gboolean
 gst_xilinx_scd_try_opening_device (GstXilinxScd * self, const gchar * video,
     const gchar * subdev)
 {
+  /* Video device */
   gst_v4l2_object_set_device (self->v4l2output, video);
 
   if (!gst_v4l2_object_open (self->v4l2output, NULL))
-    return FALSE;
+    goto failed;
 
   if (!gst_v4l2_object_get_exclusive_lock (self->v4l2output)) {
     GST_DEBUG_OBJECT (self, "%s is already used", video);
-    gst_v4l2_close (self->v4l2output);
-    return FALSE;
+    goto failed;
   }
 
   self->output_locked = TRUE;
 
+  /* v4l2 subdev */
+  gst_v4l2_object_set_device (self->subdev, subdev);
+
+  if (!gst_v4l2_object_open (self->subdev, NULL))
+    goto failed;
+
+  if (!gst_v4l2_object_get_exclusive_lock (self->subdev)) {
+    GST_DEBUG_OBJECT (self, "%s is already used", subdev);
+    goto failed;
+  }
+
+  self->subdev_locked = TRUE;
+
   return TRUE;
+
+failed:
+  if (self->output_locked) {
+    gst_v4l2_object_release_exclusive_lock (self->v4l2output);
+    self->output_locked = FALSE;
+  }
+  if (GST_V4L2_IS_OPEN (self->v4l2output))
+    gst_v4l2_object_close (self->v4l2output);
+
+  if (self->subdev_locked) {
+    gst_v4l2_object_release_exclusive_lock (self->subdev);
+    self->subdev_locked = FALSE;
+  }
+  if (GST_V4L2_IS_OPEN (self->subdev))
+    gst_v4l2_object_close (self->subdev);
+
+  return FALSE;
 }
 
 static gboolean
@@ -242,12 +272,12 @@ gst_xilinx_scd_open (GstXilinxScd * self)
     goto no_input_format;
 
   gst_poll_fd_init (&self->poll_fd);
-  self->poll_fd.fd = self->v4l2output->video_fd;
+  self->poll_fd.fd = self->subdev->video_fd;
 
   gst_poll_add_fd (self->event_poll, &self->poll_fd);
   gst_poll_fd_ctl_pri (self->event_poll, &self->poll_fd, TRUE);
 
-  if (!gst_v4l2_subscribe_event (self->v4l2output, SCD_EVENT_TYPE, 0, 0))
+  if (!gst_v4l2_subscribe_event (self->subdev, SCD_EVENT_TYPE, 0, 0))
     goto failure;
 
   return TRUE;
@@ -259,12 +289,19 @@ no_input_format:
   goto failure;
 
 failure:
-  if (GST_V4L2_IS_OPEN (self->v4l2output))
-    gst_v4l2_object_close (self->v4l2output);
   if (self->output_locked) {
     gst_v4l2_object_release_exclusive_lock (self->v4l2output);
     self->output_locked = FALSE;
   }
+  if (GST_V4L2_IS_OPEN (self->v4l2output))
+    gst_v4l2_object_close (self->v4l2output);
+
+  if (self->subdev_locked) {
+    gst_v4l2_object_release_exclusive_lock (self->subdev);
+    self->subdev_locked = FALSE;
+  }
+  if (GST_V4L2_IS_OPEN (self->subdev))
+    gst_v4l2_object_close (self->subdev);
 
   gst_caps_replace (&self->probed_sinkcaps, NULL);
 
@@ -285,6 +322,13 @@ gst_xilinx_scd_close (GstXilinxScd * self)
 
   gst_v4l2_object_close (self->v4l2output);
 
+  if (self->subdev_locked) {
+    gst_v4l2_object_release_exclusive_lock (self->subdev);
+    self->subdev_locked = FALSE;
+  }
+
+  gst_v4l2_object_close (self->subdev);
+
   gst_caps_replace (&self->probed_sinkcaps, NULL);
 }
 
@@ -296,6 +340,7 @@ gst_xilinx_scd_stop (GstBaseTransform * trans)
   GST_DEBUG_OBJECT (self, "Stop");
 
   gst_v4l2_object_stop (self->v4l2output);
+  gst_v4l2_object_stop (self->subdev);
 
   return TRUE;
 }
@@ -415,7 +460,7 @@ again:
     return GST_FLOW_ERROR;
   }
 
-  if (!gst_v4l2_dqevent (self->v4l2output, event)) {
+  if (!gst_v4l2_dqevent (self->subdev, event)) {
     GST_ELEMENT_ERROR (self, RESOURCE, READ, (NULL),
         ("Failed to dqueue event"));
     return GST_FLOW_ERROR;
@@ -578,6 +623,7 @@ gst_xilinx_scd_finalize (GObject * object)
 
   gst_poll_free (self->event_poll);
   gst_v4l2_object_destroy (self->v4l2output);
+  gst_v4l2_object_destroy (self->subdev);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -592,6 +638,9 @@ gst_xilinx_scd_init (GstXilinxScd * self)
   self->event_poll = gst_poll_new (TRUE);
   self->v4l2output->no_initial_format = TRUE;
   self->v4l2output->keep_aspect = FALSE;
+
+  self->subdev = gst_v4l2_object_new (GST_ELEMENT (self), GST_OBJECT (self),
+      0, DEFAULT_PROP_DEVICE, gst_v4l2_get_output, gst_v4l2_set_output, NULL);
 
   /* enable QoS */
   gst_base_transform_set_qos_enabled (GST_BASE_TRANSFORM (self), TRUE);
