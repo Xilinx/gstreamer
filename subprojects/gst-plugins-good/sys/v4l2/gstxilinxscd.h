@@ -54,6 +54,7 @@ struct _GstXilinxScd
   GstV4l2Object *v4l2output;
   GstPoll *event_poll;
   GstPollFD poll_fd;
+  gboolean output_locked;
 
   /* pads */
   GstCaps *probed_sinkcaps;

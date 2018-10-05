@@ -31,9 +31,11 @@
 
 #include "gstxilinxscd.h"
 #include "gstv4l2object.h"
+#include "gstv4l2media.h"
 
 #include <string.h>
 #include <gst/gst-i18n-plugin.h>
+#include "ext/media.h"
 
 #define DEFAULT_PROP_DEVICE "/dev/video0"
 
@@ -42,6 +44,7 @@ GST_DEBUG_CATEGORY_STATIC (gst_xilinx_scd_debug);
 
 #define SCD_EVENT_TYPE 0x08000301
 #define DRIVER_NAME "xilinx-vipp"
+#define ENTITY_SCD_PREFIX "xlnx-scdchan"
 
 enum
 {
@@ -95,11 +98,134 @@ gst_xilinx_scd_get_property (GObject * object,
 }
 
 static gboolean
+find_scd_video (GstV4l2Media * media, GstV4l2MediaEntity * scd_entity,
+    GstV4l2MediaEntity ** video_entity, GstV4l2MediaInterface ** video)
+{
+  GstV4l2MediaPad *pad;
+  GstV4l2MediaLink *link;
+  GList *l;
+
+  g_return_val_if_fail (video_entity && video, FALSE);
+
+  if (!scd_entity->pads)
+    return FALSE;
+
+  pad = scd_entity->pads->data;
+  l = gst_v4l2_media_find_pads_linked_with_sink (media, pad);
+
+  if (!l)
+    return FALSE;
+
+  link = l->data;
+  g_list_free (l);
+  pad = link->source;
+  *video_entity = pad->entity;
+
+  l = gst_v4l2_media_find_interfaces_linked_with_entity (media, *video_entity,
+      MEDIA_INTF_T_V4L_VIDEO);
+  if (!l)
+    return FALSE;
+
+  *video = l->data;
+  g_list_free (l);
+
+  return TRUE;
+}
+
+static GstV4l2MediaInterface *
+find_scd_subdev (GstV4l2Media * media, GstV4l2MediaEntity * scd_entity)
+{
+  GstV4l2MediaInterface *subdev;
+  GList *l;
+
+  if (!g_str_has_prefix (scd_entity->name, ENTITY_SCD_PREFIX))
+    return NULL;
+
+  l = gst_v4l2_media_find_interfaces_linked_with_entity (media, scd_entity,
+      MEDIA_INTF_T_V4L_SUBDEV);
+
+  if (!l)
+    return FALSE;
+  subdev = l->data;
+  g_list_free (l);
+  return subdev;
+}
+
+static gboolean
+gst_xilinx_scd_try_opening_device (GstXilinxScd * self, const gchar * video,
+    const gchar * subdev)
+{
+  gst_v4l2_object_set_device (self->v4l2output, video);
+
+  if (!gst_v4l2_object_open (self->v4l2output, NULL))
+    return FALSE;
+
+  if (!gst_v4l2_object_get_exclusive_lock (self->v4l2output)) {
+    GST_DEBUG_OBJECT (self, "%s is already used", video);
+    gst_v4l2_close (self->v4l2output);
+    return FALSE;
+  }
+
+  self->output_locked = TRUE;
+
+  return TRUE;
+}
+
+static gboolean
+gst_xilinx_scd_find_device (GstXilinxScd * self)
+{
+  GstV4l2Media *media;
+  GList *entities = NULL, *l;
+  gboolean result = FALSE;
+
+  media = gst_v4l2_media_new (NULL);
+
+  if (!gst_v4l2_media_open (media))
+    goto out;
+
+  if (!gst_v4l2_media_refresh_topology (media))
+    goto out;
+
+  entities = gst_v4l2_media_get_entities (media);
+
+  for (l = entities; l && !result; l = g_list_next (l)) {
+    GstV4l2MediaEntity *entity = l->data;
+    GstV4l2MediaEntity *video_entity;
+    GstV4l2MediaInterface *subdev, *video;
+    gchar *subdev_file, *video_file;
+
+    subdev = find_scd_subdev (media, entity);
+    if (!subdev)
+      continue;
+
+    if (!find_scd_video (media, entity, &video_entity, &video))
+      continue;
+
+    subdev_file = gst_v4l2_media_get_interface_device_file (media, subdev);
+    video_file = gst_v4l2_media_get_interface_device_file (media, video);
+
+    GST_DEBUG_OBJECT (self,
+        "SCD device: '%s' (%s) subdev '%s' (%s)",
+        video_entity->name, video_file, entity->name, subdev_file);
+
+    result = gst_xilinx_scd_try_opening_device (self, video_file, subdev_file);
+
+    g_free (subdev_file);
+    g_free (video_file);
+  }
+
+out:
+  g_list_free (entities);
+  gst_v4l2_media_free (media);
+  return result;
+}
+
+static gboolean
 gst_xilinx_scd_open (GstXilinxScd * self)
 {
   GST_DEBUG_OBJECT (self, "Opening");
 
-  if (!gst_v4l2_object_open (self->v4l2output, NULL))
+  if (!gst_xilinx_scd_find_device (self))
     goto failure;
 
   if (!g_str_equal (self->v4l2output->vcap.driver, DRIVER_NAME)) {
@@ -135,6 +261,10 @@ no_input_format:
 failure:
   if (GST_V4L2_IS_OPEN (self->v4l2output))
     gst_v4l2_object_close (self->v4l2output);
+  if (self->output_locked) {
+    gst_v4l2_object_release_exclusive_lock (self->v4l2output);
+    self->output_locked = FALSE;
+  }
 
   gst_caps_replace (&self->probed_sinkcaps, NULL);
 
@@ -147,6 +277,11 @@ gst_xilinx_scd_close (GstXilinxScd * self)
   GST_DEBUG_OBJECT (self, "Closing");
 
   gst_poll_remove_fd (self->event_poll, &self->poll_fd);
+
+  if (self->output_locked) {
+    gst_v4l2_object_release_exclusive_lock (self->v4l2output);
+    self->output_locked = FALSE;
+  }
 
   gst_v4l2_object_close (self->v4l2output);
 
@@ -468,6 +603,7 @@ gst_xilinx_scd_class_init (GstXilinxScdClass * klass)
   GstElementClass *element_class;
   GObjectClass *gobject_class;
   GstBaseTransformClass *base_transform_class;
+  GParamSpec *spec;
 
   element_class = (GstElementClass *) klass;
   gobject_class = (GObjectClass *) klass;
@@ -509,4 +645,9 @@ gst_xilinx_scd_class_init (GstXilinxScdClass * klass)
 
   gst_v4l2_object_install_properties_helper (gobject_class,
       DEFAULT_PROP_DEVICE);
+
+  /* device isn't writable as a free device is picked automatically */
+  spec = g_object_class_find_property (gobject_class, "device");
+  g_assert (spec);
+  spec->flags &= ~G_PARAM_WRITABLE;
 }
