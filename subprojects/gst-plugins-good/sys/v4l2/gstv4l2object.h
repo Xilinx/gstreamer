@@ -281,6 +281,9 @@ gboolean     gst_v4l2_object_open            (GstV4l2Object * v4l2object, GstV4l
 gboolean     gst_v4l2_object_open_shared     (GstV4l2Object * v4l2object, GstV4l2Object * other);
 gboolean     gst_v4l2_object_close           (GstV4l2Object * v4l2object);
 
+gboolean     gst_v4l2_object_get_exclusive_lock (GstV4l2Object *v4l2object);
+gboolean     gst_v4l2_object_release_exclusive_lock (GstV4l2Object *v4l2object);
+
 /* probing */
 
 GstCaps*     gst_v4l2_object_get_all_caps (void);

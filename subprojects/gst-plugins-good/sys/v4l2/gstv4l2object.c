@@ -22,6 +22,7 @@
 #include <config.h>
 #endif
 
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -5368,4 +5369,20 @@ gst_v4l2_object_set_device (GstV4l2Object * v4l2object, const gchar * device)
 {
   g_free (v4l2object->videodev);
   v4l2object->videodev = g_strdup (device);
+}
+
+gboolean
+gst_v4l2_object_get_exclusive_lock (GstV4l2Object * v4l2object)
+{
+  g_return_val_if_fail (GST_V4L2_IS_OPEN (v4l2object), FALSE);
+
+  return flock (v4l2object->video_fd, LOCK_EX | LOCK_NB) == 0;
+}
+
+gboolean
+gst_v4l2_object_release_exclusive_lock (GstV4l2Object * v4l2object)
+{
+  g_return_val_if_fail (GST_V4L2_IS_OPEN (v4l2object), FALSE);
+
+  return flock (v4l2object->video_fd, LOCK_UN | LOCK_NB) == 0;
 }
