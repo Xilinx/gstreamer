@@ -55,6 +55,8 @@ struct _GstXilinxScd
   GstPoll *event_poll;
   GstPollFD poll_fd;
   gboolean output_locked;
+  GstV4l2Object *subdev;
+  gboolean subdev_locked;
 
   /* pads */
   GstCaps *probed_sinkcaps;
