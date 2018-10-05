@@ -39,7 +39,7 @@
 GST_DEBUG_CATEGORY_STATIC (gst_xilinx_scd_debug);
 #define GST_CAT_DEFAULT gst_xilinx_scd_debug
 
-#define SCD_EVENT_TYPE V4L2_EVENT_PRIVATE_START
+#define SCD_EVENT_TYPE 0x08000301
 #define DRIVER_NAME "xilinx-vipp"
 
 enum
