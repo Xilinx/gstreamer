@@ -205,6 +205,7 @@ gst_h265_parse_reset_frame (GstH265Parse * h265parse)
   h265parse->have_vps_in_frame = FALSE;
   h265parse->have_sps_in_frame = FALSE;
   h265parse->have_pps_in_frame = FALSE;
+  h265parse->frame_start = FALSE;
   h265parse->aud_insert = FALSE;
   gst_adapter_clear (h265parse->frame_out);
 }
@@ -894,9 +895,11 @@ gst_h265_parse_process_nal (GstH265Parse * h265parse, GstH265NalUnit * nalu)
 
         h265parse->state |= GST_H265_PARSE_STATE_GOT_SLICE;
       }
-      if (slice.first_slice_segment_in_pic_flag == 1)
+      if (slice.first_slice_segment_in_pic_flag == 1) {
         GST_DEBUG_OBJECT (h265parse,
             "frame start, first_slice_segment_in_pic_flag = 1");
+        h265parse->frame_start = TRUE;
+      }
 
       GST_DEBUG_OBJECT (h265parse,
           "parse result %d, first slice_segment: %u, slice type: %u",
@@ -2599,13 +2602,16 @@ gst_h265_parse_parse_frame (GstBaseParse * parse, GstBaseParseFrame * frame)
 
   gst_h265_parse_update_src_caps (h265parse, NULL);
 
-  if (h265parse->fps_num > 0 && h265parse->fps_den > 0) {
+  if (h265parse->frame_start && h265parse->fps_num > 0 &&
+      h265parse->fps_den > 0) {
     GstClockTime val =
         gst_h265_parse_is_field_interlaced (h265parse) ? GST_SECOND /
         2 : GST_SECOND;
 
     GST_BUFFER_DURATION (buffer) = gst_util_uint64_scale (val,
         h265parse->fps_den, h265parse->fps_num);
+  } else {
+    GST_BUFFER_DURATION (buffer) = 0;
   }
 
   if (h265parse->keyframe)
