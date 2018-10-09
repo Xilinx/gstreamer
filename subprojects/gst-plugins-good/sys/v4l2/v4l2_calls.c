@@ -560,24 +560,27 @@ gst_v4l2_open (GstV4l2Object * v4l2object, GstV4l2Error * error)
   if (libv4l2_fd != -1)
     v4l2object->video_fd = libv4l2_fd;
 
-  /* get capabilities, error will be posted */
-  if (!gst_v4l2_get_capabilities (v4l2object))
-    goto error;
+  /* type=0 can be used with sudev which doesn't implement VIDIOC_QUERYCAP */
+  if (v4l2object->type) {
+    /* get capabilities, error will be posted */
+    if (!gst_v4l2_get_capabilities (v4l2object))
+      goto error;
 
-  /* do we need to be a capture device? */
-  if (GST_IS_V4L2SRC (v4l2object->element) &&
-      !(v4l2object->device_caps & (V4L2_CAP_VIDEO_CAPTURE |
-              V4L2_CAP_VIDEO_CAPTURE_MPLANE)))
-    goto not_capture;
+    /* do we need to be a capture device? */
+    if (GST_IS_V4L2SRC (v4l2object->element) &&
+        !(v4l2object->device_caps & (V4L2_CAP_VIDEO_CAPTURE |
+                V4L2_CAP_VIDEO_CAPTURE_MPLANE)))
+      goto not_capture;
 
-  if (GST_IS_V4L2SINK (v4l2object->element) &&
-      !(v4l2object->device_caps & (V4L2_CAP_VIDEO_OUTPUT |
-              V4L2_CAP_VIDEO_OUTPUT_MPLANE)))
-    goto not_output;
+    if (GST_IS_V4L2SINK (v4l2object->element) &&
+        !(v4l2object->device_caps & (V4L2_CAP_VIDEO_OUTPUT |
+                V4L2_CAP_VIDEO_OUTPUT_MPLANE)))
+      goto not_output;
 
-  if (GST_IS_V4L2_VIDEO_DEC (v4l2object->element) &&
-      !GST_V4L2_IS_M2M (v4l2object->device_caps))
-    goto not_m2m;
+    if (GST_IS_V4L2_VIDEO_DEC (v4l2object->element) &&
+        !GST_V4L2_IS_M2M (v4l2object->device_caps))
+      goto not_m2m;
+  }
 
   gst_v4l2_adjust_buf_type (v4l2object);
 
