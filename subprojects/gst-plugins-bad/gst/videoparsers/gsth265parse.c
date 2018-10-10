@@ -1353,23 +1353,29 @@ gst_h265_parse_handle_frame (GstBaseParse * parse,
     }
 
     if (nonext) {
-      /* If there is a marker flag, or input is AU, we know this is complete */
-      if (GST_BUFFER_FLAG_IS_SET (frame->buffer, GST_BUFFER_FLAG_MARKER) ||
-          h265parse->in_align == GST_H265_PARSE_ALIGN_AU) {
-        h265parse->marker = TRUE;
-        break;
-      }
+      /* We may have complete frame if we have valid header */
+      if (GST_H265_PARSE_STATE_VALID (h265parse,
+              GST_H265_PARSE_STATE_VALID_PICTURE_HEADERS)) {
+        /* If there is a marker flag, or input is AU */
+        if (GST_BUFFER_FLAG_IS_SET (frame->buffer, GST_BUFFER_FLAG_MARKER) ||
+            h265parse->in_align == GST_H265_PARSE_ALIGN_AU) {
+          h265parse->marker = TRUE;
+          break;
+        }
 
-      /* or if we are draining or producing NALs */
-      if (drain || h265parse->align == GST_H265_PARSE_ALIGN_NAL)
-        break;
+        /* or if we are draining or producing NALs */
+        if (drain || h265parse->align == GST_H265_PARSE_ALIGN_NAL)
+          break;
+      }
 
       current_off = nalu.offset + nalu.size;
       goto more;
     }
 
-    /* If the output is NAL, we are done */
-    if (h265parse->align == GST_H265_PARSE_ALIGN_NAL)
+    /* If the output is NAL and have valid header, we are done */
+    if (h265parse->align == GST_H265_PARSE_ALIGN_NAL &&
+        GST_H265_PARSE_STATE_VALID (h265parse,
+            GST_H265_PARSE_STATE_VALID_PICTURE_HEADERS))
       break;
 
     GST_DEBUG_OBJECT (h265parse, "Looking for more");
