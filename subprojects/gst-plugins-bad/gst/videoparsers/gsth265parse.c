@@ -832,7 +832,6 @@ gst_h265_parse_process_nal (GstH265Parse * h265parse, GstH265NalUnit * nalu)
       h265parse->state |= GST_H265_PARSE_STATE_GOT_PPS;
       break;
     case GST_H265_NAL_PREFIX_SEI:
-    case GST_H265_NAL_SUFFIX_SEI:
       /* expected state: got-sps */
       if (!GST_H265_PARSE_STATE_VALID (h265parse, GST_H265_PARSE_STATE_GOT_SPS))
         return FALSE;
@@ -842,7 +841,7 @@ gst_h265_parse_process_nal (GstH265Parse * h265parse, GstH265NalUnit * nalu)
       gst_h265_parse_process_sei (h265parse, nalu);
 
       /* mark SEI pos */
-      if (nal_type == GST_H265_NAL_PREFIX_SEI && h265parse->sei_pos == -1) {
+      if (h265parse->sei_pos == -1) {
         if (h265parse->transform)
           h265parse->sei_pos = gst_adapter_available (h265parse->frame_out);
         else
@@ -850,6 +849,14 @@ gst_h265_parse_process_nal (GstH265Parse * h265parse, GstH265NalUnit * nalu)
         GST_DEBUG_OBJECT (h265parse, "marking SEI in frame at offset %d",
             h265parse->sei_pos);
       }
+      break;
+
+    case GST_H265_NAL_SUFFIX_SEI:
+      /* expected state: got-slice */
+      if (!GST_H265_PARSE_STATE_VALID (h265parse,
+              GST_H265_PARSE_STATE_GOT_SLICE))
+        return FALSE;
+      gst_h265_parse_process_sei (h265parse, nalu);
       break;
 
     case GST_H265_NAL_SLICE_TRAIL_N:
