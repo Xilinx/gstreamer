@@ -1516,23 +1516,29 @@ gst_h264_parse_handle_frame (GstBaseParse * parse,
 
     /* if no next nal, we reached the end of this buffer */
     if (nonext) {
-      /* If there is a marker flag, or input is AU, we know this is complete */
-      if (GST_BUFFER_FLAG_IS_SET (frame->buffer, GST_BUFFER_FLAG_MARKER) ||
-          h264parse->in_align == GST_H264_PARSE_ALIGN_AU) {
-        h264parse->marker = TRUE;
-        break;
-      }
+      /* We may have complete frame ff we have valid header */
+      if (GST_H264_PARSE_STATE_VALID (h264parse,
+              GST_H264_PARSE_STATE_VALID_PICTURE_HEADERS)) {
+        /* If there is a marker flag, or input is AU */
+        if (GST_BUFFER_FLAG_IS_SET (frame->buffer, GST_BUFFER_FLAG_MARKER) ||
+            h264parse->in_align == GST_H264_PARSE_ALIGN_AU) {
+          h264parse->marker = TRUE;
+          break;
+        }
 
-      /* or if we are draining */
-      if (drain || h264parse->align == GST_H264_PARSE_ALIGN_NAL)
-        break;
+        /* or if we are draining */
+        if (drain || h264parse->align == GST_H264_PARSE_ALIGN_NAL)
+          break;
+      }
 
       current_off = nalu.offset + nalu.size;
       goto more;
     }
 
     /* If the output is NAL, we are done */
-    if (h264parse->align == GST_H264_PARSE_ALIGN_NAL)
+    if (h264parse->align == GST_H264_PARSE_ALIGN_NAL &&
+        GST_H264_PARSE_STATE_VALID (h264parse,
+            GST_H264_PARSE_STATE_VALID_PICTURE_HEADERS))
       break;
 
     GST_DEBUG_OBJECT (h264parse, "Looking for more");
