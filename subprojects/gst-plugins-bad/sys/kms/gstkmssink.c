@@ -65,6 +65,13 @@
 #define GST_PLUGIN_NAME "kmssink"
 #define GST_PLUGIN_DESC "Video sink using the Linux kernel mode setting API"
 
+#ifndef DRM_MODE_FB_ALTERNATE_TOP
+#  define DRM_MODE_FB_ALTERNATE_TOP       (1<<2)        /* for alternate top field */
+#endif
+#ifndef DRM_MODE_FB_ALTERNATE_BOTTOM
+#  define DRM_MODE_FB_ALTERNATE_BOTTOM    (1<<3)        /* for alternate bottom field */
+#endif
+
 GST_DEBUG_CATEGORY_STATIC (gst_kms_sink_debug);
 GST_DEBUG_CATEGORY_STATIC (CAT_PERFORMANCE);
 #define GST_CAT_DEFAULT gst_kms_sink_debug
@@ -1792,6 +1799,7 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
   GstVideoRectangle dst = { 0, };
   GstVideoRectangle result;
   GstFlowReturn res;
+  guint32 flags = 0;
 
   self = GST_KMS_SINK (vsink);
 
@@ -1815,8 +1823,18 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
   if (!buffer)
     return GST_FLOW_ERROR;
 
+  if (GST_BUFFER_FLAG_IS_SET (buffer, GST_VIDEO_BUFFER_FLAG_ONEFIELD)) {
+    if (GST_BUFFER_FLAG_IS_SET (buffer, GST_VIDEO_BUFFER_FLAG_TFF)) {
+      GST_DEBUG_OBJECT (vsink, "Received TOP field.");
+      flags |= DRM_MODE_FB_ALTERNATE_TOP;
+    } else {
+      GST_DEBUG_OBJECT (vsink, "Received BOTTOM field.");
+      flags |= DRM_MODE_FB_ALTERNATE_BOTTOM;
+    }
+  }
+
   mem = gst_buffer_peek_memory (buffer, 0);
-  if (!gst_kms_memory_add_fb (mem, &self->vinfo, 0))
+  if (!gst_kms_memory_add_fb (mem, &self->vinfo, flags))
     goto buffer_invalid;
 
   fb_id = gst_kms_memory_get_fb_id (mem);
