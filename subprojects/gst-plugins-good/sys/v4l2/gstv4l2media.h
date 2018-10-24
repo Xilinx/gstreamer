@@ -98,4 +98,5 @@ GList * gst_v4l2_media_find_pads_linked_with_sink (GstV4l2Media * self, GstV4l2M
 
 gchar * gst_v4l2_media_get_interface_device_file (GstV4l2Media *self, GstV4l2MediaInterface * interface);
 
+gchar * gst_v4l2_media_get_device_file (gchar *video_file);
 #endif /* __GST_V4L2_MEDIA_H__ */
