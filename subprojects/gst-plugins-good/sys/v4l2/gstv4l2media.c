@@ -413,3 +413,36 @@ gst_v4l2_media_get_interface_device_file (GstV4l2Media * self,
 #endif
   return NULL;
 }
+
+/* Get /dev/mediaX media node from /dev/videoX or /dev/v4l-subdevX */
+gchar *
+gst_v4l2_media_get_device_file (gchar * video_file)
+{
+  gchar **src_v = NULL;
+  gchar *search_path = NULL;
+  gchar *search_path_tmp = NULL;
+  const gchar *filename = NULL;
+  gchar *media_path = NULL;
+  GDir *dir;
+
+  g_return_val_if_fail (video_file, NULL);
+  src_v = g_strsplit_set (video_file, "/", 3);
+  search_path_tmp = g_strjoin ("/", "/sys/class/video4linux", src_v[2], NULL);
+  search_path = g_strjoin ("/", search_path_tmp, "device", NULL);
+  dir = g_dir_open (search_path, 0, NULL);
+  if (dir) {
+    while ((filename = g_dir_read_name (dir))) {
+      if (g_str_has_prefix (filename, "media"))
+        break;
+    }
+  }
+
+  media_path = g_strjoin ("/", "/dev", filename, NULL);
+  g_dir_close (dir);
+  g_strfreev (src_v);
+  g_free (search_path_tmp);
+  g_free (search_path);
+
+  return media_path;
+
+}
