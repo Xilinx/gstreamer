@@ -31,6 +31,14 @@
 
 #include "gstkmsutils.h"
 
+#ifndef DRM_FORMAT_XV15
+#define DRM_FORMAT_XV15		fourcc_code('X', 'V', '1', '5') /* 2x2 subsampled Cr:Cb plane 2:10:10:10 */
+#endif
+
+#ifndef DRM_FORMAT_XV20
+#define DRM_FORMAT_XV20		fourcc_code('X', 'V', '2', '0') /* 2x1 subsampled Cr:Cb plane 2:10:10:10 */
+#endif
+
 /* *INDENT-OFF* */
 static const struct
 {
