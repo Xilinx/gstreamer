@@ -31,6 +31,14 @@
 
 #include "gstkmsutils.h"
 
+#ifndef DRM_FORMAT_Y8
+#define DRM_FORMAT_Y8		fourcc_code('G', 'R', 'E', 'Y') /* 8  Greyscale	*/
+#endif
+
+#ifndef DRM_FORMAT_Y10
+#define DRM_FORMAT_Y10		fourcc_code('Y', '1', '0', ' ') /* 10 Greyscale */
+#endif
+
 #ifndef DRM_FORMAT_XV15
 #define DRM_FORMAT_XV15		fourcc_code('X', 'V', '1', '5') /* 2x2 subsampled Cr:Cb plane 2:10:10:10 */
 #endif
@@ -57,6 +65,9 @@ static const struct
 
   /* 16bits/c YUV 4:2:0 */
   DEF_FMT (P016, P016_LE),
+
+  DEF_FMT (Y8, GRAY8),
+  DEF_FMT (Y10, GRAY10_LE32),
 
   /* 16bits/c YUV 4:2:0 */
   DEF_FMT (P010, P010_10LE),
