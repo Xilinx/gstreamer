@@ -70,5 +70,7 @@ struct _GstXilinxScdClass
 
 GType gst_xilinx_scd_get_type (void);
 
+gboolean gst_xilinx_scd_register (GstPlugin * plugin);
+
 G_END_DECLS
 #endif /* __GST_XILINX_SCD_H__ */

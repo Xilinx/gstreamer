@@ -729,6 +729,13 @@ gst_xilinx_scd_init (GstXilinxScd * self)
 }
 
 static void
+gst_xilinx_scd_debug_init (void)
+{
+  GST_DEBUG_CATEGORY_INIT (gst_xilinx_scd_debug, "xilinxscd", 0,
+      "Xilinx Scene Change Detector");
+}
+
+static void
 gst_xilinx_scd_class_init (GstXilinxScdClass * klass)
 {
   GstElementClass *element_class;
@@ -740,8 +747,7 @@ gst_xilinx_scd_class_init (GstXilinxScdClass * klass)
   gobject_class = (GObjectClass *) klass;
   base_transform_class = (GstBaseTransformClass *) klass;
 
-  GST_DEBUG_CATEGORY_INIT (gst_xilinx_scd_debug, "xilinxscd", 0,
-      "Xilinx Scene Change Detector");
+  gst_xilinx_scd_debug_init ();
 
   gst_element_class_set_static_metadata (element_class,
       "Xilinx Scene Change Detector",
@@ -781,4 +787,26 @@ gst_xilinx_scd_class_init (GstXilinxScdClass * klass)
   spec = g_object_class_find_property (gobject_class, "device");
   g_assert (spec);
   spec->flags &= ~G_PARAM_WRITABLE;
+}
+
+gboolean
+gst_xilinx_scd_register (GstPlugin * plugin)
+{
+  GstXilinxScdIterator *it;
+  gboolean found;
+
+  gst_xilinx_scd_debug_init ();
+
+  /* Register the element if there is at least one SCD device on the system */
+  it = gst_xilinx_scd_iterator_new ();
+  found = gst_xilinx_scd_iterator_next (it, NULL, NULL);
+  gst_xilinx_scd_iterator_free (it);
+
+  if (!found) {
+    GST_DEBUG ("No SCD device found, don't register xilinxscd");
+    return TRUE;
+  }
+
+  return gst_element_register (plugin, "xilinxscd", GST_RANK_NONE,
+      GST_TYPE_XILINX_SCD);
 }
