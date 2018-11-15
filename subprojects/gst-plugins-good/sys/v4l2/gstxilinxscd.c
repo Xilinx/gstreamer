@@ -200,52 +200,135 @@ failed:
   return FALSE;
 }
 
-static gboolean
-gst_xilinx_scd_find_device (GstXilinxScd * self)
+#define MAX_MEDIA_INDEX 64
+
+typedef struct
 {
   GstV4l2Media *media;
-  GList *entities = NULL, *l;
-  gboolean result = FALSE;
+  gint media_idx;
+  GList *entities;
+  GList *entities_it;
+} GstXilinxScdIterator;
 
-  media = gst_v4l2_media_new (NULL);
+static GstXilinxScdIterator *
+gst_xilinx_scd_iterator_new (void)
+{
+  GstXilinxScdIterator *it;
 
-  if (!gst_v4l2_media_open (media))
-    goto out;
+  it = g_new0 (GstXilinxScdIterator, 1);
+  it->media_idx = -1;
+  return it;
+}
 
-  if (!gst_v4l2_media_refresh_topology (media))
-    goto out;
+static void
+gst_xilinx_scd_iterator_free (GstXilinxScdIterator * it)
+{
+  g_clear_pointer (&it->media, gst_v4l2_media_free);
+  g_clear_pointer (&it->entities, g_list_free);
+  g_free (it);
+}
 
-  entities = gst_v4l2_media_get_entities (media);
+static gboolean
+gst_xilinx_scd_iterator_next (GstXilinxScdIterator * it,
+    gchar ** video_file_out, gchar ** subdev_file_out)
+{
+  GList *l;
 
-  for (l = entities; l && !result; l = g_list_next (l)) {
+  /* Find the next /dev/media%d */
+retry:
+  while (!it->media) {
+    gchar *path;
+
+    it->media_idx++;
+
+    if (it->media_idx > MAX_MEDIA_INDEX)
+      return FALSE;
+
+    path = g_strdup_printf ("/dev/media%d", it->media_idx);
+    if (!g_file_test (path, G_FILE_TEST_EXISTS)) {
+      g_free (path);
+      continue;
+    }
+
+    it->media = gst_v4l2_media_new (path);
+    g_free (path);
+
+    if (!gst_v4l2_media_open (it->media)) {
+      g_clear_pointer (&it->media, gst_v4l2_media_free);
+      continue;
+    }
+
+    if (!gst_v4l2_media_refresh_topology (it->media)) {
+      g_clear_pointer (&it->media, gst_v4l2_media_free);
+      continue;
+    }
+
+    g_clear_pointer (&it->entities, g_list_free);
+    it->entities = gst_v4l2_media_get_entities (it->media);
+    it->entities_it = it->entities;
+  }
+
+  for (l = it->entities_it; l; l = g_list_next (l)) {
     GstV4l2MediaEntity *entity = l->data;
     GstV4l2MediaEntity *video_entity;
     GstV4l2MediaInterface *subdev, *video;
     gchar *subdev_file, *video_file;
 
-    subdev = find_scd_subdev (media, entity);
+    subdev = find_scd_subdev (it->media, entity);
     if (!subdev)
       continue;
 
-    if (!find_scd_video (media, entity, &video_entity, &video))
+    if (!find_scd_video (it->media, entity, &video_entity, &video))
       continue;
 
-    subdev_file = gst_v4l2_media_get_interface_device_file (media, subdev);
-    video_file = gst_v4l2_media_get_interface_device_file (media, video);
+    /* Found device */
+    subdev_file = gst_v4l2_media_get_interface_device_file (it->media, subdev);
+    video_file = gst_v4l2_media_get_interface_device_file (it->media, video);
 
-    GST_DEBUG_OBJECT (self,
-        "SCD device: '%s' (%s) subdev '%s' (%s)",
+    GST_DEBUG ("SCD device: '%s' (%s) subdev '%s' (%s)",
         video_entity->name, video_file, entity->name, subdev_file);
 
+    if (video_file_out)
+      *video_file_out = video_file;
+    else
+      g_free (video_file);
+
+    if (subdev_file_out)
+      *subdev_file_out = subdev_file;
+    else
+      g_free (subdev_file);
+
+    it->entities_it = g_list_next (l);
+    return TRUE;
+  }
+
+  /* Didn't find device with current media, try next one */
+  g_clear_pointer (&it->media, gst_v4l2_media_free);
+  goto retry;
+}
+
+static gboolean
+gst_xilinx_scd_find_device (GstXilinxScd * self)
+{
+  GstXilinxScdIterator *it;
+  gboolean result = FALSE;
+  gchar *subdev_file, *video_file;
+
+  it = gst_xilinx_scd_iterator_new ();
+
+  while (gst_xilinx_scd_iterator_next (it, &video_file, &subdev_file)
+      && !result) {
     result = gst_xilinx_scd_try_opening_device (self, video_file, subdev_file);
 
     g_free (subdev_file);
     g_free (video_file);
   }
 
-out:
-  g_list_free (entities);
-  gst_v4l2_media_free (media);
+  gst_xilinx_scd_iterator_free (it);
+
+  if (!result)
+    GST_DEBUG ("Didn't find any SCD device");
+
   return result;
 }
 
