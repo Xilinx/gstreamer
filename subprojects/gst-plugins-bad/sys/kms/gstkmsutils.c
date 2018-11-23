@@ -258,7 +258,7 @@ GstCaps *
 gst_kms_sink_caps_template_fill (void)
 {
   gint i;
-  GstCaps *caps;
+  GstCaps *caps, *caps_alternate;
   GstStructure *template;
 
   caps = gst_caps_new_empty ();
@@ -270,7 +270,19 @@ gst_kms_sink_caps_template_fill (void)
         "framerate", GST_TYPE_FRACTION_RANGE, 0, 1, G_MAXINT, 1, NULL);
     gst_caps_append_structure (caps, template);
   }
-  return gst_caps_simplify (caps);
+  caps = gst_caps_simplify (caps);
+
+  /* Add an 'alternate' variant of the caps with the feature */
+  caps_alternate = gst_caps_copy (caps);
+  gst_caps_set_simple (caps_alternate, "interlace-mode", G_TYPE_STRING,
+      "alternate", NULL);
+
+  for (i = 0; i < gst_caps_get_size (caps_alternate); i++) {
+    gst_caps_set_features (caps_alternate, gst_caps_get_size (caps) - 1,
+        gst_caps_features_new (GST_CAPS_FEATURE_FORMAT_INTERLACED, NULL));
+  }
+
+  return gst_caps_merge (caps, caps_alternate);
 }
 
 static const gint device_par_map[][2] = {
