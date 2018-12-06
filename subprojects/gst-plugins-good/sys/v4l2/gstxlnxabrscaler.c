@@ -75,7 +75,7 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE
-        ("{RGB, YUY2, NV16, GRAY8, BGRx, UYVY, BGR}"))
+        ("{RGB, YUY2, NV16, GRAY8, BGRx, UYVY, BGR, NV12}"))
     );
 
 static GstStaticPadTemplate src_request_template =
@@ -83,7 +83,7 @@ GST_STATIC_PAD_TEMPLATE ("src_%u",
     GST_PAD_SRC,
     GST_PAD_REQUEST,
     GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE
-        ("{RGB, YUY2, NV16, GRAY8, BGRx, UYVY, BGR}"))
+        ("{RGB, YUY2, NV16, GRAY8, BGRx, UYVY, BGR, NV12}"))
     );
 
 #define gst_xlnx_abr_scaler_parent_class parent_class
