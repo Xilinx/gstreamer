@@ -154,9 +154,17 @@ set_profile_and_level (GstOMXH265Dec * self, GstVideoCodecState * state)
     goto unsupported_profile;
 
   level_string = gst_structure_get_string (s, "level");
+  if (!level_string) {
+    /* HACK: use higher level/tier if not specified (invalid stream) so we can decode it */
+    GST_DEBUG_OBJECT (self, "level not specified, use 6.2");
+    level_string = "6.2";
+  }
+
   tier_string = gst_structure_get_string (s, "tier");
-  if (!level_string || !tier_string)
-    return TRUE;
+  if (!tier_string) {
+    GST_DEBUG_OBJECT (self, "tier not specified, use 'high'");
+    tier_string = "high";
+  }
 
   param.eLevel =
       gst_omx_h265_utils_get_level_from_str (level_string, tier_string);
