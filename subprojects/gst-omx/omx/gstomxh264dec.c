@@ -150,8 +150,11 @@ set_profile_and_level (GstOMXH264Dec * self, GstVideoCodecState * state)
     goto unsupported_profile;
 
   level_string = gst_structure_get_string (s, "level");
-  if (!level_string)
-    return TRUE;
+  if (!level_string) {
+    /* HACK: use higher level/tier if not specified (invalid stream) so we can decode it */
+    GST_DEBUG_OBJECT (self, "level not specified, use 6.2");
+    level_string = "6.2";
+  }
 
   param.eLevel = gst_omx_h264_utils_get_level_from_str (level_string);
   if (param.eLevel == OMX_VIDEO_AVCLevelMax)
