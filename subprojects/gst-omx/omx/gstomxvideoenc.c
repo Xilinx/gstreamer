@@ -56,6 +56,8 @@ gst_omx_video_enc_control_rate_get_type (void)
       {OMX_Video_ControlRateConstantSkipFrames, "Constant Skip Frames",
           "constant-skip-frames"},
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+      {OMX_ALG_Video_ControlRateVariableCapped, "Capped Variable",
+          "capped-variable"},
       {OMX_ALG_Video_ControlRateLowLatency, "Low Latency", "low-latency"},
 #endif
       {0xffffffff, "Component Default", "default"},
