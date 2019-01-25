@@ -1819,10 +1819,34 @@ set_outbuffer_interlace_flags (GstOMXBuffer * buf, GstBuffer * outbuf)
 #endif // USE_OMX_TARGET_ZYNQ_USCALE_PLUS
 
 static void
+push_pending_downstream_events (GstOMXVideoDec * self, GstOMXBuffer * buf)
+{
+  GstEvent *event;
+
+  while ((event =
+          gst_omx_component_pop_pending_downstream_event (self->dec, buf))) {
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    if (gst_event_has_name (event, "omx-alg/sei-parsed")) {
+      /* Application may also be interested so send a message as well */
+      GstMessage *msg;
+
+      msg =
+          gst_message_new_custom (GST_MESSAGE_APPLICATION,
+          GST_OBJECT_CAST (self),
+          gst_structure_copy (gst_event_get_structure (event)));
+      gst_element_post_message (GST_ELEMENT_CAST (self), msg);
+    }
+#endif
+
+    gst_pad_push_event (GST_VIDEO_DECODER_SRC_PAD (self), event);
+  }
+}
+
+static void
 gst_omx_video_dec_loop (GstOMXVideoDec * self)
 {
   GstOMXPort *port;
-  GstOMXBuffer *buf = NULL;
+  GstOMXBuffer *buf = NULL, *pushed_buf = NULL;
   GstVideoCodecFrame *frame;
   GstFlowReturn flow_ret = GST_FLOW_OK;
   GstOMXAcquireBufferReturn acq_return;
@@ -1933,6 +1957,9 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
 
   g_assert (acq_return == GST_OMX_ACQUIRE_BUFFER_OK);
 
+  /* Push events arrived before @buf */
+  push_pending_downstream_events (self, NULL);
+
   /* This prevents a deadlock between the srcpad stream
    * lock and the videocodec stream lock, if ::reset()
    * is called at the wrong time
@@ -2000,6 +2027,7 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
             copy_frame (&GST_OMX_BUFFER_POOL (self->out_port_pool)->video_info,
             outbuf);
 
+      pushed_buf = buf;
       buf = NULL;
     } else {
       outbuf =
@@ -2012,6 +2040,7 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
       set_outbuffer_interlace_flags (buf, outbuf);
 #endif
+      pushed_buf = buf;
     }
 
     flow_ret = gst_pad_push (GST_VIDEO_DECODER_SRC_PAD (self), outbuf);
@@ -2055,6 +2084,7 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
       flow_ret =
           gst_video_decoder_finish_frame (GST_VIDEO_DECODER (self), frame);
       frame = NULL;
+      pushed_buf = buf;
       buf = NULL;
     } else {
       if ((flow_ret =
@@ -2078,17 +2108,23 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
 
         flow_ret =
             gst_video_decoder_finish_frame (GST_VIDEO_DECODER (self), frame);
+        pushed_buf = buf;
         frame = NULL;
       }
     }
   } else if (frame != NULL) {
     /* Just ignore empty buffers, don't drop a frame for that */
+    pushed_buf = buf;
     flow_ret = GST_FLOW_OK;
     gst_video_codec_frame_unref (frame);
     frame = NULL;
   }
 
   GST_DEBUG_OBJECT (self, "Finished frame: %s", gst_flow_get_name (flow_ret));
+
+  if (pushed_buf)
+    /* Push events which arrived right after the buffer we just pushed */
+    push_pending_downstream_events (self, pushed_buf);
 
   if (buf) {
     err = gst_omx_port_release_buffer (port, buf);

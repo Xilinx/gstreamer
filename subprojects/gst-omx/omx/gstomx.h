@@ -256,6 +256,9 @@ typedef enum {
   GST_OMX_MESSAGE_PORT_SETTINGS_CHANGED,
   GST_OMX_MESSAGE_BUFFER_FLAG,
   GST_OMX_MESSAGE_BUFFER_DONE,
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  GST_OMX_MESSAGE_SEI_PARSED,
+#endif
 } GstOMXMessageType;
 
 typedef enum {
@@ -306,6 +309,13 @@ struct _GstOMXMessage {
       OMX_BUFFERHEADERTYPE *buffer;
       OMX_BOOL empty;
     } buffer_done;
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    struct {
+      OMX_U32 payload_type;
+      OMX_U32 payload_size;
+      gpointer payload;
+    } sei_parsed;
+#endif
   } content;
 };
 
@@ -367,6 +377,7 @@ struct _GstOMXComponent {
   OMX_ERRORTYPE last_error;
 
   GList *pending_reconfigure_outports;
+  GQueue pending_downstream_events; /* contains owned GstOMXPendingEvent */
 };
 
 struct _GstOMXBuffer {
@@ -441,6 +452,8 @@ OMX_ERRORTYPE     gst_omx_component_set_parameter (GstOMXComponent * comp, OMX_I
 
 OMX_ERRORTYPE     gst_omx_component_get_config (GstOMXComponent * comp, OMX_INDEXTYPE index, gpointer config);
 OMX_ERRORTYPE     gst_omx_component_set_config (GstOMXComponent * comp, OMX_INDEXTYPE index, gpointer config);
+
+GstEvent *        gst_omx_component_pop_pending_downstream_event (GstOMXComponent * comp, GstOMXBuffer * preceding_buffer);
 
 OMX_ERRORTYPE     gst_omx_setup_tunnel (GstOMXPort * port1, GstOMXPort * port2);
 OMX_ERRORTYPE     gst_omx_close_tunnel (GstOMXPort * port1, GstOMXPort * port2);
