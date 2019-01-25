@@ -223,6 +223,18 @@ gst_omx_core_release (GstOMXCore * core)
   G_UNLOCK (core_handles);
 }
 
+static void
+gst_omx_message_free (GstOMXMessage * msg)
+{
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  if (msg->type == GST_OMX_MESSAGE_SEI_PARSED)
+    if (msg->content.sei_parsed.payload)
+      g_free (msg->content.sei_parsed.payload);
+#endif
+
+  g_slice_free (GstOMXMessage, msg);
+}
+
 /* NOTE: comp->messages_lock will be used */
 static void
 gst_omx_component_flush_messages (GstOMXComponent * comp)
@@ -231,7 +243,7 @@ gst_omx_component_flush_messages (GstOMXComponent * comp)
 
   g_mutex_lock (&comp->messages_lock);
   while ((msg = g_queue_pop_head (&comp->messages))) {
-    g_slice_free (GstOMXMessage, msg);
+    gst_omx_message_free (msg);
   }
   g_mutex_unlock (&comp->messages_lock);
 }
@@ -246,6 +258,59 @@ gst_omx_buffer_reset (GstOMXBuffer * buf)
 }
 
 static void gst_omx_buffer_unmap (GstOMXBuffer * buffer);
+
+typedef struct
+{
+  GstEvent *event;
+  /* The buffer preceding this event so we preserve the ordering between output buffers and events.
+   * If NULL the event can be send right away */
+  GstOMXBuffer *preceding_buffer;
+} GstOMXPendingEvent;
+
+static void
+gst_omx_pending_event_free (GstOMXPendingEvent * pending)
+{
+  if (pending->event)
+    gst_event_unref (pending->event);
+
+  g_free (pending);
+}
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+/* @event: (transfer full) */
+static void
+gst_omx_component_add_downstream_pending_event (GstOMXComponent * comp,
+    GstEvent * event, GstOMXBuffer * preceding_buffer)
+{
+  GstOMXPendingEvent *pending = g_new (GstOMXPendingEvent, 1);
+
+  pending->event = event;       /* transfer ownership */
+  pending->preceding_buffer = preceding_buffer;
+
+  g_queue_push_tail (&comp->pending_downstream_events, pending);
+}
+#endif
+
+/* Returns: (transfer full) */
+GstEvent *
+gst_omx_component_pop_pending_downstream_event (GstOMXComponent * comp,
+    GstOMXBuffer * preceding_buffer)
+{
+  GstOMXPendingEvent *pending;
+  GstEvent *event;
+
+  pending = g_queue_peek_head (&comp->pending_downstream_events);
+  if (!pending || pending->preceding_buffer != preceding_buffer) {
+    return NULL;
+  }
+
+  pending = g_queue_pop_head (&comp->pending_downstream_events);
+  event = pending->event;
+  pending->event = NULL;
+
+  gst_omx_pending_event_free (pending);
+  return event;
+}
 
 /* NOTE: Call with comp->lock, comp->messages_lock will be used */
 static void
@@ -430,13 +495,49 @@ gst_omx_component_handle_messages (GstOMXComponent * comp)
 
         break;
       }
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+      case GST_OMX_MESSAGE_SEI_PARSED:{
+        if (GST_IS_OMX_VIDEO_DEC (comp->parent)) {
+          GstBuffer *buf;
+          GstEvent *event;
+          GstOMXPort *port;
+
+          /* Assume output port has index 1, which it is with our OMX stack */
+          port = gst_omx_component_get_port (comp, 1);
+          if (!port || !msg->content.sei_parsed.payload
+              || !msg->content.sei_parsed.payload_size)
+            break;
+
+          buf = gst_buffer_new_wrapped (msg->content.sei_parsed.payload,
+              msg->content.sei_parsed.payload_size);
+          msg->content.sei_parsed.payload = NULL;
+
+          event = gst_event_new_custom (GST_EVENT_CUSTOM_DOWNSTREAM,
+              gst_structure_new ("omx-alg/sei-parsed",
+                  "prefix", G_TYPE_BOOLEAN,
+                  msg->content.sei_parsed.prefix,
+                  "payload-type", G_TYPE_UINT,
+                  msg->content.sei_parsed.payload_type,
+                  "payload", GST_TYPE_BUFFER, buf, NULL));
+          gst_buffer_unref (buf);
+
+          gst_omx_component_add_downstream_pending_event (comp, event,
+              g_queue_peek_tail (&port->pending_buffers));
+        } else {
+          GST_WARNING_OBJECT (comp->parent,
+              "Received SEI event on a not video decoder component");
+        }
+
+        break;
+      }
+#endif
       default:{
         g_assert_not_reached ();
         break;
       }
     }
 
-    g_slice_free (GstOMXMessage, msg);
+    gst_omx_message_free (msg);
 
     g_mutex_lock (&comp->messages_lock);
   }
@@ -536,6 +637,18 @@ omx_event_type_to_str (OMX_EVENTTYPE event)
       break;
   }
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  switch ((OMX_ALG_EVENTTYPE) event) {
+    case OMX_ALG_EventSEIPrefixParsed:
+      return "ALG_EventSEIPrefixParsed";
+    case OMX_ALG_EventSEISuffixParsed:
+      return "ALG_EventSEISuffixParsed";
+    case OMX_ALG_EventVendorStartUnused:
+    case OMX_ALG_EventMax:
+      break;
+  }
+#endif
+
   return NULL;
 }
 
@@ -609,6 +722,18 @@ omx_event_to_debug_struct (OMX_EVENTTYPE event,
       break;
   }
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  switch ((OMX_ALG_EVENTTYPE) event) {
+    case OMX_ALG_EventSEIPrefixParsed:
+    case OMX_ALG_EventSEISuffixParsed:
+      return gst_structure_new (name, "payload-type", G_TYPE_UINT, data1,
+          "payload-size", G_TYPE_UINT, data2, NULL);
+    case OMX_ALG_EventVendorStartUnused:
+    case OMX_ALG_EventMax:
+      break;
+  }
+#endif
+
   return NULL;
 }
 
@@ -636,6 +761,39 @@ log_omx_api_trace_event (GstOMXComponent * comp, OMX_EVENTTYPE event,
   gst_structure_free (s);
 #endif /* GST_DISABLE_GST_DEBUG */
 }
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+static gboolean
+AlgEventHandler (GstOMXComponent * comp, OMX_PTR pAppData, OMX_EVENTTYPE eEvent,
+    OMX_U32 nData1, OMX_U32 nData2, OMX_PTR pEventData)
+{
+  switch ((OMX_ALG_EVENTTYPE) eEvent) {
+    case OMX_ALG_EventSEIPrefixParsed:
+    case OMX_ALG_EventSEISuffixParsed:{
+      GstOMXMessage *msg = g_slice_new (GstOMXMessage);
+      gboolean prefix =
+          ((OMX_ALG_EVENTTYPE) eEvent == OMX_ALG_EventSEIPrefixParsed);
+
+      GST_DEBUG_OBJECT (comp->parent,
+          "SEI %s parsed, payload-type: %d payload-size: %d",
+          prefix ? "prefix" : "suffix", nData1, nData2);
+
+      msg->type = GST_OMX_MESSAGE_SEI_PARSED;
+      msg->content.sei_parsed.prefix = prefix;
+      msg->content.sei_parsed.payload_type = nData1;
+      msg->content.sei_parsed.payload_size = nData2;
+      msg->content.sei_parsed.payload = g_memdup (pEventData, nData2);
+
+      gst_omx_component_send_message (comp, msg);
+      return TRUE;
+    }
+    case OMX_ALG_EventVendorStartUnused:
+    case OMX_ALG_EventMax:
+      break;
+  }
+  return FALSE;
+}
+#endif
 
 static OMX_ERRORTYPE
 EventHandler (OMX_HANDLETYPE hComponent, OMX_PTR pAppData, OMX_EVENTTYPE eEvent,
@@ -771,6 +929,10 @@ EventHandler (OMX_HANDLETYPE hComponent, OMX_PTR pAppData, OMX_EVENTTYPE eEvent,
     }
     case OMX_EventPortFormatDetected:
     default:
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+      if (AlgEventHandler (comp, pAppData, eEvent, nData1, nData2, pEventData))
+        return OMX_ErrorNone;
+#endif
       GST_DEBUG_OBJECT (comp->parent, "%s unknown event 0x%08x", comp->name,
           eEvent);
       break;
@@ -988,6 +1150,7 @@ gst_omx_component_new (GstObject * parent, const gchar * core_name,
   g_queue_init (&comp->messages);
   comp->pending_state = OMX_StateInvalid;
   comp->last_error = OMX_ErrorNone;
+  g_queue_init (&comp->pending_downstream_events);
 
   /* Set component role if any */
   if (component_role && !(hacks & GST_OMX_HACK_NO_COMPONENT_ROLE)) {
@@ -1049,6 +1212,9 @@ gst_omx_component_free (GstOMXComponent * comp)
   gst_omx_core_release (comp->core);
 
   gst_omx_component_flush_messages (comp);
+
+  g_queue_foreach (&comp->pending_downstream_events,
+      (GFunc) gst_omx_pending_event_free, NULL);
 
   g_cond_clear (&comp->messages_cond);
   g_mutex_clear (&comp->messages_lock);
