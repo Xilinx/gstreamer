@@ -29,6 +29,7 @@
 #include <glib.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "OMX_VideoExt.h"
 
 #define DEFAULT_VIDEO_WIDTH 3840
@@ -50,6 +51,8 @@
 #define DYNAMIC_SCENE_CHANGE_STR "SC"
 #define DYNAMIC_INSERT_LONGTERM_STR "IL"
 #define DYNAMIC_USE_LONGTERM_STR "UL"
+#define DYNAMIC_INSERT_SEI_PREFIX_STR "SEIp"
+#define DYNAMIC_INSERT_SEI_SUFFIX_STR "SEIs"
 
 #define DYNAMIC_FEATURE_DELIMIT ","
 #define DYNAMIC_PARAM_DELIMIT ":x"
@@ -65,6 +68,8 @@ typedef enum
   DYNAMIC_SCENE_CHANGE,
   DYNAMIC_INSERT_LONGTERM,
   DYNAMIC_USE_LONGTERM,
+  DYNAMIC_INSERT_SEI_PREFIX,
+  DYNAMIC_INSERT_SEI_SUFFIX,
 } DynamicFeatureType;
 
 typedef struct
@@ -128,6 +133,10 @@ get_dynamic_str_enum (gchar * user_string)
     return DYNAMIC_INSERT_LONGTERM;
   else if (!g_strcmp0 (user_string, DYNAMIC_USE_LONGTERM_STR))
     return DYNAMIC_USE_LONGTERM;
+  else if (!g_strcmp0 (user_string, DYNAMIC_INSERT_SEI_PREFIX_STR))
+    return DYNAMIC_INSERT_SEI_PREFIX;
+  else if (!g_strcmp0 (user_string, DYNAMIC_INSERT_SEI_SUFFIX_STR))
+    return DYNAMIC_INSERT_SEI_SUFFIX;
   else {
     g_print ("Invalid User string \n");
     return -1;
@@ -224,9 +233,9 @@ parse_dynamic_user_string (const char *str, GstElement * encoder)
       dynamic->param.value = atoi (token[2]);
       break;
     case DYNAMIC_INSERT_LONGTERM:
-      dynamic->start_frame = atoi (token[1]);
-      break;
     case DYNAMIC_USE_LONGTERM:
+    case DYNAMIC_INSERT_SEI_PREFIX:
+    case DYNAMIC_INSERT_SEI_SUFFIX:
       dynamic->start_frame = atoi (token[1]);
       break;
     default:
@@ -347,6 +356,28 @@ videoparser_src_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
         s = gst_structure_new_empty ("omx-alg/use-longterm");
         send_downstream_event (pad, s);
       }
+      case DYNAMIC_INSERT_SEI_PREFIX:
+      case DYNAMIC_INSERT_SEI_SUFFIX:
+      {
+        GstStructure *s;
+        gboolean prefix = (dynamic->type == DYNAMIC_INSERT_SEI_PREFIX);
+        GstBuffer *sei;
+        const gchar *data = "some data";
+
+        g_print ("Inserting SEI %s for Frame num = %d \n",
+            prefix ? "prefix" : "suffix", dynamic->start_frame);
+
+        /* Should be actual data */
+        sei = gst_buffer_new_wrapped (g_strdup (data), strlen (data));
+
+        s = gst_structure_new (prefix ? "omx-alg/insert-prefix-sei" :
+            "omx-alg/insert-suffix-sei",
+            "payload-type", G_TYPE_UINT, 77,
+            "payload", GST_TYPE_BUFFER, sei, NULL);
+        send_downstream_event (pad, s);
+
+        gst_buffer_unref (sei);
+      }
         break;
       default:
         g_print ("Invalid Dynamic String \n");
@@ -405,7 +436,19 @@ main (int argc, char *argv[])
   };
 
   const char *summary =
-      "Dynamic Bitrate Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -o /run/op.h264 -i /run/input.yuv -d BR:100:1000 \nDynamic Bframes Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e hevc -f 30 -c 2 -g 30 -b 4 -o /run/op.h265 -i /run/input.yuv -d BFrm:10:2 \nROI Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -o /run/op.h264 -i /run/input.yuv -d ROI:1200x300:200x200:high \n\nDynamic-string pattern should be:\n'BR:frm_num:new_value_in_kbps' -> Dynamic Bitrate\n'BFrm:frame_num:new_value' -> Dynamic Bframes \n'KF:frame_num' -> Key Frame Insertion \n'GL:frame_num:new_value' -> Dynamic GOP length \n'ROI:frame_num:XPOSxYPOS:roi_widthxroi_height:roi_type' -> ROI string \n'IL:frame_num' -> Mark longterm reference picture \n'UL:frame_num -> Use longterm picture ";
+      "Dynamic Bitrate Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -o /run/op.h264 -i /run/input.yuv -d BR:100:1000\n"
+      "Dynamic Bframes Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e hevc -f 30 -c 2 -g 30 -b 4 -o /run/op.h265 -i /run/input.yuv -d BFrm:10:2\n"
+      "ROI Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -o /run/op.h264 -i /run/input.yuv -d ROI:10:1200x300:200x200:high\n\n"
+      "Dynamic-string pattern should be:\n"
+      "'BR:frm_num:new_value_in_kbps' -> Dynamic Bitrate\n"
+      "'BFrm:frame_num:new_value' -> Dynamic Bframes \n"
+      "'KF:frame_num' -> Key Frame Insertion\n"
+      "'GL:frame_num:new_value' -> Dynamic GOP length\n"
+      "'ROI:frame_num:XPOSxYPOS:roi_widthxroi_height:roi_type' -> ROI string\n"
+      "'IL:frame_num' -> Mark longterm reference picture\n"
+      "'UL:frame_num' -> Use longterm picture\n"
+      "'SEIp:frame_num' -> Insert SEI prefix\n"
+      "'SEIs:frame_num' -> Insert SEI suffix";
 
   /* Set Encoder defalut parameters */
   enc.width = DEFAULT_VIDEO_WIDTH;
