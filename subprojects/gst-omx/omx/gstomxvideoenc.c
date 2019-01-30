@@ -346,6 +346,8 @@ enum
 #define OMX_ALG_GST_EVENT_INSERT_LONGTERM "omx-alg/insert-longterm"
 #define OMX_ALG_GST_EVENT_USE_LONGTERM "omx-alg/use-longterm"
 #define OMX_ALG_GST_EVENT_SCENE_CHANGE "omx-alg/scene-change"
+#define OMX_ALG_GST_EVENT_INSERT_PREFIX_SEI "omx-alg/insert-prefix-sei"
+#define OMX_ALG_GST_EVENT_INSERT_SUFFIX_SEI "omx-alg/insert-suffix-sei"
 
 /* class initialization */
 #define do_init \
@@ -3828,6 +3830,59 @@ handle_longterm_event (GstOMXVideoEnc * self, GstEvent * event)
 
   return TRUE;
 }
+
+static gboolean
+handle_sei_insertion (GstOMXVideoEnc * self, GstEvent * event)
+{
+  const GstStructure *s;
+  gboolean prefix;
+  OMX_ALG_VIDEO_CONFIG_SEI config;
+  OMX_ERRORTYPE err;
+  guint32 payload_type;
+  GstBuffer *buf;
+  GstMapInfo map;
+
+  prefix = gst_event_has_name (event, OMX_ALG_GST_EVENT_INSERT_PREFIX_SEI);
+  s = gst_event_get_structure (event);
+
+  if (!gst_structure_get (s, "payload-type", G_TYPE_UINT, &payload_type,
+          "payload", GST_TYPE_BUFFER, &buf, NULL)) {
+    GST_WARNING_OBJECT (self, "Failed to parse event");
+    return TRUE;
+  }
+
+  if (!gst_buffer_map (buf, &map, GST_MAP_READ)) {
+    GST_WARNING_OBJECT (self, "Failed to map payload buffer");
+    gst_buffer_unref (buf);
+    return TRUE;
+  }
+
+  GST_DEBUG_OBJECT (self,
+      "Requesting encoder to insert custom SEI %s (payload-type=%d)",
+      prefix ? "prefix" : "suffix", payload_type);
+
+  GST_OMX_INIT_STRUCT (&config);
+  config.nType = payload_type;
+  config.pBuffer = map.data;
+  config.nAllocLen = map.size;
+  config.nFilledLen = map.size;
+  config.nOffset =
+      GST_BUFFER_OFFSET_IS_VALID (buf) ? GST_BUFFER_OFFSET (buf) : 0;
+
+  err =
+      gst_omx_component_set_config (self->enc,
+      prefix ? OMX_ALG_IndexConfigVideoInsertPrefixSEI :
+      OMX_ALG_IndexConfigVideoInsertSuffixSEI, &config);
+
+  if (err != OMX_ErrorNone)
+    GST_ERROR_OBJECT (self,
+        "Failed to request SEI insertion: %s (0x%08x)",
+        gst_omx_error_to_string (err), err);
+
+  gst_buffer_unmap (buf, &map);
+  gst_buffer_unref (buf);
+  return TRUE;
+}
 #endif
 
 static gboolean
@@ -3861,6 +3916,9 @@ gst_omx_video_enc_sink_event (GstVideoEncoder * encoder, GstEvent * event)
       else if (gst_event_has_name (event, OMX_ALG_GST_EVENT_INSERT_LONGTERM)
           || gst_event_has_name (event, OMX_ALG_GST_EVENT_USE_LONGTERM))
         return handle_longterm_event (self, event);
+      else if (gst_event_has_name (event, OMX_ALG_GST_EVENT_INSERT_PREFIX_SEI)
+          || gst_event_has_name (event, OMX_ALG_GST_EVENT_INSERT_SUFFIX_SEI))
+        handle_sei_insertion (self, event);
 #endif
     }
     default:
