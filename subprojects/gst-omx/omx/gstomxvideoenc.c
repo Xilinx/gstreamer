@@ -3841,6 +3841,7 @@ handle_sei_insertion (GstOMXVideoEnc * self, GstEvent * event)
   guint32 payload_type;
   GstBuffer *buf;
   GstMapInfo map;
+  OMX_INDEXTYPE index;
 
   prefix = gst_event_has_name (event, OMX_ALG_GST_EVENT_INSERT_PREFIX_SEI);
   s = gst_event_get_structure (event);
@@ -3869,10 +3870,12 @@ handle_sei_insertion (GstOMXVideoEnc * self, GstEvent * event)
   config.nOffset =
       GST_BUFFER_OFFSET_IS_VALID (buf) ? GST_BUFFER_OFFSET (buf) : 0;
 
-  err =
-      gst_omx_component_set_config (self->enc,
-      prefix ? OMX_ALG_IndexConfigVideoInsertPrefixSEI :
-      OMX_ALG_IndexConfigVideoInsertSuffixSEI, &config);
+  if (prefix)
+    index = (OMX_INDEXTYPE) OMX_ALG_IndexConfigVideoInsertPrefixSEI;
+  else
+    index = (OMX_INDEXTYPE) OMX_ALG_IndexConfigVideoInsertSuffixSEI;
+
+  err = gst_omx_component_set_config (self->enc, index, &config);
 
   if (err != OMX_ErrorNone)
     GST_ERROR_OBJECT (self,
