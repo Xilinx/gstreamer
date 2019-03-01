@@ -26,6 +26,7 @@
 
 #include "gstomxh264enc.h"
 #include "gstomxh264utils.h"
+#include "gstomxvideo.h"
 
 #ifdef USE_OMX_TARGET_RPI
 #include <OMX_Broadcom.h>
