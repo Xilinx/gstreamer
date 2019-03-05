@@ -301,6 +301,7 @@ enum
   PROP_SCALING_LIST,
   PROP_LOW_BANDWIDTH,
   PROP_MAX_BITRATE,
+  PROP_MAX_QUALITY,
   PROP_ASPECT_RATIO,
   PROP_FILLER_DATA,
   PROP_NUM_SLICES,
@@ -330,6 +331,7 @@ enum
 #define GST_OMX_VIDEO_ENC_SCALING_LIST_DEFAULT (OMX_ALG_SCL_DEFAULT)
 #define GST_OMX_VIDEO_ENC_LOW_BANDWIDTH_DEFAULT (FALSE)
 #define GST_OMX_VIDEO_ENC_MAX_BITRATE_DEFAULT (0xffffffff)
+#define GST_OMX_VIDEO_ENC_MAX_QUALITY_DEFAULT (0xffffffff)
 #define GST_OMX_VIDEO_ENC_ASPECT_RATIO_DEFAULT (OMX_ALG_ASPECT_RATIO_AUTO)
 #define GST_OMX_VIDEO_ENC_FILLER_DATA_DEFAULT (TRUE)
 #define GST_OMX_VIDEO_ENC_NUM_SLICES_DEFAULT (0xffffffff)
@@ -486,6 +488,14 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
 
+  g_object_class_install_property (gobject_class, PROP_MAX_QUALITY,
+      g_param_spec_uint ("max-quality-target", "Max Quality",
+          "Cap quality at a certain high limit, keeping bitrate variable (Valid range: 0 to 20, 20 = lossless quality)"
+          ", only used if control-rate=capped-variable",
+          0, G_MAXUINT, GST_OMX_VIDEO_ENC_MAX_QUALITY_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
+
   g_object_class_install_property (gobject_class, PROP_ASPECT_RATIO,
       g_param_spec_enum ("aspect-ratio", "Aspect ratio",
           "Display aspect ratio of the video sequence to be written in SPS/VUI",
@@ -618,6 +628,7 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->scaling_list = GST_OMX_VIDEO_ENC_SCALING_LIST_DEFAULT;
   self->low_bandwidth = GST_OMX_VIDEO_ENC_LOW_BANDWIDTH_DEFAULT;
   self->max_bitrate = GST_OMX_VIDEO_ENC_MAX_BITRATE_DEFAULT;
+  self->max_quality_target = GST_OMX_VIDEO_ENC_MAX_QUALITY_DEFAULT;
   self->aspect_ratio = GST_OMX_VIDEO_ENC_ASPECT_RATIO_DEFAULT;
   self->filler_data = GST_OMX_VIDEO_ENC_FILLER_DATA_DEFAULT;
   self->num_slices = GST_OMX_VIDEO_ENC_NUM_SLICES_DEFAULT;
@@ -878,15 +889,50 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
     CHECK_ERR ("low-bandwidth");
   }
 
-  if (self->max_bitrate != GST_OMX_VIDEO_ENC_MAX_BITRATE_DEFAULT) {
+  {
     OMX_ALG_VIDEO_PARAM_MAX_BITRATE max_bitrate;
 
     GST_OMX_INIT_STRUCT (&max_bitrate);
     max_bitrate.nPortIndex = self->enc_out_port->index;
     /* nMaxBitrate is in kbps while max-bitrate is in bps */
-    max_bitrate.nMaxBitrate = self->max_bitrate / 1000;
+    err = gst_omx_component_get_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoMaxBitrate, &max_bitrate);
+    if (err != OMX_ErrorNone) {
+      GST_WARNING_OBJECT (self,
+          "Error getting max-bitrate parameters: %s (0x%08x)",
+          gst_omx_error_to_string (err), err);
+      return FALSE;
+    }
 
-    GST_DEBUG_OBJECT (self, "setting max bitrate to %d", self->max_bitrate);
+    if (self->max_bitrate != GST_OMX_VIDEO_ENC_MAX_BITRATE_DEFAULT) {
+      if (self->control_rate == OMX_ALG_Video_ControlRateVariableCapped ||
+          self->control_rate == OMX_Video_ControlRateVariable) {
+        max_bitrate.nMaxBitrate = self->max_bitrate;
+        GST_DEBUG_OBJECT (self, "setting max bitrate to %d", self->max_bitrate);
+      } else {
+        GST_ERROR_OBJECT (self,
+            "max-bitrate is only used with variable and capped-variable control-rate");
+        return FALSE;
+      }
+    }
+
+    if (self->max_quality_target != GST_OMX_VIDEO_ENC_MAX_QUALITY_DEFAULT) {
+      if (self->control_rate == OMX_ALG_Video_ControlRateVariableCapped) {
+        if ((self->max_quality_target < 0) || (self->max_quality_target > 20)) {
+          GST_ERROR_OBJECT (self,
+              "Invalid value for max-quality-target(Valid range: 0 to 20)");
+          return FALSE;
+        } else {
+          max_bitrate.nMaxQuality = self->max_quality_target;
+          GST_DEBUG_OBJECT (self, "setting max quality target to %d",
+              self->max_quality_target);
+        }
+      } else {
+        GST_ERROR_OBJECT (self,
+            "max-quality-target is only used with capped-variable control-rate");
+        return FALSE;
+      }
+    }
 
     err =
         gst_omx_component_set_parameter (self->enc,
@@ -1430,7 +1476,10 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
       g_value_set_boolean (value, self->low_bandwidth);
       break;
     case PROP_MAX_BITRATE:
-      g_value_set_uint (value, self->max_bitrate);
+       g_value_set_uint (value, self->max_bitrate);
+       break;
+    case PROP_MAX_QUALITY:
+      g_value_set_uint (value, self->max_quality_target);
       break;
     case PROP_ASPECT_RATIO:
       g_value_set_enum (value, self->aspect_ratio);
