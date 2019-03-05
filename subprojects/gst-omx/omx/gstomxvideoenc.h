@@ -86,6 +86,7 @@ struct _GstOMXVideoEnc
   guint32 scaling_list;
   gboolean low_bandwidth;
   guint32 max_bitrate;
+  guint32 max_quality_target;
   guint32 aspect_ratio;
   gboolean filler_data;
   guint32 num_slices;
