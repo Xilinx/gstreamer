@@ -1328,6 +1328,14 @@ gst_xlnx_abr_scaler_configure_caps (GstXlnxABRScaler * self,
   GST_DEBUG_OBJECT (srcpad, "in caps:  %" GST_PTR_FORMAT, incaps);
   GST_DEBUG_OBJECT (srcpad, "out caps: %" GST_PTR_FORMAT, outcaps);
 
+  if (srcpad->incaps && srcpad->outcaps) {
+    if (gst_caps_is_equal (incaps, srcpad->incaps) &&
+        gst_caps_is_equal (outcaps, srcpad->outcaps)) {
+      GST_DEBUG_OBJECT (srcpad, "Caps did not changed");
+      return TRUE;
+    }
+  }
+
   /* TODO Add renegotiation support */
   g_return_val_if_fail (!GST_V4L2_IS_ACTIVE (srcpad->v4l2output), FALSE);
   g_return_val_if_fail (!GST_V4L2_IS_ACTIVE (srcpad->v4l2capture), FALSE);
