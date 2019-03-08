@@ -513,6 +513,8 @@ gst_omx_component_handle_messages (GstOMXComponent * comp)
 
           event = gst_event_new_custom (GST_EVENT_CUSTOM_DOWNSTREAM,
               gst_structure_new ("omx-alg/sei-parsed",
+                  "prefix", G_TYPE_BOOLEAN,
+                  msg->content.sei_parsed.prefix,
                   "payload-type", G_TYPE_UINT,
                   msg->content.sei_parsed.payload_type,
                   "payload", GST_TYPE_BUFFER, buf, NULL));
@@ -522,7 +524,7 @@ gst_omx_component_handle_messages (GstOMXComponent * comp)
               g_queue_peek_tail (&port->pending_buffers));
         } else {
           GST_WARNING_OBJECT (comp->parent,
-              "Received OMX_ALG_EventSEIParsed on a not video decoder component");
+              "Received SEI event on a not video decoder component");
         }
 
         break;
@@ -636,8 +638,10 @@ omx_event_type_to_str (OMX_EVENTTYPE event)
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   switch ((OMX_ALG_EVENTTYPE) event) {
-    case OMX_ALG_EventSEIParsed:
-      return "ALG_EventSEIParsed";
+    case OMX_ALG_EventSEIPrefixParsed:
+      return "ALG_EventSEIPrefixParsed";
+    case OMX_ALG_EventSEISuffixParsed:
+      return "ALG_EventSEISuffixParsed";
     case OMX_ALG_EventVendorStartUnused:
     case OMX_ALG_EventMax:
       break;
@@ -719,7 +723,8 @@ omx_event_to_debug_struct (OMX_EVENTTYPE event,
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   switch ((OMX_ALG_EVENTTYPE) event) {
-    case OMX_ALG_EventSEIParsed:
+    case OMX_ALG_EventSEIPrefixParsed:
+    case OMX_ALG_EventSEISuffixParsed:
       return gst_structure_new (name, "payload-type", G_TYPE_UINT, data1,
           "payload-size", G_TYPE_UINT, data2, NULL);
     case OMX_ALG_EventVendorStartUnused:
@@ -762,13 +767,18 @@ AlgEventHandler (GstOMXComponent * comp, OMX_PTR pAppData, OMX_EVENTTYPE eEvent,
     OMX_U32 nData1, OMX_U32 nData2, OMX_PTR pEventData)
 {
   switch ((OMX_ALG_EVENTTYPE) eEvent) {
-    case OMX_ALG_EventSEIParsed:{
+    case OMX_ALG_EventSEIPrefixParsed:
+    case OMX_ALG_EventSEISuffixParsed:{
       GstOMXMessage *msg = g_slice_new (GstOMXMessage);
+      gboolean prefix =
+          ((OMX_ALG_EVENTTYPE) eEvent == OMX_ALG_EventSEIPrefixParsed);
 
       GST_DEBUG_OBJECT (comp->parent,
-          "SEI parsed, payload-type: %d payload-size: %d", nData1, nData2);
+          "SEI %s parsed, payload-type: %d payload-size: %d",
+          prefix ? "prefix" : "suffix", nData1, nData2);
 
       msg->type = GST_OMX_MESSAGE_SEI_PARSED;
+      msg->content.sei_parsed.prefix = prefix;
       msg->content.sei_parsed.payload_type = nData1;
       msg->content.sei_parsed.payload_size = nData2;
       msg->content.sei_parsed.payload = g_memdup (pEventData, nData2);

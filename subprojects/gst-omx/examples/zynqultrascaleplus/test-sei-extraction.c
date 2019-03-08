@@ -32,15 +32,20 @@ bus_call (GstBus * bus, GstMessage * msg, gpointer data)
       const GstStructure *s;
       guint sei_type;
       GstBuffer *buf;
+      gboolean prefix;
 
       s = gst_message_get_structure (msg);
       if (!gst_structure_has_name (s, "omx-alg/sei-parsed"))
         return TRUE;
 
       g_assert (gst_structure_get (s, "payload-type", G_TYPE_UINT, &sei_type,
-              "payload", GST_TYPE_BUFFER, &buf, NULL));
-      g_print ("Parsed SEI after frame %u (type=%d size=%" G_GSIZE_FORMAT
-          "):\n", frame_count, sei_type, gst_buffer_get_size (buf));
+              "payload", GST_TYPE_BUFFER, &buf, "prefix",
+              G_TYPE_BOOLEAN, &prefix, NULL));
+
+      g_print ("Parsed SEI %s after frame %u (type=%d size=%" G_GSIZE_FORMAT
+          "):\n", prefix ? "prefix" : "suffix", frame_count, sei_type,
+          gst_buffer_get_size (buf));
+
       gst_util_dump_buffer (buf);
 
       gst_buffer_unref (buf);

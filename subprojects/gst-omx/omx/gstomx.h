@@ -311,6 +311,7 @@ struct _GstOMXMessage {
     } buffer_done;
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
     struct {
+      gboolean prefix;
       OMX_U32 payload_type;
       OMX_U32 payload_size;
       gpointer payload;
