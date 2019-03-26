@@ -56,6 +56,7 @@ struct _GstKMSMemory
   GstMemory parent;
 
   guint32 fb_id;
+  guint32 old_fb_id;
   guint32 gem_handle[GST_VIDEO_MAX_PLANES];
   gsize mem_offsets[GST_VIDEO_MAX_PLANES];
   struct kms_bo *bo;
