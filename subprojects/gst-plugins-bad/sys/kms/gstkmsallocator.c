@@ -102,18 +102,43 @@ check_fd (GstKMSAllocator * alloc)
 }
 
 static void
+gst_kms_memory_remove_fb (GstMemory * mem)
+{
+  GstKMSAllocator *alloc = GST_KMS_ALLOCATOR (mem->allocator);
+  GstKMSMemory *kmsmem = (GstKMSMemory *) mem;
+
+  if (kmsmem->fb_id) {
+    GST_DEBUG_OBJECT (alloc, "removing fb id %d", kmsmem->fb_id);
+    drmModeRmFB (alloc->priv->fd, kmsmem->fb_id);
+    kmsmem->fb_id = 0;
+  }
+}
+
+static void
 gst_kms_allocator_memory_reset (GstKMSAllocator * allocator, GstKMSMemory * mem)
 {
   int err;
   struct drm_mode_destroy_dumb arg = { 0, };
+  gint i;
 
   if (!check_fd (allocator))
     return;
 
-  if (mem->fb_id) {
-    GST_DEBUG_OBJECT (allocator, "removing fb id %d", mem->fb_id);
-    drmModeRmFB (allocator->priv->fd, mem->fb_id);
-    mem->fb_id = 0;
+  gst_kms_memory_remove_fb ((GstMemory *) mem);
+
+  for (i = 0; i < GST_VIDEO_MAX_PLANES; i++) {
+    struct drm_gem_close arg = { mem->gem_handle[i], };
+    gint err;
+
+    if (mem->gem_handle[i] == 0)
+      continue;
+
+    err = drmIoctl (allocator->priv->fd, DRM_IOCTL_GEM_CLOSE, &arg);
+    if (err)
+      GST_WARNING_OBJECT (allocator, "Failed to close GEM handle: %s %d",
+          strerror (errno), errno);
+
+    mem->gem_handle[i] = 0;
   }
 
   if (!mem->bo)
@@ -212,7 +237,7 @@ gst_kms_allocator_memory_create (GstKMSAllocator * allocator,
      * by the kms driver. */
     pitch = extrapolate_stride (vinfo->finfo, i, arg.pitch);
     GST_VIDEO_INFO_PLANE_STRIDE (vinfo, i) = pitch;
-    GST_VIDEO_INFO_PLANE_OFFSET (vinfo, i) = offs;
+    GST_VIDEO_INFO_PLANE_OFFSET (vinfo, i) = kmsmem->mem_offsets[i] = offs;
 
     /* Note that we cannot negotiate special padding betweem each planes,
      * hence using the display height here. */
@@ -442,18 +467,23 @@ gst_kms_allocator_new (int fd)
 
 /* The mem_offsets are relative to the GstMemory start, unlike the vinfo->offset
  * which are relative to the GstBuffer start. */
-static gboolean
-gst_kms_allocator_add_fb (GstKMSAllocator * alloc, GstKMSMemory * kmsmem,
-    gsize in_offsets[GST_VIDEO_MAX_PLANES], GstVideoInfo * vinfo)
+gboolean
+gst_kms_memory_add_fb (GstMemory * mem, GstVideoInfo * vinfo, guint32 flags)
 {
+  GstKMSAllocator *alloc;
+  GstKMSMemory *kmsmem;
   gint i, ret;
   gint num_planes = GST_VIDEO_INFO_N_PLANES (vinfo);
   guint32 w, h, fmt, bo_handles[4] = { 0, };
   guint32 pitches[4] = { 0, };
   guint32 offsets[4] = { 0, };
 
-  if (kmsmem->fb_id)
-    return TRUE;
+  g_return_val_if_fail (gst_is_kms_memory (mem), FALSE);
+
+  alloc = GST_KMS_ALLOCATOR (mem->allocator);
+  kmsmem = (GstKMSMemory *) mem;
+
+  gst_kms_memory_remove_fb (mem);
 
   w = GST_VIDEO_INFO_WIDTH (vinfo);
   h = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo);
@@ -466,19 +496,24 @@ gst_kms_allocator_add_fb (GstKMSAllocator * alloc, GstKMSMemory * kmsmem,
       bo_handles[i] = kmsmem->gem_handle[i];
 
     pitches[i] = GST_VIDEO_INFO_PLANE_STRIDE (vinfo, i);
-    offsets[i] = in_offsets[i];
+    offsets[i] = kmsmem->mem_offsets[i];
+
+    GST_LOG_OBJECT (alloc, "[%i] pitch %u, offset %u", i, pitches[i],
+        offsets[i]);
   }
 
   GST_DEBUG_OBJECT (alloc, "bo handles: %d, %d, %d, %d", bo_handles[0],
       bo_handles[1], bo_handles[2], bo_handles[3]);
 
   ret = drmModeAddFB2 (alloc->priv->fd, w, h, fmt, bo_handles, pitches,
-      offsets, &kmsmem->fb_id, 0);
+      offsets, &kmsmem->fb_id, flags);
   if (ret) {
     GST_ERROR_OBJECT (alloc, "Failed to bind to framebuffer: %s (%d)",
         g_strerror (errno), errno);
     return FALSE;
   }
+
+  GST_DEBUG_OBJECT (alloc, "Create FB %i", kmsmem->fb_id);
 
   return TRUE;
 }
@@ -506,15 +541,7 @@ gst_kms_allocator_bo_alloc (GstAllocator * allocator, GstVideoInfo * vinfo)
   gst_memory_init (mem, GST_MEMORY_FLAG_NO_SHARE, allocator, NULL,
       kmsmem->bo->size, 0, 0, GST_VIDEO_INFO_SIZE (vinfo));
 
-  if (!gst_kms_allocator_add_fb (alloc, kmsmem, vinfo->offset, vinfo))
-    goto fail;
-
   return mem;
-
-  /* ERRORS */
-fail:
-  gst_memory_unref (mem);
-  return NULL;
 }
 
 GstKMSMemory *
@@ -542,21 +569,9 @@ gst_kms_allocator_dmabuf_import (GstAllocator * allocator, gint * prime_fds,
         &kmsmem->gem_handle[i]);
     if (ret)
       goto import_fd_failed;
-  }
-
-  if (!gst_kms_allocator_add_fb (alloc, kmsmem, offsets, vinfo))
-    goto failed;
-
-  for (i = 0; i < n_planes; i++) {
-    struct drm_gem_close arg = { kmsmem->gem_handle[i], };
-    gint err;
-
-    err = drmIoctl (alloc->priv->fd, DRM_IOCTL_GEM_CLOSE, &arg);
-    if (err)
-      GST_WARNING_OBJECT (allocator,
-          "Failed to close GEM handle: %s %d", g_strerror (errno), errno);
-
-    kmsmem->gem_handle[i] = 0;
+    /* This is per memory offset, in contrast with the vinfo offsets which are
+     * relative to the GstBuffer layout. */
+    kmsmem->mem_offsets[i] = offsets[i];
   }
 
   return kmsmem;
@@ -566,11 +581,6 @@ import_fd_failed:
   {
     GST_ERROR_OBJECT (alloc, "Failed to import prime fd %d: %s (%d)",
         prime_fds[i], g_strerror (errno), errno);
-    /* fallback */
-  }
-
-failed:
-  {
     gst_memory_unref (mem);
     return NULL;
   }
