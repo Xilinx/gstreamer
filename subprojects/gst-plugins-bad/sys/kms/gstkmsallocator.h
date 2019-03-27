@@ -57,6 +57,7 @@ struct _GstKMSMemory
 
   guint32 fb_id;
   guint32 gem_handle[GST_VIDEO_MAX_PLANES];
+  gsize mem_offsets[GST_VIDEO_MAX_PLANES];
   struct kms_bo *bo;
 };
 
@@ -72,8 +73,11 @@ struct _GstKMSAllocatorClass {
 
 GType gst_kms_allocator_get_type (void) G_GNUC_CONST;
 
-gboolean gst_is_kms_memory (GstMemory *mem);
-guint32 gst_kms_memory_get_fb_id (GstMemory *mem);
+gboolean gst_is_kms_memory        (GstMemory *mem);
+guint32  gst_kms_memory_get_fb_id (GstMemory *mem);
+gboolean gst_kms_memory_add_fb    (GstMemory * kmsmem,
+                                   GstVideoInfo * vinfo,
+                                   guint32 flags);
 
 GstAllocator* gst_kms_allocator_new (gint fd);
 
