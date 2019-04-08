@@ -313,6 +313,7 @@ enum
   PROP_LONGTERM_REF,
   PROP_LONGTERM_FREQUENCY,
   PROP_LOOK_AHEAD,
+  PROP_SKIP_FRAME,
 };
 
 /* FIXME: Better defaults */
@@ -343,6 +344,7 @@ enum
 #define GST_OMX_VIDEO_ENC_LONGTERM_REF_DEFAULT (FALSE)
 #define GST_OMX_VIDEO_ENC_LONGTERM_FREQUENCY_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_LOOK_AHEAD_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_SKIP_FRAME_DEFAULT (FALSE)
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
 #define OMX_ALG_GST_EVENT_INSERT_LONGTERM "omx-alg/insert-longterm"
@@ -578,6 +580,14 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
           0, G_MAXUINT, GST_OMX_VIDEO_ENC_LOOK_AHEAD_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_SKIP_FRAME,
+      g_param_spec_boolean ("skip-frame", "Skip Frame",
+          "If enabled and encoded picture exceeds the CPB buffer size, that specific picture is discarded and replaced by a picture with all MB/CTB encoded as Skip. "
+          "Only used if control-rate=constant or variable and b-frames are less than 2",
+          GST_OMX_VIDEO_ENC_SKIP_FRAME_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
 #endif
 
   element_class->change_state =
@@ -640,6 +650,7 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->long_term_ref = GST_OMX_VIDEO_ENC_LONGTERM_REF_DEFAULT;
   self->long_term_freq = GST_OMX_VIDEO_ENC_LONGTERM_FREQUENCY_DEFAULT;
   self->look_ahead = GST_OMX_VIDEO_ENC_LOOK_AHEAD_DEFAULT;
+  self->skip_frame = GST_OMX_VIDEO_ENC_SKIP_FRAME_DEFAULT;
 #endif
 
   self->default_target_bitrate = GST_OMX_PROP_OMX_DEFAULT;
@@ -1069,6 +1080,28 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
     CHECK_ERR ("look-ahead");
   }
 
+  if (self->skip_frame != GST_OMX_VIDEO_ENC_SKIP_FRAME_DEFAULT) {
+    OMX_ALG_VIDEO_PARAM_SKIP_FRAME skip_frame;
+    if (self->control_rate != OMX_Video_ControlRateConstant &&
+        self->control_rate != OMX_Video_ControlRateVariable) {
+      GST_ERROR_OBJECT (self,
+          "skip-frame is only used with Variable and Constant control-rate");
+      return FALSE;
+    }
+
+    GST_OMX_INIT_STRUCT (&skip_frame);
+    skip_frame.nPortIndex = self->enc_out_port->index;
+    skip_frame.bEnableSkipFrame = self->skip_frame;
+
+    GST_DEBUG_OBJECT (self, "%s skip frame",
+        self->skip_frame ? "Enable" : "Disable");
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoSkipFrame, &skip_frame);
+    CHECK_ERR ("skip-frame");
+  }
+
   return TRUE;
 }
 #endif
@@ -1416,6 +1449,9 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
     case PROP_LOOK_AHEAD:
       self->look_ahead = g_value_get_uint (value);
       break;
+    case PROP_SKIP_FRAME:
+      self->skip_frame = g_value_get_boolean (value);
+      break;
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -1513,6 +1549,9 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
       break;
     case PROP_LOOK_AHEAD:
       g_value_set_uint (value, self->look_ahead);
+      break;
+    case PROP_SKIP_FRAME:
+      g_value_set_boolean (value, self->skip_frame);
       break;
 #endif
     default:
