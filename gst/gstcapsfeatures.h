@@ -39,6 +39,9 @@ GST_API GType _gst_caps_features_type;
 
 #define GST_CAPS_FEATURE_MEMORY_SYSTEM_MEMORY "memory:SystemMemory"
 
+/* Xilinx low latency memory exchange using SyncIP */
+#define GST_CAPS_FEATURE_MEMORY_XLNX_LL "memory:XLNXLL"
+
 GST_API GstCapsFeatures *_gst_caps_features_any;
 #define GST_CAPS_FEATURES_ANY (_gst_caps_features_any)
 
