@@ -63,6 +63,7 @@
 #include "ext/types-compat.h"
 #include "ext/v4l2-common.h"
 #include "ext/v4l2-controls.h"
+#include "ext/xilinx-v4l2-controls.h"
 
 /*
  * Common stuff for both V4L1 and V4L2
