@@ -314,6 +314,7 @@ enum
   PROP_LONGTERM_FREQUENCY,
   PROP_LOOK_AHEAD,
   PROP_SKIP_FRAME,
+  PROP_MAX_PICTURE_SIZE,
 };
 
 /* FIXME: Better defaults */
@@ -345,6 +346,7 @@ enum
 #define GST_OMX_VIDEO_ENC_LONGTERM_FREQUENCY_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_LOOK_AHEAD_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_SKIP_FRAME_DEFAULT (FALSE)
+#define GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_DEFAULT (0)
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
 #define OMX_ALG_GST_EVENT_INSERT_LONGTERM "omx-alg/insert-longterm"
@@ -588,6 +590,15 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
           GST_OMX_VIDEO_ENC_SKIP_FRAME_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_MAX_PICTURE_SIZE,
+      g_param_spec_uint ("max-picture-size", "maximum picture size",
+          "Maximum picture size in Kbits, encoded picture size (I, P, and B type) will be limited to max-picture-size value. "
+          "If set it to 0 then max-picture-size will not have any effect",
+          0, G_MAXUINT, GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
+
 #endif
 
   element_class->change_state =
@@ -651,6 +662,7 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->long_term_freq = GST_OMX_VIDEO_ENC_LONGTERM_FREQUENCY_DEFAULT;
   self->look_ahead = GST_OMX_VIDEO_ENC_LOOK_AHEAD_DEFAULT;
   self->skip_frame = GST_OMX_VIDEO_ENC_SKIP_FRAME_DEFAULT;
+  self->max_picture_size = GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_DEFAULT;
 #endif
 
   self->default_target_bitrate = GST_OMX_PROP_OMX_DEFAULT;
@@ -1102,6 +1114,23 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
     CHECK_ERR ("skip-frame");
   }
 
+  if (self->max_picture_size != GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_DEFAULT) {
+    OMX_ALG_VIDEO_PARAM_MAX_PICTURE_SIZE max_picture_size;
+
+    GST_OMX_INIT_STRUCT (&max_picture_size);
+    max_picture_size.nPortIndex = self->enc_out_port->index;
+    max_picture_size.nMaxPictureSize = self->max_picture_size;
+
+    GST_DEBUG_OBJECT (self, "max_picture_size is set to %d",
+        self->max_picture_size);
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoMaxPictureSize,
+        &max_picture_size);
+    CHECK_ERR ("max-picture-size");
+  }
+
   return TRUE;
 }
 #endif
@@ -1452,6 +1481,9 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
     case PROP_SKIP_FRAME:
       self->skip_frame = g_value_get_boolean (value);
       break;
+    case PROP_MAX_PICTURE_SIZE:
+      self->max_picture_size = g_value_get_uint (value);
+      break;
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -1552,6 +1584,9 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
       break;
     case PROP_SKIP_FRAME:
       g_value_set_boolean (value, self->skip_frame);
+      break;
+    case PROP_MAX_PICTURE_SIZE:
+      g_value_set_uint (value, self->max_picture_size);
       break;
 #endif
     default:
