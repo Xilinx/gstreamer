@@ -4004,6 +4004,11 @@ gst_omx_video_enc_getcaps (GstVideoEncoder * encoder, GstCaps * filter)
 
   comp_supported_caps = add_interlace_to_caps (self, comp_supported_caps);
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  comp_supported_caps =
+      gst_omx_video_add_xlnx_ll_to_caps (comp_supported_caps, TRUE);
+#endif
+
   if (!gst_caps_is_empty (comp_supported_caps)) {
     ret =
         gst_video_encoder_proxy_getcaps (encoder, comp_supported_caps, filter);

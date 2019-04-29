@@ -354,3 +354,37 @@ gst_omx_video_get_port_padding (GstOMXPort * port, GstVideoInfo * info_orig,
 
   return TRUE;
 }
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+
+#define SYNC_IP_DEV_ENCODER "/dev/xvsfsync0"
+#define SYNC_IP_DEV_DECODER "/dev/xvsfsync1"
+
+static gboolean
+xlnx_ll_supported (gboolean encoder)
+{
+  return g_file_test (encoder ? SYNC_IP_DEV_ENCODER : SYNC_IP_DEV_DECODER,
+      G_FILE_TEST_EXISTS);
+}
+
+GstCaps *
+gst_omx_video_add_xlnx_ll_to_caps (GstCaps * caps, gboolean encoder)
+{
+  GstCaps *xlnx_ll;
+  guint i;
+
+  if (!xlnx_ll_supported (encoder))
+    return caps;
+
+  xlnx_ll = gst_caps_copy (caps);
+  for (i = 0; i < gst_caps_get_size (xlnx_ll); i++) {
+    GstCapsFeatures *features;
+
+    features = gst_caps_get_features (xlnx_ll, i);
+    gst_caps_features_remove (features, GST_CAPS_FEATURE_MEMORY_SYSTEM_MEMORY);
+    gst_caps_features_add (features, GST_CAPS_FEATURE_MEMORY_XLNX_LL);
+  }
+
+  return gst_caps_merge (caps, xlnx_ll);
+}
+#endif
