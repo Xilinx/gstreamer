@@ -750,6 +750,8 @@ ensure_allowed_caps (GstKMSSink * self, drmModeConnector * conn,
     return FALSE;
   }
 
+  out_caps = gst_kms_add_xlnx_ll_caps (out_caps, TRUE);
+
   self->allowed_caps = gst_caps_simplify (out_caps);
 
   GST_DEBUG_OBJECT (self, "allowed caps = %" GST_PTR_FORMAT,

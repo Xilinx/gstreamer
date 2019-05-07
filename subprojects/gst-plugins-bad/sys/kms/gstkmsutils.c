@@ -254,6 +254,42 @@ gst_video_format_to_structure (GstVideoFormat format)
   return structure;
 }
 
+
+#define SYNC_IP_DEV_DECODER "/dev/xvsfsync1"
+
+static gboolean
+xlnx_ll_supported (void)
+{
+  return g_file_test (SYNC_IP_DEV_DECODER, G_FILE_TEST_EXISTS);
+}
+
+GstCaps *
+gst_kms_add_xlnx_ll_caps (GstCaps * caps, gboolean if_supported)
+{
+  GstCaps *caps_xlnx_ll;
+  guint i;
+
+  if (if_supported && !xlnx_ll_supported ())
+    return caps;
+
+  caps_xlnx_ll = gst_caps_copy (caps);
+
+  for (i = 0; i < gst_caps_get_size (caps_xlnx_ll); i++) {
+    GstCapsFeatures *feats;
+
+    feats = gst_caps_get_features (caps_xlnx_ll, i);
+    if (feats) {
+      gst_caps_features_remove (feats, GST_CAPS_FEATURE_MEMORY_SYSTEM_MEMORY);
+      gst_caps_features_add (feats, GST_CAPS_FEATURE_MEMORY_XLNX_LL);
+    } else {
+      gst_caps_set_features (caps_xlnx_ll, gst_caps_get_size (caps_xlnx_ll) - 1,
+          gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_XLNX_LL, NULL));
+    }
+  }
+
+  return gst_caps_merge (caps, caps_xlnx_ll);
+}
+
 GstCaps *
 gst_kms_sink_caps_template_fill (void)
 {
@@ -282,7 +318,10 @@ gst_kms_sink_caps_template_fill (void)
         gst_caps_features_new (GST_CAPS_FEATURE_FORMAT_INTERLACED, NULL));
   }
 
-  return gst_caps_merge (caps, caps_alternate);
+  caps = gst_caps_merge (caps, caps_alternate);
+  caps = gst_kms_add_xlnx_ll_caps (caps, FALSE);
+
+  return caps;
 }
 
 static const gint device_par_map[][2] = {

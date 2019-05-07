@@ -43,6 +43,8 @@ void           gst_video_calculate_device_ratio (guint dev_width,
 						 guint * dpy_par_n,
 						 guint * dpy_par_d);
 
+GstCaps *      gst_kms_add_xlnx_ll_caps (GstCaps * caps, gboolean if_supported);
+
 G_END_DECLS
 
 #endif
