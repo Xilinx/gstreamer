@@ -899,6 +899,9 @@ gst_v4l2src_query (GstBaseSrc * bsrc, GstQuery * query)
       else
         max_latency = num_buffers * min_latency;
 
+      if (src->xlnx_ll)
+        min_latency = GST_MSECOND;
+
       GST_DEBUG_OBJECT (bsrc,
           "report latency min %" GST_TIME_FORMAT " max %" GST_TIME_FORMAT,
           GST_TIME_ARGS (min_latency), GST_TIME_ARGS (max_latency));
