@@ -991,6 +991,7 @@ log_omx_api_trace_buffer (GstOMXComponent * comp, const gchar * event,
         "TimeStamp", G_TYPE_UINT64, GST_OMX_GET_TICKS (buf->omx_buf->nTimeStamp),
         "AllocLen", G_TYPE_UINT, buf->omx_buf->nAllocLen,
         "FilledLen", G_TYPE_UINT, buf->omx_buf->nFilledLen,
+        "TickCount", G_TYPE_UINT, buf->omx_buf->nTickCount,
         "flags", G_TYPE_UINT, buf->omx_buf->nFlags,
         "flags-str", G_TYPE_STRING, gst_omx_buffer_flags_to_string (buf->omx_buf->nFlags),
         NULL);
