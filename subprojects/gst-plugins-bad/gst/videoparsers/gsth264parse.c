@@ -2911,6 +2911,10 @@ gst_h264_parse_push_codec_buffer (GstH264Parse * h264parse,
       map.data, map.size);
   gst_buffer_unmap (nal, &map);
 
+  if (GST_BUFFER_FLAG_IS_SET (buffer, GST_BUFFER_FLAG_DELTA_UNIT)) {
+    GST_BUFFER_FLAG_SET (wrapped_nal, GST_BUFFER_FLAG_DELTA_UNIT);
+  }
+
   GST_BUFFER_PTS (wrapped_nal) = GST_BUFFER_PTS (buffer);
   GST_BUFFER_DTS (wrapped_nal) = GST_BUFFER_DTS (buffer);
   GST_BUFFER_DURATION (wrapped_nal) = 0;
