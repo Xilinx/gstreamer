@@ -354,6 +354,7 @@ enum
 #define OMX_ALG_GST_EVENT_SCENE_CHANGE "omx-alg/scene-change"
 #define OMX_ALG_GST_EVENT_INSERT_PREFIX_SEI "omx-alg/insert-prefix-sei"
 #define OMX_ALG_GST_EVENT_INSERT_SUFFIX_SEI "omx-alg/insert-suffix-sei"
+#define OMX_ALG_GST_EVENT_LOAD_QP "omx-alg/load-qp"
 
 /* class initialization */
 #define do_init \
@@ -4023,6 +4024,48 @@ handle_longterm_event (GstOMXVideoEnc * self, GstEvent * event)
 }
 
 static gboolean
+handle_load_qp (GstOMXVideoEnc * self, GstEvent * event)
+{
+  const GstStructure *s;
+  GstBuffer *buf;
+  GstMapInfo map;
+  OMX_ALG_VIDEO_CONFIG_DATA config;
+  OMX_ERRORTYPE err;
+
+  s = gst_event_get_structure (event);
+
+  if (!gst_structure_get (s, "qp-table", GST_TYPE_BUFFER, &buf, NULL)) {
+    GST_WARNING_OBJECT (self, "Failed to parse load-qp event");
+    goto load_qp_done;
+  }
+
+  if (!gst_buffer_map (buf, &map, GST_MAP_READ)) {
+    GST_WARNING_OBJECT (self, "Failed to map payload buffer");
+    gst_buffer_unref (buf);
+    goto load_qp_done;
+  }
+
+  GST_OMX_INIT_STRUCT (&config);
+  config.pBuffer = map.data;
+  config.nAllocLen = map.size;
+  config.nFilledLen = map.size;
+  config.nOffset =
+      GST_BUFFER_OFFSET_IS_VALID (buf) ? GST_BUFFER_OFFSET (buf) : 0;
+  err = gst_omx_component_set_config (self->enc,
+      OMX_ALG_IndexConfigVideoQuantizationParameterTable, &config);
+
+  if (err != OMX_ErrorNone)
+    GST_ERROR_OBJECT (self,
+        "Failed to load qp: %s (0x%08x)", gst_omx_error_to_string (err), err);
+
+  gst_buffer_unmap (buf, &map);
+  gst_buffer_unref (buf);
+
+load_qp_done:
+  return TRUE;
+}
+
+static gboolean
 handle_sei_insertion (GstOMXVideoEnc * self, GstEvent * event)
 {
   const GstStructure *s;
@@ -4113,6 +4156,8 @@ gst_omx_video_enc_sink_event (GstVideoEncoder * encoder, GstEvent * event)
       else if (gst_event_has_name (event, OMX_ALG_GST_EVENT_INSERT_PREFIX_SEI)
           || gst_event_has_name (event, OMX_ALG_GST_EVENT_INSERT_SUFFIX_SEI))
         handle_sei_insertion (self, event);
+      else if (gst_event_has_name (event, OMX_ALG_GST_EVENT_LOAD_QP))
+        handle_load_qp (self, event);
 #endif
     }
     default:
