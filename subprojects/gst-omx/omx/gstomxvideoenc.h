@@ -100,6 +100,9 @@ struct _GstOMXVideoEnc
   guint32 look_ahead;
   gboolean skip_frame;
   guint32 max_picture_size;
+  guint32 max_picture_size_i;
+  guint32 max_picture_size_p;
+  guint32 max_picture_size_b;
 #endif
 
   guint32 default_target_bitrate;
