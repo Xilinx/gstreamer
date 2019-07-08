@@ -53,10 +53,15 @@
 #define DYNAMIC_USE_LONGTERM_STR "UL"
 #define DYNAMIC_INSERT_SEI_PREFIX_STR "SEIp"
 #define DYNAMIC_INSERT_SEI_SUFFIX_STR "SEIs"
+#define DYNAMIC_LOAD_QP_STR "LOADQP"
 
 #define DYNAMIC_FEATURE_DELIMIT ","
-#define DYNAMIC_PARAM_DELIMIT ":x"
+#define DYNAMIC_PARAM_DELIMIT ":"
+#define DYNAMIC_PARAM_DELIMIT_ROI ":x"
 
+#define QP_MAX_VALUE 51
+/* 64 byte buffer needed in beginning of qp table */
+#define QP_BUF_OFFSET 64
 
 typedef enum
 {
@@ -70,6 +75,7 @@ typedef enum
   DYNAMIC_USE_LONGTERM,
   DYNAMIC_INSERT_SEI_PREFIX,
   DYNAMIC_INSERT_SEI_SUFFIX,
+  DYNAMIC_LOAD_QP,
 } DynamicFeatureType;
 
 typedef struct
@@ -88,6 +94,7 @@ typedef struct
       gchar *quality;
     } roi;
     guint value;
+    gchar *qp_file;
   } param;
 } DynamicFeature;
 
@@ -137,6 +144,8 @@ get_dynamic_str_enum (gchar * user_string)
     return DYNAMIC_INSERT_SEI_PREFIX;
   else if (!g_strcmp0 (user_string, DYNAMIC_INSERT_SEI_SUFFIX_STR))
     return DYNAMIC_INSERT_SEI_SUFFIX;
+  else if (!g_strcmp0 (user_string, DYNAMIC_LOAD_QP_STR))
+    return DYNAMIC_LOAD_QP;
   else {
     g_print ("Invalid User string \n");
     return -1;
@@ -207,6 +216,10 @@ parse_dynamic_user_string (const char *str, GstElement * encoder)
 
   dynamic->type = get_dynamic_str_enum (*token);
 
+  /* Only use x as delimiter for ROI */
+  if (dynamic->type == DYNAMIC_ROI)
+    token = g_strsplit_set (str, DYNAMIC_PARAM_DELIMIT_ROI, -1);
+
   switch (dynamic->type) {
     case DYNAMIC_BIT_RATE:
     case DYNAMIC_GOP_LENGTH:
@@ -238,6 +251,10 @@ parse_dynamic_user_string (const char *str, GstElement * encoder)
     case DYNAMIC_INSERT_SEI_SUFFIX:
       dynamic->start_frame = atoi (token[1]);
       break;
+    case DYNAMIC_LOAD_QP:
+      dynamic->start_frame = atoi (token[1]);
+      dynamic->param.qp_file = g_strdup (token[2]);
+      break;
     default:
       g_print ("Invalid DynamicFeatureType \n");
       g_strfreev (token);
@@ -264,6 +281,94 @@ send_downstream_event (GstPad * pad, GstStructure * s)
   return TRUE;
 }
 
+static guint8 *
+load_qp_file (gint * size, gchar * qp_file)
+{
+  guint8 *qp_table;
+  gchar *line, *end_of_line;
+  gint num_to_read = 0, num_read = 0, block_size = 0, qp = 0;
+  gsize line_len = 0;
+  GIOChannel *in_channel;
+  GError *error = NULL;
+
+  if (!g_strcmp0 (enc.type, "avc"))
+    block_size = 16 * 16;
+  else
+    block_size = 32 * 32;
+  num_to_read = enc.width * enc.height / block_size + QP_BUF_OFFSET;
+  num_read = QP_BUF_OFFSET;
+
+  qp_table = g_malloc0 (num_to_read);
+  if (!qp_table) {
+    g_print ("malloc fail...Continuing without external QP\n");
+    return NULL;
+  }
+
+  in_channel = g_io_channel_new_file (qp_file, "r", &error);
+  if (!in_channel) {
+    g_print ("no %s...Continuing without external QP\n", qp_file);
+    g_free (qp_table);
+    return NULL;
+  }
+
+  while (g_io_channel_read_line (in_channel, &line, &line_len, NULL,
+          &error) == G_IO_STATUS_NORMAL) {
+    /* Ignore lines if qp_table already full */
+    if (num_read >= num_to_read) {
+      g_free (line);
+      break;
+    }
+
+    /* QP should be 2 characters long + line terminator(s)  */
+    if (line_len > 2) {
+      /* Strip line terminator(s) to convert to gint */
+      line[2] = '\0';
+    } else {
+      g_print ("Improper hex at %d...Continuing without external QP\n",
+          num_read - QP_BUF_OFFSET);
+      g_free (line);
+      g_free (qp_table);
+      g_io_channel_unref (in_channel);
+      return NULL;
+    }
+
+    qp = g_ascii_strtoull (line, &end_of_line, 16);
+    if (end_of_line == line) {
+      g_print ("Can't convert hex at %d...Continuing without external QP\n",
+          num_read - QP_BUF_OFFSET);
+      g_free (line);
+      g_free (qp_table);
+      g_io_channel_unref (in_channel);
+      return NULL;
+    }
+
+    if (qp > QP_MAX_VALUE) {
+      g_print ("Hex value too large at %d...Continuing without external QP\n",
+          num_read - QP_BUF_OFFSET);
+      g_free (line);
+      g_free (qp_table);
+      g_io_channel_unref (in_channel);
+      return NULL;
+    } else {
+      qp_table[num_read] = qp;
+    }
+
+    g_free (line);
+    num_read++;
+  }
+
+  if (num_read != num_to_read) {
+    g_print ("Not enough QPs...Continuing without external QP\n");
+    g_free (qp_table);
+    g_io_channel_unref (in_channel);
+    return NULL;
+  }
+
+  g_io_channel_unref (in_channel);
+  *size = num_read;
+  return qp_table;
+}
+
 static GstPadProbeReturn
 videoparser_src_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
     gpointer user_data)
@@ -277,7 +382,35 @@ videoparser_src_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
 
   buffer = gst_pad_probe_info_get_buffer (info);
 
-  if (framecount == dynamic->start_frame) {
+  if (framecount >= dynamic->start_frame) {
+
+    switch (dynamic->type) {
+
+      case DYNAMIC_LOAD_QP:
+      {
+        gint buf_len = 0;
+        guint8 *qp_table = load_qp_file (&buf_len, dynamic->param.qp_file);
+
+        if (qp_table) {
+          GstStructure *s;
+          GstBuffer *buf;
+
+          g_print (" Loading external QP for frame:%d\n", framecount);
+
+          buf = gst_buffer_new_wrapped (qp_table, buf_len);
+
+          s = gst_structure_new ("omx-alg/load-qp",
+              "qp-table", GST_TYPE_BUFFER, buf, NULL);
+          send_downstream_event (pad, s);
+
+          gst_buffer_unref (buf);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  } else if (framecount == dynamic->start_frame) {
 
     switch (dynamic->type) {
 
@@ -448,7 +581,8 @@ main (int argc, char *argv[])
       "'IL:frame_num' -> Mark longterm reference picture\n"
       "'UL:frame_num' -> Use longterm picture\n"
       "'SEIp:frame_num' -> Insert SEI prefix\n"
-      "'SEIs:frame_num' -> Insert SEI suffix";
+      "'SEIs:frame_num' -> Insert SEI suffix\n"
+      "'LOADQP:frame_num:file_name' -> Load external QP table from file_name";
 
   /* Set Encoder defalut parameters */
   enc.width = DEFAULT_VIDEO_WIDTH;
@@ -578,8 +712,11 @@ main (int argc, char *argv[])
   gst_element_set_state (pipeline, GST_STATE_NULL);
 
   /* Free the memory */
-  if (dynamic)
+  if (dynamic) {
+    if (dynamic->type == DYNAMIC_LOAD_QP)
+      g_free (dynamic->param.qp_file);
     g_free (dynamic);
+  }
   if (enc.output_filename)
     g_free (enc.output_filename);
   if (enc.input_filename)
