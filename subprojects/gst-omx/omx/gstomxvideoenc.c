@@ -120,8 +120,13 @@ gst_omx_video_enc_gop_mode_get_type (void)
   if (qtype == 0) {
     static const GEnumValue values[] = {
       {OMX_ALG_GOP_MODE_DEFAULT, "Basic GOP settings", "basic"},
+      {OMX_ALG_GOP_MODE_DEFAULT_B, "Basic GOP settings, includes only B-frames",
+          "basic-b"},
       {OMX_ALG_GOP_MODE_PYRAMIDAL,
           "Advanced GOP pattern with hierarchical B-frames", "pyramidal"},
+      {OMX_ALG_GOP_MODE_PYRAMIDAL_B,
+            "Advanced GOP pattern with hierarchical B-frames, includes only B-frames",
+          "pyramidal-b"},
       {OMX_ALG_GOP_MODE_LOW_DELAY_P, "Single I-frame followed by P-frames only",
           "low-delay-p"},
       {OMX_ALG_GOP_MODE_LOW_DELAY_B, "Single I-frame followed by B-frames only",
