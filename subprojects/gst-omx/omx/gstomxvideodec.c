@@ -2632,6 +2632,23 @@ gst_omx_video_dec_pick_input_allocation_mode (GstOMXVideoDec * self,
     return GST_OMX_BUFFER_ALLOCATION_ALLOCATE_BUFFER;
 
   if (can_use_dynamic_buffer_mode (self, inbuf)) {
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    {
+      GstMemory *mem;
+
+      mem = gst_buffer_peek_memory (inbuf, 0);
+      if (!mem) {
+        GST_WARNING_OBJECT (self, "Failed to retrieve buffer memory");
+        return GST_OMX_BUFFER_ALLOCATION_ALLOCATE_BUFFER;
+      }
+
+      if (!gst_is_dmabuf_memory (mem)) {
+        GST_DEBUG_OBJECT (self,
+            "input is not dmabuf, let OMX allocates its buffer and copy");
+        return GST_OMX_BUFFER_ALLOCATION_ALLOCATE_BUFFER;
+      }
+    }
+#endif
     GST_DEBUG_OBJECT (self,
         "input buffer is properly aligned, use dynamic allocation");
     return GST_OMX_BUFFER_ALLOCATION_USE_BUFFER_DYNAMIC;
