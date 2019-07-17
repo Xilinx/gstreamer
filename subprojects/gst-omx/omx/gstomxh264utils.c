@@ -51,6 +51,22 @@ static const H264ProfileMapping h264_profiles[] = {
       (OMX_VIDEO_AVCPROFILETYPE) OMX_ALG_VIDEO_AVCProfileHigh10_Intra},
   {"high-4:2:2-intra",
       (OMX_VIDEO_AVCPROFILETYPE) OMX_ALG_VIDEO_AVCProfileHigh422_Intra},
+  {"xavc-high-10-intra-cbg",
+      (OMX_VIDEO_AVCPROFILETYPE) OMX_ALG_VIDEO_XAVCProfileHigh10_Intra_CBG},
+  {"xavc-high-10-intra-vbr",
+      (OMX_VIDEO_AVCPROFILETYPE) OMX_ALG_VIDEO_XAVCProfileHigh10_Intra_VBR},
+  {"xavc-high-4:2:2-intra-cbg",
+      (OMX_VIDEO_AVCPROFILETYPE) OMX_ALG_VIDEO_XAVCProfileHigh422_Intra_CBG},
+  {"xavc-high-4:2:2-intra-vbr",
+      (OMX_VIDEO_AVCPROFILETYPE) OMX_ALG_VIDEO_XAVCProfileHigh422_Intra_VBR},
+  {"xavc-long-gop-main-mp4",
+      (OMX_VIDEO_AVCPROFILETYPE) OMX_ALG_VIDEO_XAVCProfileLongGopMain_MP4},
+  {"xavc-long-gop-high-mp4",
+      (OMX_VIDEO_AVCPROFILETYPE) OMX_ALG_VIDEO_XAVCProfileLongGopHigh_MP4},
+  {"xavc-long-gop-high-mxf",
+      (OMX_VIDEO_AVCPROFILETYPE) OMX_ALG_VIDEO_XAVCProfileLongGopHigh_MXF},
+  {"xavc-long-gop-high-4:2:2-mxf",
+      (OMX_VIDEO_AVCPROFILETYPE) OMX_ALG_VIDEO_XAVCProfileLongGopHigh422_MXF},
 #endif
 };
 
