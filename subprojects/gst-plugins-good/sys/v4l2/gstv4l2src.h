@@ -74,6 +74,9 @@ struct _GstV4l2Src
 
   /* maintain signal status, updated during negotiation */
   gboolean no_signal;
+
+  /* TRUE if using Xilinx low latency capture */
+  gboolean xlnx_ll;
 };
 
 struct _GstV4l2SrcClass
