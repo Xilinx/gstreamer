@@ -243,6 +243,8 @@ gst_omx_video_dec_class_init (GstOMXVideoDecClass * klass)
       GST_VIDEO_CAPS_MAKE_WITH_FEATURES (GST_CAPS_FEATURE_FORMAT_INTERLACED,
       GST_OMX_VIDEO_DEC_SUPPORTED_FORMATS)
       ", interlace-mode = (string) alternate ; "
+      GST_VIDEO_CAPS_MAKE_WITH_FEATURES (GST_CAPS_FEATURE_MEMORY_XLNX_LL,
+      GST_OMX_VIDEO_DEC_SUPPORTED_FORMATS) "; "
 #endif
       GST_VIDEO_CAPS_MAKE (GST_OMX_VIDEO_DEC_SUPPORTED_FORMATS);
 }
@@ -2343,6 +2345,11 @@ gst_omx_video_dec_negotiate (GstOMXVideoDec * self)
       self->input_state);
 
   comp_supported_caps = gst_omx_video_get_caps_for_map (negotiation_map);
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  comp_supported_caps =
+      gst_omx_video_add_xlnx_ll_to_caps (comp_supported_caps, FALSE);
+#endif
 
   GST_DEBUG_OBJECT (self, "Decoder supported caps: %" GST_PTR_FORMAT,
       comp_supported_caps);
