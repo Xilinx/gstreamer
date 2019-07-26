@@ -4333,7 +4333,7 @@ gst_v4l2_object_acquire_format (GstV4l2Object * v4l2object, GstVideoInfo * info)
   /* Use the default compose rectangle */
   memset (&sel, 0, sizeof (struct v4l2_selection));
   sel.type = v4l2object->type;
-  sel.target = V4L2_SEL_TGT_COMPOSE_DEFAULT;
+  sel.target = V4L2_SEL_TGT_COMPOSE;
   if (v4l2object->ioctl (v4l2object->video_fd, VIDIOC_G_SELECTION, &sel) >= 0) {
     r = &sel.r;
   } else {
