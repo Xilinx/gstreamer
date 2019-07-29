@@ -58,6 +58,8 @@ struct _GstOMXH264Enc
   guint8 ref_frames;
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   guint32 gop_length;
+  gint8 loop_filter_beta_offset;
+  gint8 loop_filter_alpha_c0_offset;
 #endif
 
 

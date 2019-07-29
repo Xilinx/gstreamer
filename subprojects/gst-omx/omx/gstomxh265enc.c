@@ -53,6 +53,8 @@ enum
   PROP_CONSTRAINED_INTRA_PREDICTION,
   PROP_LOOP_FILTER_MODE,
   PROP_GOP_LENGTH,
+  PROP_LOOP_FILTER_BETA_OFFSET,
+  PROP_LOOP_FILTER_TC_OFFSET,
 };
 
 #define GST_OMX_H265_VIDEO_ENC_PERIODICITY_OF_IDR_FRAMES_DEFAULT    (0xffffffff)
@@ -61,6 +63,8 @@ enum
 #define GST_OMX_H265_VIDEO_ENC_GOP_LENGTH_DEFAULT (30)
 #define GST_OMX_H265_VIDEO_ENC_CONSTRAINED_INTRA_PREDICTION_DEFAULT (FALSE)
 #define GST_OMX_H265_VIDEO_ENC_LOOP_FILTER_MODE_DEFAULT (0xffffffff)
+#define GST_OMX_H265_VIDEO_ENC_LOOP_FILTER_BETA_OFFSET_DEFAULT (-1)
+#define GST_OMX_H265_VIDEO_ENC_LOOP_FILTER_TC_OFFSET_DEFAULT (-1)
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
 /* zynqultrascaleplus's OMX uses a param struct different of Android's one */
@@ -203,6 +207,22 @@ gst_omx_h265_enc_class_init (GstOMXH265EncClass * klass)
           GST_OMX_H265_VIDEO_ENC_LOOP_FILTER_MODE_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_LOOP_FILTER_BETA_OFFSET,
+      g_param_spec_int ("loop-filter-beta-offset", "Loop Filter Beta Offset",
+          "Beta offset for the deblocking filter, used only when loop-filter-mode is enabled",
+          -6, 6, GST_OMX_H265_VIDEO_ENC_LOOP_FILTER_BETA_OFFSET_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_PLAYING));
+
+  g_object_class_install_property (gobject_class,
+      PROP_LOOP_FILTER_TC_OFFSET,
+      g_param_spec_int ("loop-filter-tc-offset",
+          "Loop Filter TC offset",
+          "TC offset for the deblocking filter, used only when loop-filter-mode is enabled",
+          -6, 6, GST_OMX_H265_VIDEO_ENC_LOOP_FILTER_TC_OFFSET_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_PLAYING));
 #endif
 
   videoenc_class->cdata.default_sink_template_caps =
@@ -281,6 +301,44 @@ update_config_video_gop (GstOMXH265Enc * self)
         gst_omx_error_to_string (err), err);
 
 }
+
+static void
+update_config_loop_filter_beta_offset (GstOMXH265Enc * self)
+{
+  OMX_ALG_VIDEO_CONFIG_LOOP_FILTER_BETA config;
+  OMX_ERRORTYPE err;
+
+  GST_OMX_INIT_STRUCT (&config);
+  config.nPortIndex = GST_OMX_VIDEO_ENC (self)->enc_out_port->index;
+  config.nLoopFilterBeta = self->loop_filter_beta_offset;
+
+  err =
+      gst_omx_component_set_config (GST_OMX_VIDEO_ENC (self)->enc,
+      (OMX_INDEXTYPE) OMX_ALG_IndexConfigVideoLoopFilterBeta, &config);
+  if (err != OMX_ErrorNone)
+    GST_ERROR_OBJECT (self,
+        "Failed to set  parameter: %s (0x%08x)",
+        gst_omx_error_to_string (err), err);
+}
+
+static void
+update_config_loop_filter_tc_offset (GstOMXH265Enc * self)
+{
+  OMX_ALG_VIDEO_CONFIG_LOOP_FILTER_TC config;
+  OMX_ERRORTYPE err;
+
+  GST_OMX_INIT_STRUCT (&config);
+  config.nPortIndex = GST_OMX_VIDEO_ENC (self)->enc_out_port->index;
+  config.nLoopFilterTc = self->loop_filter_tc_offset;
+
+  err =
+      gst_omx_component_set_config (GST_OMX_VIDEO_ENC (self)->enc,
+      (OMX_INDEXTYPE) OMX_ALG_IndexConfigVideoLoopFilterTc, &config);
+  if (err != OMX_ErrorNone)
+    GST_ERROR_OBJECT (self,
+        "Failed to set  parameter: %s (0x%08x)",
+        gst_omx_error_to_string (err), err);
+}
 #endif
 static void
 gst_omx_h265_enc_set_property (GObject * object, guint prop_id,
@@ -311,6 +369,24 @@ gst_omx_h265_enc_set_property (GObject * object, guint prop_id,
       break;
     case PROP_LOOP_FILTER_MODE:
       self->loop_filter_mode = g_value_get_enum (value);
+      break;
+    case PROP_LOOP_FILTER_BETA_OFFSET:
+      self->loop_filter_beta_offset = g_value_get_int (value);
+      if (self->loop_filter_mode != OMX_ALG_VIDEO_HEVCLoopFilterEnable)
+        GST_WARNING_OBJECT (self,
+            "Loop Filter Mode not set to enabled. Setting beta offset may do nothing.");
+
+      if (GST_OMX_VIDEO_ENC (self)->enc)
+        update_config_loop_filter_beta_offset (self);
+      break;
+    case PROP_LOOP_FILTER_TC_OFFSET:
+      self->loop_filter_tc_offset = g_value_get_int (value);
+      if (self->loop_filter_mode != OMX_ALG_VIDEO_HEVCLoopFilterEnable)
+        GST_WARNING_OBJECT (self,
+            "Loop Filter Mode not set to enabled. Setting tc offset may do nothing.");
+
+      if (GST_OMX_VIDEO_ENC (self)->enc)
+        update_config_loop_filter_tc_offset (self);
       break;
 #endif
     default:
@@ -345,6 +421,12 @@ gst_omx_h265_enc_get_property (GObject * object, guint prop_id, GValue * value,
     case PROP_LOOP_FILTER_MODE:
       g_value_set_enum (value, self->loop_filter_mode);
       break;
+    case PROP_LOOP_FILTER_BETA_OFFSET:
+      g_value_set_int (value, self->loop_filter_beta_offset);
+      break;
+    case PROP_LOOP_FILTER_TC_OFFSET:
+      g_value_set_int (value, self->loop_filter_tc_offset);
+      break;
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -365,6 +447,10 @@ gst_omx_h265_enc_init (GstOMXH265Enc * self)
   self->constrained_intra_prediction =
       GST_OMX_H265_VIDEO_ENC_CONSTRAINED_INTRA_PREDICTION_DEFAULT;
   self->loop_filter_mode = GST_OMX_H265_VIDEO_ENC_LOOP_FILTER_MODE_DEFAULT;
+  self->loop_filter_beta_offset =
+      GST_OMX_H265_VIDEO_ENC_LOOP_FILTER_BETA_OFFSET_DEFAULT;
+  self->loop_filter_tc_offset =
+      GST_OMX_H265_VIDEO_ENC_LOOP_FILTER_TC_OFFSET_DEFAULT;
 #endif
 }
 
@@ -538,6 +624,59 @@ set_intra_period (GstOMXH265Enc * self)
 
   return TRUE;
 }
+
+static gboolean
+set_alg_loop_filter_beta (GstOMXH265Enc * self)
+{
+  OMX_ALG_VIDEO_CONFIG_LOOP_FILTER_BETA config;
+  OMX_ERRORTYPE err;
+
+  GST_OMX_INIT_STRUCT (&config);
+  config.nPortIndex = GST_OMX_VIDEO_ENC (self)->enc_out_port->index;
+  config.nLoopFilterBeta = self->loop_filter_beta_offset;
+
+  err =
+      gst_omx_component_set_parameter (GST_OMX_VIDEO_ENC (self)->enc,
+      (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoLoopFilterBeta, &config);
+  if (err != OMX_ErrorNone) {
+    GST_ERROR_OBJECT (self,
+        "can't set OMX_ALG_IndexParamVideoLoopFilterBeta %s (0x%08x)",
+        gst_omx_error_to_string (err), err);
+    return FALSE;
+  }
+
+  GST_DEBUG_OBJECT (self, "OMX_ALG_IndexParamVideoLoopFilterBeta set to %d",
+      config.nLoopFilterBeta);
+
+  return TRUE;
+}
+
+static gboolean
+set_alg_loop_filter_tc (GstOMXH265Enc * self)
+{
+  OMX_ALG_VIDEO_CONFIG_LOOP_FILTER_TC config;
+  OMX_ERRORTYPE err;
+
+  GST_OMX_INIT_STRUCT (&config);
+  config.nPortIndex = GST_OMX_VIDEO_ENC (self)->enc_out_port->index;
+  config.nLoopFilterTc = self->loop_filter_tc_offset;
+
+  err =
+      gst_omx_component_set_parameter (GST_OMX_VIDEO_ENC (self)->enc,
+      (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoLoopFilterTc, &config);
+  if (err != OMX_ErrorNone) {
+    GST_ERROR_OBJECT (self,
+        "can't set OMX_ALG_IndexParamVideoLoopFilterTc %s (0x%08x)",
+        gst_omx_error_to_string (err), err);
+    return FALSE;
+  }
+
+  GST_DEBUG_OBJECT (self, "OMX_ALG_IndexParamVideoLoopFilterTc set to %d",
+      config.nLoopFilterTc);
+
+  return TRUE;
+
+}
 #endif
 
 static gboolean
@@ -557,6 +696,11 @@ gst_omx_h265_enc_set_format (GstOMXVideoEnc * enc, GstOMXPort * port,
   if (self->periodicity_idr !=
       GST_OMX_H265_VIDEO_ENC_PERIODICITY_OF_IDR_FRAMES_DEFAULT)
     set_intra_period (self);
+
+  if (self->loop_filter_mode == OMX_ALG_VIDEO_HEVCLoopFilterEnable) {
+    set_alg_loop_filter_beta (self);
+    set_alg_loop_filter_tc (self);
+  }
 #endif
 
   gst_omx_port_get_port_definition (GST_OMX_VIDEO_ENC (self)->enc_out_port,
