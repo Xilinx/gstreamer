@@ -2210,6 +2210,7 @@ gst_omx_video_enc_start (GstVideoEncoder * encoder)
   self->nb_upstream_buffers = 0;
   self->nb_downstream_buffers = 0;
   self->in_pool_used = FALSE;
+  self->xlnx_ll = FALSE;
 
   return TRUE;
 }
@@ -3018,6 +3019,18 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   gst_omx_video_enc_set_latency (self);
   if (!gst_omx_video_enc_set_color_primaries (self))
     return FALSE;
+
+  {
+    GstCapsFeatures *features;
+
+    features = gst_caps_get_features (state->caps, 0);
+    if (features
+        && gst_caps_features_contains (features,
+            GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
+      GST_DEBUG_OBJECT (self, "Input is using XLNX-LowLatency");
+      self->xlnx_ll = TRUE;
+    }
+  }
 #endif
 
   self->downstream_flow_ret = GST_FLOW_OK;
@@ -3403,6 +3416,9 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
   GstOMXBuffer *buf;
   OMX_ERRORTYPE err;
   GstClockTimeDiff deadline;
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  gboolean starting = FALSE;
+#endif
 
   self = GST_OMX_VIDEO_ENC (encoder);
 
@@ -3432,6 +3448,9 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
     GST_DEBUG_OBJECT (self, "Starting task");
     gst_pad_start_task (GST_VIDEO_ENCODER_SRC_PAD (self),
         (GstTaskFunction) gst_omx_video_enc_loop, self, NULL);
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    starting = TRUE;
+#endif
   }
 
   port = self->enc_in_port;
@@ -3626,6 +3645,19 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
   }
 
   gst_video_codec_frame_unref (frame);
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  if (self->xlnx_ll && starting) {
+    GstEvent *event;
+
+    GST_DEBUG_OBJECT (self, "Tell XLNX-LL producer it can start streaming");
+
+    event = gst_event_new_custom (GST_EVENT_CUSTOM_UPSTREAM,
+        gst_structure_new ("xlnx-ll-consumer-ready", NULL, NULL));
+
+    gst_pad_push_event (GST_VIDEO_DECODER_SINK_PAD (self), event);
+  }
+#endif
 
   return self->downstream_flow_ret;
 
