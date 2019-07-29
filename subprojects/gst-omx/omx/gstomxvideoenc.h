@@ -120,6 +120,9 @@ struct _GstOMXVideoEnc
   /* TRUE if input buffers are from the pool we proposed to upstream */
   gboolean in_pool_used;
 
+  /* TRUE if encoder is receiving input using XLNX-LL */
+  gboolean xlnx_ll;
+
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   GEnumClass *alg_roi_quality_enum_class;
 #endif
