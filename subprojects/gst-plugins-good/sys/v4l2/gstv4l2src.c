@@ -139,6 +139,7 @@ static GstFlowReturn gst_v4l2src_create (GstPushSrc * src, GstBuffer ** out);
 static GstCaps *gst_v4l2src_fixate (GstBaseSrc * basesrc, GstCaps * caps,
     struct PreferredCapsInfo *pref);
 static gboolean gst_v4l2src_negotiate (GstBaseSrc * basesrc);
+static gboolean gst_v4l2src_event (GstBaseSrc * basesrc, GstEvent * event);
 
 static void gst_v4l2src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
@@ -279,6 +280,7 @@ gst_v4l2src_class_init (GstV4l2SrcClass * klass)
   basesrc_class->negotiate = GST_DEBUG_FUNCPTR (gst_v4l2src_negotiate);
   basesrc_class->decide_allocation =
       GST_DEBUG_FUNCPTR (gst_v4l2src_decide_allocation);
+  basesrc_class->event = GST_DEBUG_FUNCPTR (gst_v4l2src_event);
 
   pushsrc_class->create = GST_DEBUG_FUNCPTR (gst_v4l2src_create);
 
@@ -1683,4 +1685,46 @@ gst_v4l2src_uri_handler_init (gpointer g_iface, gpointer iface_data)
   iface->get_protocols = gst_v4l2src_uri_get_protocols;
   iface->get_uri = gst_v4l2src_uri_get_uri;
   iface->set_uri = gst_v4l2src_uri_set_uri;
+}
+
+static void
+start_xilinx_dma (GstV4l2Src * self)
+{
+  struct v4l2_control control = { 0, };
+
+  control.id = V4L2_CID_XILINX_LOW_LATENCY;
+  control.value = XVIP_START_DMA;
+
+  if (self->v4l2object->ioctl (self->v4l2object->video_fd, VIDIOC_S_CTRL,
+          &control))
+    GST_ERROR_OBJECT (self, "Failed to start DMA: %s", g_strerror (errno));
+  else
+    GST_DEBUG_OBJECT (self, "DMA started");
+}
+
+static gboolean
+gst_v4l2src_event (GstBaseSrc * basesrc, GstEvent * event)
+{
+  GstV4l2Src *self = GST_V4L2SRC (basesrc);
+
+  switch (GST_EVENT_TYPE (event)) {
+    case GST_EVENT_CUSTOM_UPSTREAM:
+    {
+      if (gst_event_has_name (event, "xlnx-ll-consumer-ready")) {
+        if (self->xlnx_ll) {
+          GST_DEBUG_OBJECT (self, "XLNX-LowLatency consumer ready, start DMA");
+          start_xilinx_dma (self);
+        } else {
+          GST_WARNING_OBJECT (self,
+              "Received XLNX-LowLatency consumer ready event in normal mode; ignoring");
+        }
+        return TRUE;
+      }
+    }
+
+    default:
+      break;
+  }
+
+  return GST_BASE_SRC_CLASS (gst_v4l2src_parent_class)->event (basesrc, event);
 }
