@@ -4354,7 +4354,7 @@ gst_v4l2_object_set_crop (GstV4l2Object * obj, struct v4l2_rect * crop_rect)
   GST_V4L2_CHECK_OPEN (obj);
 
   sel.type = obj->type;
-  sel.target = V4L2_SEL_TGT_CROP;
+  sel.target = V4L2_SEL_TGT_COMPOSE;
   sel.flags = 0;
   sel.r = *crop_rect;
 
