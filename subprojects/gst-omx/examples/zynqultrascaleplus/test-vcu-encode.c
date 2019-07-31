@@ -42,6 +42,7 @@
 #define DEFAULT_ENCODER_TYPE "avc"
 #define DEFAULT_LONGTERM_FREQ 0
 #define DEFAULT_LONGTERM_REF 0
+#define DEFAULT_LOOP_FILTER_MODE -1
 
 #define DYNAMIC_BITRATE_STR "BR"
 #define DYNAMIC_GOP_LENGTH_STR "GL"
@@ -54,6 +55,8 @@
 #define DYNAMIC_INSERT_SEI_PREFIX_STR "SEIp"
 #define DYNAMIC_INSERT_SEI_SUFFIX_STR "SEIs"
 #define DYNAMIC_LOAD_QP_STR "LOADQP"
+#define DYNAMIC_BETA_OFFSET_STR "BO"
+#define DYNAMIC_TC_OFFSET_STR "TO"
 
 #define DYNAMIC_FEATURE_DELIMIT ","
 #define DYNAMIC_PARAM_DELIMIT ":"
@@ -76,6 +79,8 @@ typedef enum
   DYNAMIC_INSERT_SEI_PREFIX,
   DYNAMIC_INSERT_SEI_SUFFIX,
   DYNAMIC_LOAD_QP,
+  DYNAMIC_BETA_OFFSET,
+  DYNAMIC_TC_OFFSET,
 } DynamicFeatureType;
 
 typedef struct
@@ -95,6 +100,7 @@ typedef struct
     } roi;
     guint value;
     gchar *qp_file;
+    gint signed_value;
   } param;
 } DynamicFeature;
 
@@ -110,6 +116,7 @@ typedef struct
   guint target_bitrate;
   guint long_term_freq;
   guint long_term_ref;
+  gint loop_filter_mode;
 
   gchar *output_filename;
   gchar *input_filename;
@@ -146,6 +153,10 @@ get_dynamic_str_enum (gchar * user_string)
     return DYNAMIC_INSERT_SEI_SUFFIX;
   else if (!g_strcmp0 (user_string, DYNAMIC_LOAD_QP_STR))
     return DYNAMIC_LOAD_QP;
+  else if (!g_strcmp0 (user_string, DYNAMIC_BETA_OFFSET_STR))
+    return DYNAMIC_BETA_OFFSET;
+  else if (!g_strcmp0 (user_string, DYNAMIC_TC_OFFSET_STR))
+    return DYNAMIC_TC_OFFSET;
   else {
     g_print ("Invalid User string \n");
     return -1;
@@ -254,6 +265,14 @@ parse_dynamic_user_string (const char *str, GstElement * encoder)
     case DYNAMIC_LOAD_QP:
       dynamic->start_frame = atoi (token[1]);
       dynamic->param.qp_file = g_strdup (token[2]);
+      break;
+    case DYNAMIC_BETA_OFFSET:
+      dynamic->start_frame = atoi (token[1]);
+      dynamic->param.signed_value = atoi (token[2]);
+      break;
+    case DYNAMIC_TC_OFFSET:
+      dynamic->start_frame = atoi (token[1]);
+      dynamic->param.signed_value = atoi (token[2]);
       break;
     default:
       g_print ("Invalid DynamicFeatureType \n");
@@ -512,6 +531,25 @@ videoparser_src_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
         gst_buffer_unref (sei);
       }
         break;
+      case DYNAMIC_BETA_OFFSET:
+        g_print (" Changing loop filter beta offset to %d at frame %d \n",
+            dynamic->param.signed_value, framecount);
+        g_object_set (G_OBJECT (encoder), "loop-filter-beta-offset",
+            dynamic->param.signed_value, NULL);
+        break;
+      case DYNAMIC_TC_OFFSET:
+        if (!g_strcmp0 (enc.type, "avc")) {
+          g_print (" Changing loop filter alpha offset to %d at frame %d \n",
+              dynamic->param.signed_value, framecount);
+          g_object_set (G_OBJECT (encoder), "loop-filter-alpha-c0-offset",
+              dynamic->param.signed_value, NULL);
+        } else {
+          g_print (" Changing loop filter tc offset to %d at frame %d \n",
+              dynamic->param.signed_value, framecount);
+          g_object_set (G_OBJECT (encoder), "loop-filter-tc-offset",
+              dynamic->param.signed_value, NULL);
+        }
+        break;
       default:
         g_print ("Invalid Dynamic String \n");
     }
@@ -565,6 +603,8 @@ main (int argc, char *argv[])
         "Enable longterm reference pictures", NULL},
     {"long-term-freq", 'u', 0, G_OPTION_ARG_INT, &enc.long_term_freq,
         "Periodicity of longterm ref pictures", NULL},
+    {"loop-filter-mode", 't', 0, G_OPTION_ARG_INT, &enc.loop_filter_mode,
+        "Loop filter mode", NULL},
     {NULL}
   };
 
@@ -582,7 +622,9 @@ main (int argc, char *argv[])
       "'UL:frame_num' -> Use longterm picture\n"
       "'SEIp:frame_num' -> Insert SEI prefix\n"
       "'SEIs:frame_num' -> Insert SEI suffix\n"
-      "'LOADQP:frame_num:file_name' -> Load external QP table from file_name";
+      "'LOADQP:frame_num:file_name' -> Load external QP table from file_name\n"
+      "'BO:frame_num:new_value' -> Dynamic Beta Offset\n"
+      "'TO:frame_num:new_value' -> Dynamic Tc Offset";
 
   /* Set Encoder defalut parameters */
   enc.width = DEFAULT_VIDEO_WIDTH;
@@ -595,6 +637,7 @@ main (int argc, char *argv[])
   enc.max_bitrate = DEFAULT_ENCODER_TARGET_BITRATE;
   enc.long_term_ref = DEFAULT_LONGTERM_REF;
   enc.long_term_freq = DEFAULT_LONGTERM_FREQ;
+  enc.loop_filter_mode = DEFAULT_LOOP_FILTER_MODE;
 
   context = g_option_context_new (" vcu encode test applicaiton");
   g_option_context_set_summary (context, summary);
@@ -644,7 +687,7 @@ main (int argc, char *argv[])
   g_object_set (G_OBJECT (encoder), "target-bitrate", enc.target_bitrate,
       "b-frames", enc.b_frames, "control-rate", enc.control_rate, "gop-length",
       enc.gop_length, "long-term-ref", enc.long_term_ref, "long-term-freq",
-      enc.long_term_freq, NULL);
+      enc.long_term_freq, "loop-filter-mode", enc.loop_filter_mode, NULL);
 
   /* set Encoder src caps */
   if (!g_strcmp0 (enc.type, "avc"))
@@ -660,9 +703,10 @@ main (int argc, char *argv[])
   g_object_set (G_OBJECT (sink), "location", enc.output_filename, NULL);
 
   g_print
-      ("Using width = %d height = %d framerate = %d codec = %s target-bitrate = %d control-rate = %d b-frames = %d output-location = %s\n",
+      ("Using width = %d height = %d framerate = %d codec = %s target-bitrate = %d control-rate = %d loop-filter-mode = %d b-frames = %d output-location = %s\n",
       enc.width, enc.height, enc.framerate, enc.type, enc.target_bitrate,
-      enc.control_rate, enc.b_frames, enc.output_filename);
+      enc.control_rate, enc.loop_filter_mode, enc.b_frames,
+      enc.output_filename);
 
   if (enc.control_rate == 1) {
     g_object_set (G_OBJECT (encoder), "max-bitrate", enc.max_bitrate, NULL);
