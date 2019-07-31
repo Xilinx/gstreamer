@@ -423,13 +423,18 @@ videoparser_src_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
           send_downstream_event (pad, s);
 
           gst_buffer_unref (buf);
+
+          framecount++;
+          return GST_PAD_PROBE_OK;
         }
         break;
       }
       default:
         break;
     }
-  } else if (framecount == dynamic->start_frame) {
+  }
+
+  if (framecount == dynamic->start_frame) {
 
     switch (dynamic->type) {
 
