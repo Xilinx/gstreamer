@@ -631,13 +631,13 @@ out:
 }
 
 static gboolean
-gst_v4l2src_set_low_latency_capture_mode (GstV4l2Src * src)
+gst_v4l2src_set_low_latency_capture_mode (GstV4l2Src * src, gboolean enable)
 {
   GstV4l2Object *v4l2object = src->v4l2object;
   struct v4l2_control control = { 0, };
 
   control.id = V4L2_CID_XILINX_LOW_LATENCY;
-  control.value = XVIP_LOW_LATENCY_ENABLE;
+  control.value = enable ? XVIP_LOW_LATENCY_ENABLE : XVIP_LOW_LATENCY_DISABLE;
 
   if (v4l2object->ioctl (v4l2object->video_fd, VIDIOC_S_CTRL, &control) != 0) {
     GST_WARNING_OBJECT (v4l2object->dbg_obj,
@@ -877,7 +877,7 @@ gst_v4l2src_negotiate (GstBaseSrc * basesrc)
               GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
         v4l2src->xlnx_ll = TRUE;
 
-        if (!gst_v4l2src_set_low_latency_capture_mode (v4l2src)) {
+        if (!gst_v4l2src_set_low_latency_capture_mode (v4l2src, TRUE)) {
           GST_ERROR_OBJECT (v4l2src, "Driver failed to activate XLNX-LL");
           result = FALSE;
         }
@@ -1144,6 +1144,11 @@ gst_v4l2src_stop (GstBaseSrc * src)
   if (GST_V4L2_IS_ACTIVE (obj)) {
     if (!gst_v4l2_object_stop (obj))
       return FALSE;
+  }
+
+  if (v4l2src->xlnx_ll) {
+    if (!gst_v4l2src_set_low_latency_capture_mode (v4l2src, FALSE))
+      GST_ERROR_OBJECT (v4l2src, "Driver failed to deactivate XLNX-LL");
   }
 
   v4l2src->pending_set_fmt = FALSE;
