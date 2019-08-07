@@ -1888,6 +1888,12 @@ gst_v4l2_buffer_pool_new (GstV4l2Object * obj, GstCaps * caps)
       gst_caps_features_contains (features, GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
     GST_ERROR_OBJECT (pool, "XLNX-LL Enabled");
     pool->xlnx_ll = TRUE;
+
+    /* Disable CREATE_BUFS in low latency mode */
+    GST_OBJECT_FLAG_UNSET (pool->vallocator,
+        GST_V4L2_ALLOCATOR_FLAG_MMAP_CREATE_BUFS
+        | GST_V4L2_ALLOCATOR_FLAG_USERPTR_CREATE_BUFS
+        | GST_V4L2_ALLOCATOR_FLAG_DMABUF_CREATE_BUFS);
   } else {
     pool->xlnx_ll = FALSE;
   }
