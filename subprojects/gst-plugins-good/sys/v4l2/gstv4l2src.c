@@ -513,7 +513,7 @@ gst_v4l2src_set_low_latency_capture_mode (GstV4l2Src * src)
   struct v4l2_control control = { 0, };
 
   control.id = V4L2_CID_XILINX_LOW_LATENCY;
-  control.value = XVIP_LOW_LATENCY;
+  control.value = XVIP_LOW_LATENCY_ENABLE;
 
   if (v4l2object->ioctl (v4l2object->video_fd, VIDIOC_S_CTRL, &control) != 0) {
     GST_WARNING_OBJECT (v4l2object->dbg_obj,

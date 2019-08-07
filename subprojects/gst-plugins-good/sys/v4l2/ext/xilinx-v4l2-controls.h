@@ -214,6 +214,7 @@
 /* Low latency mode */
 #define V4L2_CID_XILINX_LOW_LATENCY		(V4L2_CID_XILINX_VIP + 1)
 
-#define XVIP_LOW_LATENCY	1 << 1
-#define XVIP_START_DMA		1 << 2
+#define XVIP_LOW_LATENCY_ENABLE		1 << 1
+#define XVIP_LOW_LATENCY_DISABLE	1 << 2
+#define XVIP_START_DMA			1 << 3
 #endif /* __UAPI_XILINX_V4L2_CONTROLS_H__ */
