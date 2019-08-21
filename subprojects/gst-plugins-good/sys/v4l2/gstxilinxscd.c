@@ -742,7 +742,6 @@ gst_xilinx_scd_class_init (GstXilinxScdClass * klass)
   GstElementClass *element_class;
   GObjectClass *gobject_class;
   GstBaseTransformClass *base_transform_class;
-  GParamSpec *spec;
 
   element_class = (GstElementClass *) klass;
   gobject_class = (GObjectClass *) klass;
@@ -781,13 +780,11 @@ gst_xilinx_scd_class_init (GstXilinxScdClass * klass)
 
   element_class->change_state = GST_DEBUG_FUNCPTR (gst_xilinx_scd_change_state);
 
-  gst_v4l2_object_install_properties_helper (gobject_class,
-      DEFAULT_PROP_DEVICE);
-
-  /* device isn't writable as a free device is picked automatically */
-  spec = g_object_class_find_property (gobject_class, "device");
-  g_assert (spec);
-  spec->flags &= ~G_PARAM_WRITABLE;
+  g_object_class_install_property (gobject_class, PROP_IO_MODE,
+      g_param_spec_enum ("io-mode", "IO mode",
+          "I/O mode",
+          GST_TYPE_V4L2_IO_MODE, GST_V4L2_IO_AUTO,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 gboolean
