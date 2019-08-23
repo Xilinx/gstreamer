@@ -1345,14 +1345,10 @@ gst_v4l2_buffer_pool_qbuf (GstV4l2BufferPool * pool, GstBuffer * buf,
     info = &obj->info;
     xlnxll_buf->t_dim.i_width = info->width;
     xlnxll_buf->t_dim.i_height = info->height;
-    /* FIXME: Used to align height to VCU requirements */
-    aligned_height = (xlnxll_buf->t_dim.i_height + 32 - 1) / 32 * 32;
     xlnxll_buf->t_fourcc = gst_video_format_to_fourcc (info->finfo->format);
     xlnxll_buf->t_planes[PLANE_Y].i_offset = info->offset[PLANE_Y];
     xlnxll_buf->t_planes[PLANE_Y].i_pitch = info->stride[PLANE_Y];
-    xlnxll_buf->t_planes[PLANE_UV].i_offset =
-        info->offset[PLANE_UV] + (aligned_height -
-        xlnxll_buf->t_dim.i_height) * xlnxll_buf->t_dim.i_width;
+    xlnxll_buf->t_planes[PLANE_UV].i_offset = info->offset[PLANE_UV];
     xlnxll_buf->t_planes[PLANE_UV].i_pitch = info->stride[PLANE_UV];
     xlnxll_buf->t_planes[PLANE_MAP_Y].i_offset = info->offset[PLANE_MAP_Y];
     xlnxll_buf->t_planes[PLANE_MAP_Y].i_pitch = info->stride[PLANE_MAP_Y];
