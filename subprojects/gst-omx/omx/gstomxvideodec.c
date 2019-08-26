@@ -1439,6 +1439,38 @@ add_caps_gl_memory_feature (GstCaps * caps)
 }
 #endif
 
+static GstVideoCodecState *
+gst_omx_video_dec_set_output_state (GstOMXVideoDec * self, GstVideoFormat fmt)
+{
+  OMX_PARAM_PORTDEFINITIONTYPE port_def;
+  guint frame_height;
+  GstVideoInterlaceMode interlace_mode;
+
+  interlace_mode = gst_omx_video_dec_get_output_interlace_info (self);
+
+  gst_omx_port_get_port_definition (self->dec_out_port, &port_def);
+
+  frame_height = port_def.format.video.nFrameHeight;
+  /* OMX's frame height is actually the field height in alternate mode
+   * while it's always the full frame height in gst. */
+  if (interlace_mode == GST_VIDEO_INTERLACE_MODE_ALTERNATE ||
+      interlace_mode == GST_VIDEO_INTERLACE_MODE_INTERLEAVED) {
+    frame_height *= 2;
+    /* Decoder outputs interlaced content using the alternate mode */
+    interlace_mode = GST_VIDEO_INTERLACE_MODE_ALTERNATE;
+  }
+
+  GST_DEBUG_OBJECT (self,
+      "Setting output state: format %s (%d), width %u, height %u",
+      gst_video_format_to_string (fmt),
+      port_def.format.video.eColorFormat,
+      (guint) port_def.format.video.nFrameWidth, frame_height);
+
+  return gst_video_decoder_set_interlaced_output_state (GST_VIDEO_DECODER
+      (self), fmt, interlace_mode,
+      port_def.format.video.nFrameWidth, frame_height, self->input_state);
+}
+
 static OMX_ERRORTYPE
 gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
 {
@@ -1447,11 +1479,6 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
   GstVideoCodecState *state;
   OMX_PARAM_PORTDEFINITIONTYPE port_def;
   GstVideoFormat format;
-  GstVideoInterlaceMode interlace_mode;
-  guint frame_height;
-
-  /* At this point the decoder output port is disabled */
-  interlace_mode = gst_omx_video_dec_get_output_interlace_info (self);
 
 #if defined (HAVE_GST_GL)
   {
@@ -1476,20 +1503,7 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
       gst_omx_port_get_port_definition (self->dec_out_port, &port_def);
       GST_VIDEO_DECODER_STREAM_LOCK (self);
 
-      frame_height = port_def.format.video.nFrameHeight;
-      /* OMX's frame height is actually the field height in alternate mode
-       * while it's always the full frame height in gst. */
-      if (interlace_mode == GST_VIDEO_INTERLACE_MODE_ALTERNATE ||
-          interlace_mode == GST_VIDEO_INTERLACE_MODE_INTERLEAVED) {
-        frame_height *= 2;
-        /* Decoder outputs interlaced content using the alternate mode */
-        interlace_mode = GST_VIDEO_INTERLACE_MODE_ALTERNATE;
-      }
-
-      state =
-          gst_video_decoder_set_interlaced_output_state (GST_VIDEO_DECODER
-          (self), GST_VIDEO_FORMAT_RGBA, interlace_mode,
-          port_def.format.video.nFrameWidth, frame_height, self->input_state);
+      state = gst_omx_video_dec_set_output_state (self, GST_VIDEO_FORMAT_RGBA);
 
       /* at this point state->caps is NULL */
       if (state->caps)
@@ -1682,26 +1696,7 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
     goto done;
   }
 
-  frame_height = port_def.format.video.nFrameHeight;
-  /* OMX's frame height is actually the field height in alternate mode
-   * while it's always the full frame height in gst. */
-  if (interlace_mode == GST_VIDEO_INTERLACE_MODE_ALTERNATE ||
-      interlace_mode == GST_VIDEO_INTERLACE_MODE_INTERLEAVED) {
-    frame_height *= 2;
-    /* Decoder outputs interlaced content using the alternate mode */
-    interlace_mode = GST_VIDEO_INTERLACE_MODE_ALTERNATE;
-  }
-
-  GST_DEBUG_OBJECT (self,
-      "Setting output state: format %s (%d), width %u, height %u",
-      gst_video_format_to_string (format),
-      port_def.format.video.eColorFormat,
-      (guint) port_def.format.video.nFrameWidth, frame_height);
-
-  state =
-      gst_video_decoder_set_interlaced_output_state (GST_VIDEO_DECODER (self),
-      format, interlace_mode, port_def.format.video.nFrameWidth,
-      frame_height, self->input_state);
+  state = gst_omx_video_dec_set_output_state (self, format);
 
   if (!gst_video_decoder_negotiate (GST_VIDEO_DECODER (self))) {
     gst_video_codec_state_unref (state);
@@ -1933,8 +1928,6 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
       if (err != OMX_ErrorNone)
         goto reconfigure_error;
     } else {
-      GstVideoInterlaceMode interlace_mode;
-
       /* Just update caps */
       GST_VIDEO_DECODER_STREAM_LOCK (self);
 
@@ -1955,18 +1948,7 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
         goto caps_failed;
       }
 
-      GST_DEBUG_OBJECT (self,
-          "Setting output state: format %s (%d), width %u, height %u",
-          gst_video_format_to_string (format),
-          port_def.format.video.eColorFormat,
-          (guint) port_def.format.video.nFrameWidth,
-          (guint) port_def.format.video.nFrameHeight);
-      interlace_mode = gst_omx_video_dec_get_output_interlace_info (self);
-
-      state =
-          gst_video_decoder_set_interlaced_output_state (GST_VIDEO_DECODER
-          (self), format, interlace_mode, port_def.format.video.nFrameWidth,
-          port_def.format.video.nFrameHeight, self->input_state);
+      state = gst_omx_video_dec_set_output_state (self, format);
 
       /* Take framerate and pixel-aspect-ratio from sinkpad caps */
 
