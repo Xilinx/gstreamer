@@ -1700,7 +1700,7 @@ gst_v4l2_object_is_raw (GstV4l2Object * v4l2object)
   return FALSE;
 }
 
-#define SYNC_IP_DEV_ENCODER "/dev/xvsfsync0"
+#define SYNC_IP_DEV_ENCODER "/dev/xlnxsync0"
 
 static gboolean
 xlnx_ll_supported (void)

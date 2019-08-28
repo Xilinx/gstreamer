@@ -56,7 +56,7 @@ GST_DEBUG_CATEGORY_STATIC (CAT_PERFORMANCE);
 #define HORIZONTAL_ALIGNMENT 64
 #define VERTICAL_ALIGNMENT 32
 
-#define SYNC_IP_DEV_ENCODER "/dev/xvsfsync0"
+#define SYNC_IP_DEV_ENCODER "/dev/xlnxsync0"
 
 /*
  * GstV4l2BufferPool:

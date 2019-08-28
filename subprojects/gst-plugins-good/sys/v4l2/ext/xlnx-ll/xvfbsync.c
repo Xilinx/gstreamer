@@ -37,7 +37,7 @@ typedef uint8_t u8;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
-#include "xvsfsync.h"
+#include "xlnxsync.h"
 
 #define FOURCC2(A, B, C, D) ((uint32_t)(((uint32_t)((A))) \
                                        | ((uint32_t)((B)) << 8) \
@@ -222,7 +222,7 @@ xvfbsync_queue_push (Queue * q, XLNXLLBuf * buf_ptr)
 /***************************/
 
 static void
-xvfbsync_syncip_parse_chan_status (struct xvsfsync_stat *status,
+xvfbsync_syncip_parse_chan_status (struct xlnxsync_stat *status,
     ChannelStatus * channel_statuses, u8 max_channels,
     u8 max_users, u8 max_buffers)
 {
@@ -246,10 +246,10 @@ xvfbsync_syncip_parse_chan_status (struct xvsfsync_stat *status,
 static int
 xvfbsync_syncip_get_latest_chan_status (SyncIp * syncip)
 {
-  struct xvsfsync_stat chan_status;
+  struct xlnxsync_stat chan_status;
   int ret = 0;
 
-  ret = ioctl (syncip->fd, XVSFSYNC_GET_CHAN_STATUS, &chan_status);
+  ret = ioctl (syncip->fd, XLNXSYNC_GET_CHAN_STATUS, &chan_status);
   if (ret)
     fprintf (stderr, "SyncIp: Couldn't get sync ip channel status\n");
   else
@@ -262,7 +262,7 @@ xvfbsync_syncip_get_latest_chan_status (SyncIp * syncip)
 static int
 xvfbsync_syncip_reset_status (SyncIp * syncip, u8 chan_id)
 {
-  struct xvsfsync_clr_err clr;
+  struct xlnxsync_clr_err clr;
   int ret = 0;
 
   clr.channel_id = chan_id;
@@ -271,7 +271,7 @@ xvfbsync_syncip_reset_status (SyncIp * syncip, u8 chan_id)
   clr.ldiff_err = 1;
   clr.cdiff_err = 1;
 
-  ret = ioctl (syncip->fd, XVSFSYNC_CLR_CHAN_ERR, &clr);
+  ret = ioctl (syncip->fd, XLNXSYNC_CLR_CHAN_ERR, &clr);
   if (ret)
     fprintf (stderr, "SyncIp: Couldnt reset status of channel %d\n", chan_id);
 
@@ -284,7 +284,7 @@ xvfbsync_syncip_enable_channel (SyncIp * syncip, u8 chan_id)
   u8 chan = chan_id;
   int ret = 0;
 
-  ret = ioctl (syncip->fd, XVSFSYNC_CHAN_ENABLE, (void *) (uintptr_t) chan);
+  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_ENABLE, (void *) (uintptr_t) chan);
   if (ret)
     fprintf (stderr, "SyncIp: Couldn't enable channel %d\n", chan_id);
 
@@ -297,7 +297,7 @@ xvfbsync_syncip_disable_channel (SyncIp * syncip, u8 chan_id)
   u8 chan = chan_id;
   int ret = 0;
 
-  ret = ioctl (syncip->fd, XVSFSYNC_CHAN_DISABLE, (void *) (uintptr_t) chan);
+  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_DISABLE, (void *) (uintptr_t) chan);
   if (ret)
     fprintf (stderr, "SyncIp: Couldn't disable channel %d\n", chan_id);
 
@@ -306,11 +306,11 @@ xvfbsync_syncip_disable_channel (SyncIp * syncip, u8 chan_id)
 
 static int
 xvfbsync_syncip_add_buffer (SyncIp * syncip,
-    struct xvsfsync_chan_config *fb_config)
+    struct xlnxsync_chan_config *fb_config)
 {
   int ret = 0;
 
-  ret = ioctl (syncip->fd, XVSFSYNC_SET_CHAN_CONFIG, fb_config);
+  ret = ioctl (syncip->fd, XLNXSYNC_SET_CHAN_CONFIG, fb_config);
   if (ret)
     fprintf (stderr, "SyncIp: Couldn't add buffer\n");
 
@@ -408,7 +408,7 @@ xvfbsync_syncip_get_free_channel (SyncIp * syncip)
   pthread_mutex_lock (&(syncip->mutex));
   xvfbsync_syncip_get_latest_chan_status (syncip);
 
-  if (ioctl (syncip->fd, XVSFSYNC_RESERVE_GET_CHAN_ID, &chan_id)) {
+  if (ioctl (syncip->fd, XLNXSYNC_RESERVE_GET_CHAN_ID, &chan_id)) {
     fprintf (stderr, "SyncIp: Couldn't get sync ip channel ID\n");
     return -1;
   }
@@ -421,7 +421,7 @@ int
 xvfbsync_syncip_populate (SyncIp * syncip, u32 fd)
 {
   ThreadInfo *t_info;
-  struct xvsfsync_config config;
+  struct xlnxsync_config config;
   int ret = 0;
 
   if (getenv ("SYNCIP_LOGS") != NULL)
@@ -437,7 +437,7 @@ xvfbsync_syncip_populate (SyncIp * syncip, u32 fd)
   syncip->quit = false;
   syncip->fd = fd;
 
-  ret = ioctl (syncip->fd, XVSFSYNC_GET_CFG, &config);
+  ret = ioctl (syncip->fd, XLNXSYNC_GET_CFG, &config);
   if (ret) {
     fprintf (stderr, "SyncIp: Couldn't get sync ip configuration\n");
     return ret;
@@ -446,9 +446,9 @@ xvfbsync_syncip_populate (SyncIp * syncip, u32 fd)
   fprintf (stdout, "[fd: %d] mode: %s, channel number: %d\n", syncip->fd,
       config.encode ? "encode" : "decode", config.max_channels);
   syncip->max_channels = config.max_channels;
-  syncip->max_users = XVSFSYNC_IO;
-  syncip->max_buffers = XVSFSYNC_BUF_PER_CHANNEL;
-  syncip->max_cores = XVSFSYNC_MAX_CORES;
+  syncip->max_users = XLNXSYNC_IO;
+  syncip->max_buffers = XLNXSYNC_BUF_PER_CHAN;
+  syncip->max_cores = XLNXSYNC_MAX_CORES;
   syncip->channel_statuses = calloc (config.max_channels, sizeof (void *));
   if (!syncip->channel_statuses) {
     fprintf (stderr, "SyncIp: Memory allocation failed\n");
@@ -684,7 +684,7 @@ round_up (int i_val, int i_rnd)
 }
 
 static void
-print_framebuffer_config (struct xvsfsync_chan_config *config, u8 max_users,
+print_framebuffer_config (struct xlnxsync_chan_config *config, u8 max_users,
     u8 max_cores)
 {
   fprintf (stdout, "********************************\n");
@@ -694,10 +694,10 @@ print_framebuffer_config (struct xvsfsync_chan_config *config, u8 max_users,
 
   for (u8 user = 0; user < max_users; ++user) {
     fprintf (stdout, "%s[%d]:\n",
-        (user == XVSFSYNC_PROD) ? "prod" : (user ==
-            XVSFSYNC_CONS) ? "cons" : "unknown", user);
+        (user == XLNXSYNC_PROD) ? "prod" : (user ==
+            XLNXSYNC_CONS) ? "cons" : "unknown", user);
     fprintf (stdout, "\t-fb_id:%d %s\n", config->fb_id[user],
-        config->fb_id[user] == XVSFSYNC_AUTO_SEARCH ? "(auto_search)" : "");
+        config->fb_id[user] == XLNXSYNC_AUTO_SEARCH ? "(auto_search)" : "");
     fprintf (stdout, "\t-ismono:%s\n",
         (config->ismono[user] == 0) ? "false" : "true");
     fprintf (stdout, "\t-luma_start_offset:%" PRIx64 "\n",
@@ -721,12 +721,12 @@ print_framebuffer_config (struct xvsfsync_chan_config *config, u8 max_users,
   fprintf (stdout, "********************************\n");
 }
 
-static struct xvsfsync_chan_config
+static struct xlnxsync_chan_config
 set_enc_framebuffer_config (u8 channel_id, XLNXLLBuf * buf,
     u32 hardware_horizontal_stride_alignment,
     u32 hardware_vertical_stride_alignment)
 {
-  struct xvsfsync_chan_config config;
+  struct xlnxsync_chan_config config;
   int src_row_size;
   int i_hardware_pitch, i_hardware_luma_vertical_pitch;
   int i_vertical_factor, i_hardware_chroma_vertical_pitch;
@@ -736,12 +736,12 @@ set_enc_framebuffer_config (u8 channel_id, XLNXLLBuf * buf,
       buf->t_dim.i_width * get_pixel_size (buf->t_fourcc);
   config.dma_fd = buf->dma_fd;
 
-  config.luma_start_offset[XVSFSYNC_PROD] = buf->t_planes[PLANE_Y].i_offset;
-  config.luma_end_offset[XVSFSYNC_PROD] =
-      config.luma_start_offset[XVSFSYNC_PROD] +
+  config.luma_start_offset[XLNXSYNC_PROD] = buf->t_planes[PLANE_Y].i_offset;
+  config.luma_end_offset[XLNXSYNC_PROD] =
+      config.luma_start_offset[XLNXSYNC_PROD] +
       get_luma_size (buf) - buf->t_planes[PLANE_Y].i_pitch + src_row_size - 1;
 
-  config.luma_start_offset[XVSFSYNC_CONS] = buf->t_planes[PLANE_Y].i_offset;
+  config.luma_start_offset[XLNXSYNC_CONS] = buf->t_planes[PLANE_Y].i_offset;
   /*           <------------> stride
    *           <--------> width
    * height   ^
@@ -756,8 +756,8 @@ set_enc_framebuffer_config (u8 channel_id, XLNXLLBuf * buf,
       hardware_horizontal_stride_alignment);
   i_hardware_luma_vertical_pitch =
       round_up (buf->t_dim.i_height, hardware_vertical_stride_alignment);
-  config.luma_end_offset[XVSFSYNC_CONS] =
-      config.luma_start_offset[XVSFSYNC_CONS] +
+  config.luma_end_offset[XLNXSYNC_CONS] =
+      config.luma_start_offset[XLNXSYNC_CONS] +
       (i_hardware_pitch * (i_hardware_luma_vertical_pitch - 1)) +
       round_up (src_row_size, hardware_horizontal_stride_alignment) - 1;
 
@@ -765,30 +765,30 @@ set_enc_framebuffer_config (u8 channel_id, XLNXLLBuf * buf,
    * here we make the assumption that the fourcc is semi planar */
   if (!is_monochrome (buf->t_fourcc)) {
     assert (is_semi_planar (buf->t_fourcc));
-    config.chroma_start_offset[XVSFSYNC_PROD] = get_offset_uv (buf);
-    config.chroma_end_offset[XVSFSYNC_PROD] =
-        config.chroma_start_offset[XVSFSYNC_PROD] +
+    config.chroma_start_offset[XLNXSYNC_PROD] = get_offset_uv (buf);
+    config.chroma_end_offset[XLNXSYNC_PROD] =
+        config.chroma_start_offset[XLNXSYNC_PROD] +
         get_chroma_size (buf) - buf->t_planes[PLANE_UV].i_pitch + src_row_size -
         1;
-    config.chroma_start_offset[XVSFSYNC_CONS] = get_offset_uv (buf);
+    config.chroma_start_offset[XLNXSYNC_CONS] = get_offset_uv (buf);
     i_vertical_factor =
         (get_chroma_mode (buf->t_fourcc) == CHROMA_4_2_0) ? 2 : 1;
     i_hardware_chroma_vertical_pitch =
         round_up ((buf->t_dim.i_height / i_vertical_factor),
         (hardware_vertical_stride_alignment / i_vertical_factor));
-    config.chroma_end_offset[XVSFSYNC_CONS] =
-        config.chroma_start_offset[XVSFSYNC_CONS] +
+    config.chroma_end_offset[XLNXSYNC_CONS] =
+        config.chroma_start_offset[XLNXSYNC_CONS] +
         (i_hardware_pitch * (i_hardware_chroma_vertical_pitch - 1)) +
         round_up (src_row_size, hardware_horizontal_stride_alignment) - 1;
   } else {
-    for (int user = 0; user < XVSFSYNC_IO; user++) {
+    for (int user = 0; user < XLNXSYNC_IO; user++) {
       config.chroma_start_offset[user] = 0;
       config.chroma_end_offset[user] = 0;
       config.ismono[user] = 1;
     }
   }
 
-  for (int core = 0; core < XVSFSYNC_MAX_CORES; core++) {
+  for (int core = 0; core < XLNXSYNC_MAX_CORES; core++) {
     config.luma_core_offset[core] = 0;
     config.chroma_core_offset[core] = 0;
   }
@@ -797,24 +797,24 @@ set_enc_framebuffer_config (u8 channel_id, XLNXLLBuf * buf,
   config.luma_margin = 0;
   config.chroma_margin = 0;
 
-  config.fb_id[XVSFSYNC_PROD] = XVSFSYNC_AUTO_SEARCH;
-  config.fb_id[XVSFSYNC_CONS] = XVSFSYNC_AUTO_SEARCH;
+  config.fb_id[XLNXSYNC_PROD] = XLNXSYNC_AUTO_SEARCH;
+  config.fb_id[XLNXSYNC_CONS] = XLNXSYNC_AUTO_SEARCH;
   config.channel_id = channel_id;
 
   return config;
 }
 
-static struct xvsfsync_chan_config
+static struct xlnxsync_chan_config
 set_dec_framebuffer_config (u8 channel_id, XLNXLLBuf * buf)
 {
-  struct xvsfsync_chan_config config;
+  struct xlnxsync_chan_config config;
   int src_row_size = is_10bit_packed (buf->t_fourcc) ?
       ((buf->t_dim.i_width + 2) / 3 * 4) :
       buf->t_dim.i_width * get_pixel_size (buf->t_fourcc);
 
   config.dma_fd = buf->dma_fd;
 
-  config.luma_start_offset[XVSFSYNC_PROD] = buf->t_planes[PLANE_Y].i_offset;
+  config.luma_start_offset[XLNXSYNC_PROD] = buf->t_planes[PLANE_Y].i_offset;
 
   /*           <------------> stride
    *           <--------> width
@@ -827,39 +827,39 @@ set_dec_framebuffer_config (u8 channel_id, XLNXLLBuf * buf)
    * end = total_size - stride + width - 1
    */
   // TODO : This should be LCU and 64 aligned
-  config.luma_end_offset[XVSFSYNC_PROD] =
-      config.luma_start_offset[XVSFSYNC_PROD] +
+  config.luma_end_offset[XLNXSYNC_PROD] =
+      config.luma_start_offset[XLNXSYNC_PROD] +
       get_luma_size (buf) - buf->t_planes[PLANE_Y].i_pitch + src_row_size - 1;
 
-  config.luma_start_offset[XVSFSYNC_CONS] = buf->t_planes[PLANE_Y].i_offset;
-  config.luma_end_offset[XVSFSYNC_CONS] =
-      config.luma_start_offset[XVSFSYNC_CONS] +
+  config.luma_start_offset[XLNXSYNC_CONS] = buf->t_planes[PLANE_Y].i_offset;
+  config.luma_end_offset[XLNXSYNC_CONS] =
+      config.luma_start_offset[XLNXSYNC_CONS] +
       get_luma_size (buf) - buf->t_planes[PLANE_Y].i_pitch + src_row_size - 1;
 
   /* chroma is the same, but the width depends on the format of the yuv
    * here we make the assumption that the fourcc is semi planar */
   if (!is_monochrome (buf->t_fourcc)) {
     assert (is_semi_planar (buf->t_fourcc));
-    config.chroma_start_offset[XVSFSYNC_PROD] = get_offset_uv (buf);
+    config.chroma_start_offset[XLNXSYNC_PROD] = get_offset_uv (buf);
     // TODO : This should be LCU and 64 aligned
-    config.chroma_end_offset[XVSFSYNC_PROD] =
-        config.chroma_start_offset[XVSFSYNC_PROD] +
+    config.chroma_end_offset[XLNXSYNC_PROD] =
+        config.chroma_start_offset[XLNXSYNC_PROD] +
         get_chroma_size (buf) - buf->t_planes[PLANE_UV].i_pitch + src_row_size -
         1;
-    config.chroma_start_offset[XVSFSYNC_CONS] = get_offset_uv (buf);
-    config.chroma_end_offset[XVSFSYNC_CONS] =
-        config.chroma_start_offset[XVSFSYNC_CONS] +
+    config.chroma_start_offset[XLNXSYNC_CONS] = get_offset_uv (buf);
+    config.chroma_end_offset[XLNXSYNC_CONS] =
+        config.chroma_start_offset[XLNXSYNC_CONS] +
         get_chroma_size (buf) - buf->t_planes[PLANE_UV].i_pitch + src_row_size -
         1;
   } else {
-    for (int user = 0; user < XVSFSYNC_IO; user++) {
+    for (int user = 0; user < XLNXSYNC_IO; user++) {
       config.chroma_start_offset[user] = 0;
       config.chroma_end_offset[user] = 0;
       config.ismono[user] = 1;
     }
   }
 
-  for (int core = 0; core < XVSFSYNC_MAX_CORES; core++) {
+  for (int core = 0; core < XLNXSYNC_MAX_CORES; core++) {
     config.luma_core_offset[core] = 0;
     config.chroma_core_offset[core] = 0;
   }
@@ -868,8 +868,8 @@ set_dec_framebuffer_config (u8 channel_id, XLNXLLBuf * buf)
   config.luma_margin = 0;
   config.chroma_margin = 0;
 
-  config.fb_id[XVSFSYNC_PROD] = XVSFSYNC_AUTO_SEARCH;
-  config.fb_id[XVSFSYNC_CONS] = XVSFSYNC_AUTO_SEARCH;
+  config.fb_id[XLNXSYNC_PROD] = XLNXSYNC_AUTO_SEARCH;
+  config.fb_id[XLNXSYNC_CONS] = XLNXSYNC_AUTO_SEARCH;
   config.channel_id = channel_id;
 
   return config;
@@ -939,7 +939,7 @@ xvfbsync_dec_sync_chan_add_buffer (DecSyncChannel * dec_sync_chan,
     XLNXLLBuf * buf)
 {
   int ret = 0;
-  struct xvsfsync_chan_config config;
+  struct xlnxsync_chan_config config;
 
   config = set_dec_framebuffer_config (dec_sync_chan->sync_channel.id, buf);
   ret = xvfbsync_syncip_add_buffer (dec_sync_chan->sync_channel.sync, &config);
@@ -990,7 +990,7 @@ xvfbsync_enc_sync_chan_add_buffer_ (EncSyncChannel * enc_sync_chan,
     XLNXLLBuf * buf, int num_fb_to_enable)
 {
   int ret = 0;
-  struct xvsfsync_chan_config config;
+  struct xlnxsync_chan_config config;
 
   if (!enc_sync_chan->is_running) {
     if (buf)
