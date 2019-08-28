@@ -1634,7 +1634,7 @@ done:
   return template;
 }
 
-#define SYNC_IP_DEV_ENCODER "/dev/xvsfsync0"
+#define SYNC_IP_DEV_ENCODER "/dev/xlnxsync0"
 
 static gboolean
 xlnx_ll_supported (void)
