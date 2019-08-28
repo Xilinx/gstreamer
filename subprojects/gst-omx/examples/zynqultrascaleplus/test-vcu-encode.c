@@ -32,6 +32,12 @@
 #include <string.h>
 #include "OMX_VideoExt.h"
 
+typedef enum
+{
+  FORCE_INTRA_DISABLED,
+  FORCE_INTRA_ENABLED,
+} ForceIntraMode;
+
 #define DEFAULT_VIDEO_WIDTH 3840
 #define DEFAULT_VIDEO_HEIGHT 2160
 #define DEFAULT_ENCODER_FRAM_ERATE 30
@@ -43,6 +49,7 @@
 #define DEFAULT_LONGTERM_FREQ 0
 #define DEFAULT_LONGTERM_REF 0
 #define DEFAULT_LOOP_FILTER_MODE -1
+#define DEFAULT_FORCE_INTRA_MODE FORCE_INTRA_DISABLED
 
 #define DYNAMIC_BITRATE_STR "BR"
 #define DYNAMIC_GOP_LENGTH_STR "GL"
@@ -117,6 +124,7 @@ typedef struct
   guint long_term_freq;
   guint long_term_ref;
   gint loop_filter_mode;
+  ForceIntraMode force_intra_mode;
 
   gchar *output_filename;
   gchar *input_filename;
@@ -370,6 +378,9 @@ load_qp_file (gint * size, gchar * qp_file)
       return NULL;
     } else {
       qp_table[num_read] = qp;
+      /* Based on vcu specifications, bit 6 is force_intra flag - enable if requested */
+      if (enc.force_intra_mode == FORCE_INTRA_ENABLED)
+        qp_table[num_read] |= 1 << 6;
     }
 
     g_free (line);
@@ -610,6 +621,8 @@ main (int argc, char *argv[])
         "Periodicity of longterm ref pictures", NULL},
     {"loop-filter-mode", 't', 0, G_OPTION_ARG_INT, &enc.loop_filter_mode,
         "Loop filter mode", NULL},
+    {"force-intra-support", 'n', FORCE_INTRA_DISABLED, G_OPTION_ARG_INT, &enc.force_intra_mode,
+        "Force intra support", NULL},
     {NULL}
   };
 
@@ -643,6 +656,7 @@ main (int argc, char *argv[])
   enc.long_term_ref = DEFAULT_LONGTERM_REF;
   enc.long_term_freq = DEFAULT_LONGTERM_FREQ;
   enc.loop_filter_mode = DEFAULT_LOOP_FILTER_MODE;
+  enc.force_intra_mode = DEFAULT_FORCE_INTRA_MODE;
 
   context = g_option_context_new (" vcu encode test applicaiton");
   g_option_context_set_summary (context, summary);
