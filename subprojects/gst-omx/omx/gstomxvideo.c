@@ -357,8 +357,8 @@ gst_omx_video_get_port_padding (GstOMXPort * port, GstVideoInfo * info_orig,
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
 
-#define SYNC_IP_DEV_ENCODER "/dev/xvsfsync0"
-#define SYNC_IP_DEV_DECODER "/dev/xvsfsync1"
+#define SYNC_IP_DEV_ENCODER "/dev/xlnxsync0"
+#define SYNC_IP_DEV_DECODER "/dev/xlnxsync1"
 
 static gboolean
 xlnx_ll_supported (gboolean encoder)
