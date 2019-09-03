@@ -1331,7 +1331,6 @@ gst_v4l2_buffer_pool_qbuf (GstV4l2BufferPool * pool, GstBuffer * buf,
   pool->buffers[index] = buf;
 
   if (pool->xlnx_ll) {
-    gint aligned_height;
     const GstVideoInfo *info;
     XLNXLLBuf *xlnxll_buf = xvfbsync_xlnxll_buf_new ();
 
