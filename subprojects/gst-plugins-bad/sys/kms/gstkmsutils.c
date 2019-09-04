@@ -255,7 +255,7 @@ gst_video_format_to_structure (GstVideoFormat format)
 }
 
 
-#define SYNC_IP_DEV_DECODER "/dev/xvsfsync1"
+#define SYNC_IP_DEV_DECODER "/dev/xlnxsync1"
 
 static gboolean
 xlnx_ll_supported (void)
