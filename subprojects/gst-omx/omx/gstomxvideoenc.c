@@ -2060,6 +2060,19 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
       err = gst_omx_port_mark_reconfigured (port);
       if (err != OMX_ErrorNone)
         goto reconfigure_error;
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+      if (self->xlnx_ll && self->started && self->in_pool_used) {
+        GstEvent *event;
+
+        GST_DEBUG_OBJECT (self, "Tell XLNX-LL producer it can start streaming");
+
+        event = gst_event_new_custom (GST_EVENT_CUSTOM_UPSTREAM,
+            gst_structure_new ("xlnx-ll-consumer-ready", NULL, NULL));
+
+        gst_pad_push_event (GST_VIDEO_DECODER_SINK_PAD (self), event);
+      }
+#endif
     }
 
     /* Now get a buffer */
@@ -3652,7 +3665,7 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
   gst_video_codec_frame_unref (frame);
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-  if (self->xlnx_ll && starting) {
+  if (self->xlnx_ll && starting && !self->in_pool_used) {
     GstEvent *event;
 
     GST_DEBUG_OBJECT (self, "Tell XLNX-LL producer it can start streaming");
