@@ -1957,7 +1957,7 @@ gst_v4l2_buffer_pool_new (GstV4l2Object * obj, GstCaps * caps)
   features = gst_caps_get_features (caps, 0);
   if (features &&
       gst_caps_features_contains (features, GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
-    GST_ERROR_OBJECT (pool, "XLNX-LL Enabled");
+    GST_DEBUG_OBJECT (pool, "XLNX-LL Enabled");
     pool->xlnx_ll = TRUE;
 
     /* Disable CREATE_BUFS in low latency mode */
