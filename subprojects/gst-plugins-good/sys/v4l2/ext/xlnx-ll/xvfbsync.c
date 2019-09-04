@@ -752,14 +752,13 @@ set_enc_framebuffer_config (u8 channel_id, XLNXLLBuf * buf,
    * total_size = height * stride
    * end = total_size - stride + width - 1
    */
-  i_hardware_pitch = round_up (buf->t_planes[PLANE_Y].i_pitch,
-      hardware_horizontal_stride_alignment);
+  i_hardware_pitch = buf->t_planes[PLANE_Y].i_pitch;
   i_hardware_luma_vertical_pitch =
-      round_up (buf->t_dim.i_height, hardware_vertical_stride_alignment);
+      buf->t_planes[PLANE_UV].i_offset / i_hardware_pitch;
   config.luma_end_offset[XLNXSYNC_CONS] =
       config.luma_start_offset[XLNXSYNC_CONS] +
       (i_hardware_pitch * (i_hardware_luma_vertical_pitch - 1)) +
-      round_up (src_row_size, hardware_horizontal_stride_alignment) - 1;
+      i_hardware_pitch - 1;
 
   /* chroma is the same, but the width depends on the format of the yuv
    * here we make the assumption that the fourcc is semi planar */
@@ -770,16 +769,16 @@ set_enc_framebuffer_config (u8 channel_id, XLNXLLBuf * buf,
         config.chroma_start_offset[XLNXSYNC_PROD] +
         get_chroma_size (buf) - buf->t_planes[PLANE_UV].i_pitch + src_row_size -
         1;
-    config.chroma_start_offset[XLNXSYNC_CONS] = get_offset_uv (buf);
+    config.chroma_start_offset[XLNXSYNC_CONS] =
+        buf->t_planes[PLANE_UV].i_offset;
     i_vertical_factor =
         (get_chroma_mode (buf->t_fourcc) == CHROMA_4_2_0) ? 2 : 1;
     i_hardware_chroma_vertical_pitch =
-        round_up ((buf->t_dim.i_height / i_vertical_factor),
-        (hardware_vertical_stride_alignment / i_vertical_factor));
+        i_hardware_luma_vertical_pitch / i_vertical_factor;
     config.chroma_end_offset[XLNXSYNC_CONS] =
         config.chroma_start_offset[XLNXSYNC_CONS] +
         (i_hardware_pitch * (i_hardware_chroma_vertical_pitch - 1)) +
-        round_up (src_row_size, hardware_horizontal_stride_alignment) - 1;
+        buf->t_planes[PLANE_UV].i_pitch - 1;
   } else {
     for (int user = 0; user < XLNXSYNC_IO; user++) {
       config.chroma_start_offset[user] = 0;
