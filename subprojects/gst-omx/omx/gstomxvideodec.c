@@ -1414,7 +1414,7 @@ gst_omx_video_dec_get_output_interlace_info (GstOMXVideoDec * self)
 
 #if defined (HAVE_GST_GL)
 static void
-add_caps_gl_memory_feature (GstCaps * caps)
+add_caps_memory_feature (GstCaps * caps, const gchar * feature)
 {
   GstCapsFeatures *old, *features;
 
@@ -1434,7 +1434,7 @@ add_caps_gl_memory_feature (GstCaps * caps)
     }
   }
 
-  gst_caps_features_add (features, GST_CAPS_FEATURE_MEMORY_GL_MEMORY);
+  gst_caps_features_add (features, feature);
   gst_caps_set_features (caps, 0, features);
 }
 #endif
@@ -1509,7 +1509,7 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
       if (state->caps)
         gst_caps_unref (state->caps);
       state->caps = gst_video_info_to_caps (&state->info);
-      add_caps_gl_memory_feature (state->caps);
+      add_caps_memory_feature (state->caps, GST_CAPS_FEATURE_MEMORY_GL_MEMORY);
 
       /* try to negotiate with caps feature */
       if (!gst_video_decoder_negotiate (GST_VIDEO_DECODER (self))) {
