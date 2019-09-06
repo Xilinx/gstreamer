@@ -676,13 +676,6 @@ get_offset_uv (XLNXLLBuf * buf)
   return buf->t_planes[PLANE_UV].i_offset;
 }
 
-static int
-round_up (int i_val, int i_rnd)
-{
-  assert ((i_rnd % 2) == 0);
-  return (i_val + i_rnd - 1) / i_rnd * i_rnd;
-}
-
 static void
 print_framebuffer_config (struct xlnxsync_chan_config *config, u8 max_users,
     u8 max_cores)
