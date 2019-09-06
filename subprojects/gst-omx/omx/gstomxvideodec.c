@@ -1876,6 +1876,40 @@ push_pending_downstream_events (GstOMXVideoDec * self, GstOMXBuffer * buf)
   }
 }
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+static void
+set_decoder_out_time (GstOMXVideoDec * self, GstBuffer * buffer)
+{
+  GstClock *clock;
+  GstClockTime time;
+  static GstCaps *caps = NULL;
+
+  if (!self->xlnx_ll)
+    return;
+
+  if (G_UNLIKELY (!caps)) {
+    caps = gst_caps_new_empty_simple ("timestamp/x-xlnx-ll-decoder-out");
+    GST_MINI_OBJECT_FLAG_SET (caps, GST_MINI_OBJECT_FLAG_MAY_BE_LEAKED);
+  }
+
+  clock = gst_element_get_clock (GST_ELEMENT_CAST (self));
+  if (!clock) {
+    GST_DEBUG_OBJECT (self, "no clock set yet");
+    return;
+  }
+
+  time = gst_clock_get_time (clock);
+
+  GST_LOG_OBJECT (self, "set decoder output time: %" GST_TIME_FORMAT,
+      GST_TIME_ARGS (time));
+
+  gst_buffer_add_reference_timestamp_meta (buffer, caps, time,
+      GST_CLOCK_TIME_NONE);
+
+  gst_object_unref (clock);
+}
+#endif
+
 static void
 gst_omx_video_dec_loop (GstOMXVideoDec * self)
 {
@@ -2064,6 +2098,10 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
       pushed_buf = buf;
     }
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    set_decoder_out_time (self, outbuf);
+#endif
+
     flow_ret = gst_pad_push (GST_VIDEO_DECODER_SRC_PAD (self), outbuf);
   } else if (buf->omx_buf->nFilledLen > 0 || buf->eglimage) {
     if (self->out_port_pool) {
@@ -2100,6 +2138,10 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
             copy_frame (&GST_OMX_BUFFER_POOL (self->out_port_pool)->video_info,
             outbuf);
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+      set_decoder_out_time (self, outbuf);
+#endif
+
       frame->output_buffer = outbuf;
 
       flow_ret =
@@ -2125,6 +2167,7 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
         }
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
         set_outbuffer_interlace_flags (buf, frame->output_buffer);
+        set_decoder_out_time (self, frame->output_buffer);
 #endif
 
         flow_ret =
