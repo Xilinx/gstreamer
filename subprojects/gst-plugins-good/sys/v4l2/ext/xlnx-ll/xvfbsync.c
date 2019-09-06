@@ -358,7 +358,7 @@ xvfbsync_syncip_polling_routine (void *arg)
       break;
     }
     pthread_mutex_unlock (&(syncip->mutex));
-    xvfbsync_syncip_poll_errors (syncip, 5000);
+    xvfbsync_syncip_poll_errors (syncip, 500);
   }
 
   pthread_mutex_unlock (&(syncip->mutex));
