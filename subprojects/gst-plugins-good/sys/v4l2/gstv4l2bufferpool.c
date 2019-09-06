@@ -1059,12 +1059,6 @@ gst_v4l2_buffer_pool_stop (GstBufferPool * bpool)
 
   GST_DEBUG_OBJECT (pool, "stopping pool");
 
-  if (pool->xlnx_ll) {
-    xvfbsync_enc_sync_chan_depopulate (&pool->enc_sync_chan);
-    xvfbsync_syncip_depopulate (&pool->syncip);
-    close (pool->syncip.fd);
-  }
-
   if (pool->group_released_handler > 0) {
     g_signal_handler_disconnect (pool->vallocator,
         pool->group_released_handler);
@@ -1151,6 +1145,13 @@ gst_v4l2_buffer_pool_flush_start (GstBufferPool * bpool)
 
   if (pool->other_pool && gst_buffer_pool_is_active (pool->other_pool))
     gst_buffer_pool_set_flushing (pool->other_pool, TRUE);
+
+  if (pool->xlnx_ll) {
+    xvfbsync_enc_sync_chan_depopulate (&pool->enc_sync_chan);
+    xvfbsync_syncip_depopulate (&pool->syncip);
+    close (pool->syncip.fd);
+    pool->xlnx_ll = FALSE;
+  }
 }
 
 static void
