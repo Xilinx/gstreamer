@@ -98,6 +98,9 @@ struct _GstOMXVideoDec
   /* Number of buffers allocated upstream */
   guint nb_upstream_buffers;
 
+  /* TRUE if decoder is producing buffers using XLNX-LL */
+  gboolean xlnx_ll;
+
   /* properties */
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   guint32 internal_entropy_buffers;

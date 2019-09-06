@@ -1412,7 +1412,6 @@ gst_omx_video_dec_get_output_interlace_info (GstOMXVideoDec * self)
   return GST_VIDEO_INTERLACE_MODE_PROGRESSIVE;
 }
 
-#if defined (HAVE_GST_GL)
 static void
 add_caps_memory_feature (GstCaps * caps, const gchar * feature)
 {
@@ -1437,7 +1436,6 @@ add_caps_memory_feature (GstCaps * caps, const gchar * feature)
   gst_caps_features_add (features, feature);
   gst_caps_set_features (caps, 0, features);
 }
-#endif
 
 static GstVideoCodecState *
 gst_omx_video_dec_set_output_state (GstOMXVideoDec * self, GstVideoFormat fmt)
@@ -1445,6 +1443,7 @@ gst_omx_video_dec_set_output_state (GstOMXVideoDec * self, GstVideoFormat fmt)
   OMX_PARAM_PORTDEFINITIONTYPE port_def;
   guint frame_height;
   GstVideoInterlaceMode interlace_mode;
+  GstVideoCodecState *state;
 
   interlace_mode = gst_omx_video_dec_get_output_interlace_info (self);
 
@@ -1466,9 +1465,16 @@ gst_omx_video_dec_set_output_state (GstOMXVideoDec * self, GstVideoFormat fmt)
       port_def.format.video.eColorFormat,
       (guint) port_def.format.video.nFrameWidth, frame_height);
 
-  return gst_video_decoder_set_interlaced_output_state (GST_VIDEO_DECODER
+  state = gst_video_decoder_set_interlaced_output_state (GST_VIDEO_DECODER
       (self), fmt, interlace_mode,
       port_def.format.video.nFrameWidth, frame_height, self->input_state);
+
+  if (self->xlnx_ll) {
+    state->caps = gst_video_info_to_caps (&state->info);
+    add_caps_memory_feature (state->caps, GST_CAPS_FEATURE_MEMORY_XLNX_LL);
+  }
+
+  return state;
 }
 
 static OMX_ERRORTYPE
@@ -2277,6 +2283,7 @@ gst_omx_video_dec_start (GstVideoDecoder * decoder)
   self->downstream_flow_ret = GST_FLOW_OK;
   self->use_buffers = FALSE;
   self->nb_upstream_buffers = 0;
+  self->xlnx_ll = FALSE;
 
   return TRUE;
 }
@@ -2435,6 +2442,36 @@ gst_omx_video_dec_negotiate (GstOMXVideoDec * self)
     GST_ERROR_OBJECT (self, "Failed to set video port format: %s (0x%08x)",
         gst_omx_error_to_string (err), err);
   }
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  {
+    GstCapsFeatures *features;
+
+    features = gst_caps_get_features (intersection, 0);
+    if (features
+        && gst_caps_features_contains (features,
+            GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
+      OMX_ALG_PARAM_SYNC_IP param;
+      OMX_ERRORTYPE err;
+
+      GST_OMX_INIT_STRUCT (&param);
+      param.bEnableSyncIp = OMX_TRUE;
+
+      GST_DEBUG_OBJECT (self, "Enable XLNX-LowLatency");
+
+      err =
+          gst_omx_component_set_parameter (self->dec,
+          (OMX_INDEXTYPE) OMX_ALG_IndexParamSyncIp, &param);
+      if (err != OMX_ErrorNone) {
+        GST_ERROR_OBJECT (self,
+            "Failed to set parameter: %s (0x%08x)",
+            gst_omx_error_to_string (err), err);
+        return FALSE;
+      }
+      self->xlnx_ll = TRUE;
+    }
+  }
+#endif
 
   gst_caps_unref (intersection);
   return (err == OMX_ErrorNone);
