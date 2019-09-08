@@ -2338,6 +2338,35 @@ gst_omx_video_dec_stop (GstVideoDecoder * decoder)
   return TRUE;
 }
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+static void
+gst_omx_video_dec_set_latency (GstOMXVideoDec * self)
+{
+  GstClockTime latency;
+  OMX_ALG_PARAM_REPORTED_LATENCY param;
+  OMX_ERRORTYPE err;
+
+  GST_OMX_INIT_STRUCT (&param);
+  err =
+      gst_omx_component_get_parameter (self->dec,
+      (OMX_INDEXTYPE) OMX_ALG_IndexParamReportedLatency, &param);
+
+  if (err != OMX_ErrorNone) {
+    GST_WARNING_OBJECT (self, "Couldn't retrieve latency: %s (0x%08x)",
+        gst_omx_error_to_string (err), err);
+    return;
+  }
+
+  GST_DEBUG_OBJECT (self, "retrieved latency of %d ms",
+      (guint32) param.nLatency);
+
+  /* Convert to ns */
+  latency = param.nLatency * GST_MSECOND;
+
+  gst_video_decoder_set_latency (GST_VIDEO_DECODER (self), latency, latency);
+}
+#endif
+
 static gboolean
 gst_omx_video_dec_negotiate (GstOMXVideoDec * self)
 {
@@ -2469,6 +2498,8 @@ gst_omx_video_dec_negotiate (GstOMXVideoDec * self)
         return FALSE;
       }
       self->xlnx_ll = TRUE;
+      /* Correct reported latency since syncip decoder give early callback */
+      gst_omx_video_dec_set_latency (self);
     }
   }
 #endif
@@ -2476,35 +2507,6 @@ gst_omx_video_dec_negotiate (GstOMXVideoDec * self)
   gst_caps_unref (intersection);
   return (err == OMX_ErrorNone);
 }
-
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-static void
-gst_omx_video_dec_set_latency (GstOMXVideoDec * self)
-{
-  GstClockTime latency;
-  OMX_ALG_PARAM_REPORTED_LATENCY param;
-  OMX_ERRORTYPE err;
-
-  GST_OMX_INIT_STRUCT (&param);
-  err =
-      gst_omx_component_get_parameter (self->dec,
-      (OMX_INDEXTYPE) OMX_ALG_IndexParamReportedLatency, &param);
-
-  if (err != OMX_ErrorNone) {
-    GST_WARNING_OBJECT (self, "Couldn't retrieve latency: %s (0x%08x)",
-        gst_omx_error_to_string (err), err);
-    return;
-  }
-
-  GST_DEBUG_OBJECT (self, "retrieved latency of %d ms",
-      (guint32) param.nLatency);
-
-  /* Convert to ns */
-  latency = param.nLatency * GST_MSECOND;
-
-  gst_video_decoder_set_latency (GST_VIDEO_DECODER (self), latency, latency);
-}
-#endif
 
 static gboolean
 gst_omx_video_dec_disable (GstOMXVideoDec * self)
