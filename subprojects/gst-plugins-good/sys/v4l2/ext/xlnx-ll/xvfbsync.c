@@ -249,6 +249,7 @@ xvfbsync_syncip_get_latest_chan_status (SyncIp * syncip)
   struct xlnxsync_stat chan_status;
   int ret = 0;
 
+  chan_status.hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
   ret = ioctl (syncip->fd, XLNXSYNC_GET_CHAN_STATUS, &chan_status);
   if (ret)
     fprintf (stderr, "SyncIp: Couldn't get sync ip channel status\n");
@@ -265,6 +266,7 @@ xvfbsync_syncip_reset_status (SyncIp * syncip, u8 chan_id)
   struct xlnxsync_clr_err clr;
   int ret = 0;
 
+  clr.hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
   clr.channel_id = chan_id;
   clr.sync_err = 1;
   clr.wdg_err = 1;
@@ -310,6 +312,7 @@ xvfbsync_syncip_add_buffer (SyncIp * syncip,
 {
   int ret = 0;
 
+  fb_config->hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
   ret = ioctl (syncip->fd, XLNXSYNC_SET_CHAN_CONFIG, fb_config);
   if (ret)
     fprintf (stderr, "SyncIp: Couldn't add buffer\n");
@@ -437,6 +440,7 @@ xvfbsync_syncip_populate (SyncIp * syncip, u32 fd)
   syncip->quit = false;
   syncip->fd = fd;
 
+  config.hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
   ret = ioctl (syncip->fd, XLNXSYNC_GET_CFG, &config);
   if (ret) {
     fprintf (stderr, "SyncIp: Couldn't get sync ip configuration\n");
@@ -772,6 +776,8 @@ set_enc_framebuffer_config (u8 channel_id, XLNXLLBuf * buf,
         config.chroma_start_offset[XLNXSYNC_CONS] +
         (i_hardware_pitch * (i_hardware_chroma_vertical_pitch - 1)) +
         buf->t_planes[PLANE_UV].i_pitch - 1;
+    config.ismono[XLNXSYNC_PROD] = 0;
+    config.ismono[XLNXSYNC_CONS] = 0;
   } else {
     for (int user = 0; user < XLNXSYNC_IO; user++) {
       config.chroma_start_offset[user] = 0;
