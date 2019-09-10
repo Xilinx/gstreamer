@@ -363,8 +363,10 @@ gst_omx_video_get_port_padding (GstOMXPort * port, GstVideoInfo * info_orig,
 static gboolean
 xlnx_ll_supported (gboolean encoder)
 {
-  return g_file_test (encoder ? SYNC_IP_DEV_ENCODER : SYNC_IP_DEV_DECODER,
-      G_FILE_TEST_EXISTS);
+  if (encoder)
+    return g_file_test (SYNC_IP_DEV_ENCODER, G_FILE_TEST_EXISTS);
+  else
+    return TRUE;                /* Not using decoder syncip currently */
 }
 
 GstCaps *
