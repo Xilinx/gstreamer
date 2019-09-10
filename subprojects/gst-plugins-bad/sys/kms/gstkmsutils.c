@@ -260,7 +260,7 @@ gst_video_format_to_structure (GstVideoFormat format)
 static gboolean
 xlnx_ll_supported (void)
 {
-  return g_file_test (SYNC_IP_DEV_DECODER, G_FILE_TEST_EXISTS);
+  return TRUE;
 }
 
 GstCaps *
