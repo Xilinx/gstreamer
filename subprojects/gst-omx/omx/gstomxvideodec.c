@@ -2480,17 +2480,18 @@ gst_omx_video_dec_negotiate (GstOMXVideoDec * self)
     if (features
         && gst_caps_features_contains (features,
             GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
-      OMX_ALG_PARAM_SYNC_IP param;
+      OMX_ALG_PORT_PARAM_EARLY_CALLBACK param;
       OMX_ERRORTYPE err;
 
       GST_OMX_INIT_STRUCT (&param);
-      param.bEnableSyncIp = OMX_TRUE;
+      param.bEnableEarlyCallback = OMX_TRUE;
+      param.nPortIndex = self->dec_out_port->index;
 
       GST_DEBUG_OBJECT (self, "Enable XLNX-LowLatency");
 
       err =
           gst_omx_component_set_parameter (self->dec,
-          (OMX_INDEXTYPE) OMX_ALG_IndexParamSyncIp, &param);
+          (OMX_INDEXTYPE) OMX_ALG_IndexPortParamEarlyCallback, &param);
       if (err != OMX_ErrorNone) {
         GST_ERROR_OBJECT (self,
             "Failed to set parameter: %s (0x%08x)",
