@@ -35,8 +35,10 @@
 
 #include <string.h>
 #include "ext/media.h"
+#include "ext/xilinx-v4l2-controls.h"
 
 #define DEFAULT_PROP_DEVICE "/dev/video0"
+#define DEFAULT_PROP_THRESHOLD 50
 
 GST_DEBUG_CATEGORY_STATIC (gst_xilinx_scd_debug);
 #define GST_CAT_DEFAULT gst_xilinx_scd_debug
@@ -48,7 +50,8 @@ GST_DEBUG_CATEGORY_STATIC (gst_xilinx_scd_debug);
 enum
 {
   PROP_0,
-  V4L2_STD_OBJECT_PROPS
+  V4L2_STD_OBJECT_PROPS,
+  PROP_THRESHOLD,
 };
 
 #define gst_xilinx_scd_parent_class parent_class
@@ -64,6 +67,12 @@ gst_xilinx_scd_set_property (GObject * object,
     case PROP_OUTPUT_IO_MODE:
       gst_v4l2_object_set_property_helper (self->v4l2output, prop_id, value,
           pspec);
+      break;
+
+    case PROP_THRESHOLD:
+      self->thresh_val = g_value_get_uint (value);
+      gst_v4l2_set_attribute (self->subdev, V4L2_CID_XILINX_SCD_THRESHOLD,
+          self->thresh_val);
       break;
 
     default:
@@ -85,6 +94,12 @@ gst_xilinx_scd_get_property (GObject * object,
     case PROP_OUTPUT_IO_MODE:
       gst_v4l2_object_get_property_helper (self->v4l2output, prop_id, value,
           pspec);
+      break;
+
+    case PROP_THRESHOLD:
+      gst_v4l2_get_attribute (self->subdev, V4L2_CID_XILINX_SCD_THRESHOLD,
+          (int *) &self->thresh_val);
+      g_value_set_uint (value, self->thresh_val);
       break;
 
     default:
@@ -361,6 +376,9 @@ gst_xilinx_scd_open (GstXilinxScd * self)
 
   if (!gst_v4l2_subscribe_event (self->subdev, SCD_EVENT_TYPE, 0, 0))
     goto failure;
+
+  gst_v4l2_set_attribute (self->subdev, V4L2_CID_XILINX_SCD_THRESHOLD,
+      self->thresh_val);
 
   return TRUE;
 
@@ -723,6 +741,7 @@ gst_xilinx_scd_init (GstXilinxScd * self)
 
   self->subdev = gst_v4l2_object_new (GST_ELEMENT (self), GST_OBJECT (self),
       0, DEFAULT_PROP_DEVICE, gst_v4l2_get_output, gst_v4l2_set_output, NULL);
+  self->thresh_val = DEFAULT_PROP_THRESHOLD;
 
   /* enable QoS */
   gst_base_transform_set_qos_enabled (GST_BASE_TRANSFORM (self), TRUE);
@@ -783,6 +802,11 @@ gst_xilinx_scd_class_init (GstXilinxScdClass * klass)
       g_param_spec_enum ("io-mode", "IO mode",
           "I/O mode",
           GST_TYPE_V4L2_IO_MODE, GST_V4L2_IO_AUTO,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_THRESHOLD,
+      g_param_spec_uint ("threshold", "Threshold",
+          "SAD value at which the SCD will signal a scene change. Increasing this value decreases the sensitivity of SCD. 0 signals any change to be a scene change, 100 never signals a scene change.",
+          0, 100, DEFAULT_PROP_THRESHOLD,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 

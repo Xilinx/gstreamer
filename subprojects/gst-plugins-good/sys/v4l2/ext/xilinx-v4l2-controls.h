@@ -217,4 +217,17 @@
 #define XVIP_LOW_LATENCY_ENABLE		1 << 1
 #define XVIP_LOW_LATENCY_DISABLE	1 << 2
 #define XVIP_START_DMA			1 << 3
+
+/*
+ * Xilinx SCD
+ */
+
+/* Base ID */
+#define V4L2_CID_XILINX_SCD			(V4L2_CID_USER_BASE + 0xc140)
+
+/*
+ * SCD Threshold
+ * User can pass percentage as an integer to tune threshold value
+ */
+#define V4L2_CID_XILINX_SCD_THRESHOLD		(V4L2_CID_XILINX_SCD + 1)
 #endif /* __UAPI_XILINX_V4L2_CONTROLS_H__ */
