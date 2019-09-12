@@ -57,6 +57,7 @@ struct _GstXilinxScd
   gboolean output_locked;
   GstV4l2Object *subdev;
   gboolean subdev_locked;
+  guint thresh_val;
 
   /* pads */
   GstCaps *probed_sinkcaps;
