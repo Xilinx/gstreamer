@@ -33,7 +33,6 @@ typedef struct _GstV4l2Meta GstV4l2Meta;
 
 #include "gstv4l2object.h"
 #include "gstv4l2allocator.h"
-#include "ext/xlnx-ll/xvfbsync.h"
 
 G_BEGIN_DECLS
 
@@ -101,11 +100,6 @@ struct _GstV4l2BufferPool
 
   /* Control to warn only once on buggy feild driver bug */
   gboolean has_warned_on_buggy_field;
-
-  /* For Xilinx Low Latency */
-  gboolean xlnx_ll;
-  SyncIp syncip;
-  EncSyncChannel enc_sync_chan;
 };
 
 struct _GstV4l2BufferPoolClass

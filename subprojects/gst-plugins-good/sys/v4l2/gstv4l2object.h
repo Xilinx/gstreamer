@@ -25,6 +25,7 @@
 #define __GST_V4L2_OBJECT_H__
 
 #include "ext/videodev2.h"
+#include "ext/xlnx-ll/xvfbsync.h"
 #ifdef HAVE_LIBV4L2
 #  include <libv4l2.h>
 #endif
@@ -222,6 +223,11 @@ struct _GstV4l2Object {
    * on slow USB firmwares. When this is set, gst_v4l2_set_format() will modify
    * the caps to reflect what was negotiated during fixation */
   gboolean skip_try_fmt_probes;
+
+  /* For Xilinx Low Latency */
+  gboolean xlnx_ll;
+  SyncIp syncip;
+  EncSyncChannel enc_sync_chan;
 };
 
 struct _GstV4l2ObjectClassHelper {

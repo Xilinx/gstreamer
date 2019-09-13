@@ -709,8 +709,8 @@ gst_v4l2_buffer_pool_streamon (GstV4l2BufferPool * pool)
       if (obj->ioctl (pool->video_fd, VIDIOC_STREAMON, &obj->type) < 0)
         goto streamon_failed;
 
-      if (pool->xlnx_ll) {
-        if (xvfbsync_enc_sync_chan_enable (&pool->enc_sync_chan)) {
+      if (obj->xlnx_ll) {
+        if (xvfbsync_enc_sync_chan_enable (&obj->enc_sync_chan)) {
           GST_ERROR_OBJECT (pool, "Error with enabling sync ip");
           goto streamon_failed;
         }
@@ -802,22 +802,22 @@ gst_v4l2_buffer_pool_start (GstBufferPool * bpool)
 
   GST_DEBUG_OBJECT (pool, "activating pool");
 
-  if (pool->xlnx_ll) {
+  if (obj->xlnx_ll) {
     gint syncip_fd, syncip_channel;
 
     syncip_fd = open (SYNC_IP_DEV_ENCODER, O_RDWR);
     if (syncip_fd == -1)
       goto xvfbsync_open_failed;
 
-    if (xvfbsync_syncip_populate (&pool->syncip, syncip_fd))
+    if (xvfbsync_syncip_populate (&obj->syncip, syncip_fd))
       goto xvfbsync_populate_failed;
 
-    syncip_channel = xvfbsync_syncip_get_free_channel (&pool->syncip);
+    syncip_channel = xvfbsync_syncip_get_free_channel (&obj->syncip);
     if (syncip_channel == -1)
       goto xvfbsync_reserve_failed;
 
-    if (xvfbsync_enc_sync_chan_populate (&pool->enc_sync_chan,
-            &pool->syncip, syncip_channel,
+    if (xvfbsync_enc_sync_chan_populate (&obj->enc_sync_chan,
+            &obj->syncip, syncip_channel,
             HORIZONTAL_ALIGNMENT, VERTICAL_ALIGNMENT))
       goto xvfbsync_chan_populate_failed;
   }
@@ -1146,11 +1146,8 @@ gst_v4l2_buffer_pool_flush_start (GstBufferPool * bpool)
   if (pool->other_pool && gst_buffer_pool_is_active (pool->other_pool))
     gst_buffer_pool_set_flushing (pool->other_pool, TRUE);
 
-  if (pool->xlnx_ll) {
-    xvfbsync_enc_sync_chan_depopulate (&pool->enc_sync_chan);
-    xvfbsync_syncip_depopulate (&pool->syncip);
-    close (pool->syncip.fd);
-    pool->xlnx_ll = FALSE;
+  if (pool->obj->xlnx_ll) {
+    pool->obj->xlnx_ll = FALSE;
   }
 }
 
@@ -1331,7 +1328,7 @@ gst_v4l2_buffer_pool_qbuf (GstV4l2BufferPool * pool, GstBuffer * buf,
   g_atomic_int_inc (&pool->num_queued);
   pool->buffers[index] = buf;
 
-  if (pool->xlnx_ll) {
+  if (obj->xlnx_ll) {
     const GstVideoInfo *info;
     XLNXLLBuf *xlnxll_buf = xvfbsync_xlnxll_buf_new ();
 
@@ -1354,7 +1351,7 @@ gst_v4l2_buffer_pool_qbuf (GstV4l2BufferPool * pool, GstBuffer * buf,
     xlnxll_buf->t_planes[PLANE_MAP_Y].i_pitch = info->stride[PLANE_MAP_Y];
     xlnxll_buf->t_planes[PLANE_MAP_UV].i_offset = info->offset[PLANE_MAP_UV];
     xlnxll_buf->t_planes[PLANE_MAP_UV].i_pitch = info->stride[PLANE_MAP_UV];
-    xvfbsync_enc_sync_chan_add_buffer (&pool->enc_sync_chan, xlnxll_buf);
+    xvfbsync_enc_sync_chan_add_buffer (&obj->enc_sync_chan, xlnxll_buf);
   }
 
   if (!gst_v4l2_allocator_qbuf (pool->vallocator, group))
@@ -1959,7 +1956,7 @@ gst_v4l2_buffer_pool_new (GstV4l2Object * obj, GstCaps * caps)
   if (features &&
       gst_caps_features_contains (features, GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
     GST_DEBUG_OBJECT (pool, "XLNX-LL Enabled");
-    pool->xlnx_ll = TRUE;
+    obj->xlnx_ll = TRUE;
 
     /* Disable CREATE_BUFS in low latency mode */
     GST_OBJECT_FLAG_UNSET (pool->vallocator,
@@ -1967,7 +1964,7 @@ gst_v4l2_buffer_pool_new (GstV4l2Object * obj, GstCaps * caps)
         | GST_V4L2_ALLOCATOR_FLAG_USERPTR_CREATE_BUFS
         | GST_V4L2_ALLOCATOR_FLAG_DMABUF_CREATE_BUFS);
   } else {
-    pool->xlnx_ll = FALSE;
+    obj->xlnx_ll = FALSE;
   }
 
   return GST_BUFFER_POOL (pool);
