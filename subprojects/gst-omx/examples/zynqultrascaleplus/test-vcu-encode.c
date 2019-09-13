@@ -50,6 +50,7 @@ typedef enum
 #define DEFAULT_LONGTERM_REF 0
 #define DEFAULT_LOOP_FILTER_MODE -1
 #define DEFAULT_FORCE_INTRA_MODE FORCE_INTRA_DISABLED
+#define DEFAULT_QP_MODE 0
 
 #define DYNAMIC_BITRATE_STR "BR"
 #define DYNAMIC_GOP_LENGTH_STR "GL"
@@ -124,6 +125,7 @@ typedef struct
   guint long_term_freq;
   guint long_term_ref;
   gint loop_filter_mode;
+  guint qp_mode;
   ForceIntraMode force_intra_mode;
 
   gchar *output_filename;
@@ -257,8 +259,6 @@ parse_dynamic_user_string (const char *str, GstElement * encoder)
       dynamic->param.roi.height = atoi (token[5]);
       dynamic->param.roi.quality = g_strdup (token[6]);
 
-      /* set encoder qp-mode to ROI */
-      g_object_set (G_OBJECT (encoder), "qp-mode", OMX_ALG_ROI_QP, NULL);
       break;
     case DYNAMIC_SCENE_CHANGE:
       dynamic->start_frame = atoi (token[1]);
@@ -621,7 +621,11 @@ main (int argc, char *argv[])
         "Periodicity of longterm ref pictures", NULL},
     {"loop-filter-mode", 't', 0, G_OPTION_ARG_INT, &enc.loop_filter_mode,
         "Loop filter mode", NULL},
-    {"force-intra-support", 'n', FORCE_INTRA_DISABLED, G_OPTION_ARG_INT, &enc.force_intra_mode,
+    {"qp-mode", 'q', 0, G_OPTION_ARG_INT, &enc.qp_mode,
+          "Encoder qp Mode: 0:uniform, 1:auto, 2:roi, 3:load_qp_absolute & 4:load_qp_relative",
+        NULL},
+    {"force-intra-support", 'n', FORCE_INTRA_DISABLED, G_OPTION_ARG_INT,
+          &enc.force_intra_mode,
         "Force intra support", NULL},
     {NULL}
   };
@@ -656,6 +660,7 @@ main (int argc, char *argv[])
   enc.long_term_ref = DEFAULT_LONGTERM_REF;
   enc.long_term_freq = DEFAULT_LONGTERM_FREQ;
   enc.loop_filter_mode = DEFAULT_LOOP_FILTER_MODE;
+  enc.qp_mode = DEFAULT_QP_MODE;
   enc.force_intra_mode = DEFAULT_FORCE_INTRA_MODE;
 
   context = g_option_context_new (" vcu encode test applicaiton");
@@ -706,7 +711,8 @@ main (int argc, char *argv[])
   g_object_set (G_OBJECT (encoder), "target-bitrate", enc.target_bitrate,
       "b-frames", enc.b_frames, "control-rate", enc.control_rate, "gop-length",
       enc.gop_length, "long-term-ref", enc.long_term_ref, "long-term-freq",
-      enc.long_term_freq, "loop-filter-mode", enc.loop_filter_mode, NULL);
+      enc.long_term_freq, "loop-filter-mode", enc.loop_filter_mode, "qp-mode",
+      enc.qp_mode, NULL);
 
   /* set Encoder src caps */
   if (!g_strcmp0 (enc.type, "avc"))
