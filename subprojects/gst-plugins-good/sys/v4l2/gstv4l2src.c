@@ -630,23 +630,6 @@ out:
   return fcaps;
 }
 
-static gboolean
-gst_v4l2src_set_low_latency_capture_mode (GstV4l2Src * src, gboolean enable)
-{
-  GstV4l2Object *v4l2object = src->v4l2object;
-  struct v4l2_control control = { 0, };
-
-  control.id = V4L2_CID_XILINX_LOW_LATENCY;
-  control.value = enable ? XVIP_LOW_LATENCY_ENABLE : XVIP_LOW_LATENCY_DISABLE;
-
-  if (v4l2object->ioctl (v4l2object->video_fd, VIDIOC_S_CTRL, &control) != 0) {
-    GST_WARNING_OBJECT (v4l2object->dbg_obj,
-        "Failed to enable low latency on capture device");
-    return FALSE;
-  }
-
-  return TRUE;
-}
 
 static gboolean
 gst_v4l2src_query_preferred_dv_timings (GstV4l2Src * v4l2src,
@@ -838,7 +821,6 @@ gst_v4l2src_negotiate (GstBaseSrc * basesrc)
   if (caps) {
     /* now fixate */
     if (!gst_caps_is_empty (caps)) {
-      GstCapsFeatures *features;
 
       /* otherwise consider the first structure from peercaps to be a
        * preference. This is useful for matching a reported native display,
@@ -869,18 +851,6 @@ gst_v4l2src_negotiate (GstBaseSrc * basesrc)
       } else if (gst_caps_is_fixed (caps)) {
         /* yay, fixed caps, use those then */
         result = gst_base_src_set_caps (basesrc, caps);
-      }
-
-      features = gst_caps_get_features (caps, 0);
-      if (features &&
-          gst_caps_features_contains (features,
-              GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
-        v4l2src->xlnx_ll = TRUE;
-
-        if (!gst_v4l2src_set_low_latency_capture_mode (v4l2src, TRUE)) {
-          GST_ERROR_OBJECT (v4l2src, "Driver failed to activate XLNX-LL");
-          result = FALSE;
-        }
       }
     }
     gst_caps_unref (caps);
@@ -1072,7 +1042,7 @@ gst_v4l2src_query (GstBaseSrc * bsrc, GstQuery * query)
       else
         max_latency = num_buffers * min_latency;
 
-      if (src->xlnx_ll)
+      if (src->v4l2object->xlnx_ll)
         min_latency = GST_MSECOND;
 
       GST_DEBUG_OBJECT (bsrc,
@@ -1116,7 +1086,7 @@ gst_v4l2src_start (GstBaseSrc * src)
   v4l2src->has_bad_timestamp = FALSE;
   v4l2src->last_timestamp = 0;
 
-  v4l2src->xlnx_ll = FALSE;
+  v4l2src->v4l2object->xlnx_ll = FALSE;
 
   return TRUE;
 }
@@ -1149,10 +1119,6 @@ gst_v4l2src_stop (GstBaseSrc * src)
       return FALSE;
   }
 
-  if (v4l2src->xlnx_ll) {
-    if (!gst_v4l2src_set_low_latency_capture_mode (v4l2src, FALSE))
-      GST_ERROR_OBJECT (v4l2src, "Driver failed to deactivate XLNX-LL");
-  }
 
   v4l2src->pending_set_fmt = FALSE;
 
@@ -1719,7 +1685,7 @@ gst_v4l2src_event (GstBaseSrc * basesrc, GstEvent * event)
     case GST_EVENT_CUSTOM_UPSTREAM:
     {
       if (gst_event_has_name (event, "xlnx-ll-consumer-ready")) {
-        if (self->xlnx_ll) {
+        if (self->v4l2object->xlnx_ll) {
           GST_DEBUG_OBJECT (self, "XLNX-LowLatency consumer ready, start DMA");
           start_xilinx_dma (self);
         } else {

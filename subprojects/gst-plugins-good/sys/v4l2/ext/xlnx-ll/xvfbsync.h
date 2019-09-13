@@ -183,7 +183,7 @@ typedef struct
 /**
  * xvfbsync_syncip_get_free_channel - Reserve channel from SyncIp driver
  * @syncip: SyncIp configuration to be queried
- * Returns 0 if no errors, else -1
+ * Returns channel reserved to be used, else -1
  */
 int xvfbsync_syncip_get_free_channel (SyncIp * syncip);
 
