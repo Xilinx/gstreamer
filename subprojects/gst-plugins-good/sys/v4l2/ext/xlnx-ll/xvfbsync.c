@@ -26,6 +26,7 @@
 */
 
 #include <assert.h>
+#include <gst/gst.h>
 #include <inttypes.h>
 #include <poll.h>
 #include <stdio.h>
@@ -51,11 +52,13 @@ typedef uint64_t u64;
 
 #define MIN(a, b) ((a) < (b) ? a : b)
 
+GST_DEBUG_CATEGORY (xvfbsync_debug);
+#define GST_CAT_DEFAULT xvfbsync_debug
+
+
 /**********************************/
 /* xvfbsync private structs/enums */
 /**********************************/
-
-static int logs_enabled = 0;
 
 typedef enum
 {
@@ -130,7 +133,7 @@ static bool
 xvfbsync_queue_init (Queue * q)
 {
   if (!q) {
-    fprintf (stderr, "Queue: Queue is NULL\n");
+    GST_ERROR ("Queue: Queue is NULL");
     return false;
   }
 
@@ -145,7 +148,7 @@ static bool
 xvfbsync_queue_empty (Queue * q)
 {
   if (!q) {
-    fprintf (stderr, "Queue: Queue is NULL\n");
+    GST_ERROR ("Queue: Queue is NULL");
     return false;
   }
 
@@ -156,7 +159,7 @@ static XLNXLLBuf *
 xvfbsync_queue_front (Queue * q)
 {
   if (!q) {
-    fprintf (stderr, "Queue: Queue is NULL\n");
+    GST_ERROR ("Queue: Queue is NULL");
     return NULL;
   }
 
@@ -169,7 +172,7 @@ xvfbsync_queue_pop (Queue * q)
   struct Node *temp;
 
   if (!q || xvfbsync_queue_empty (q)) {
-    fprintf (stderr, "Queue: Queue is NULL or empty\n");
+    GST_ERROR ("Queue: Queue is NULL or empty");
     return false;
   }
 
@@ -186,7 +189,7 @@ static bool
 xvfbsync_queue_push (Queue * q, XLNXLLBuf * buf_ptr)
 {
   if (!q) {
-    fprintf (stderr, "Queue: Queue is NULL\n");
+    GST_ERROR ("Queue: Queue is NULL");
     return false;
   }
 
@@ -195,7 +198,7 @@ xvfbsync_queue_push (Queue * q, XLNXLLBuf * buf_ptr)
   if (q->front == NULL) {
     q->front = (struct Node *) calloc (1, sizeof (struct Node));
     if (!q->front) {
-      fprintf (stderr, "Queue: Memory allocation failed\n");
+      GST_ERROR ("Queue: Memory allocation failed");
       return false;
     }
 
@@ -205,7 +208,7 @@ xvfbsync_queue_push (Queue * q, XLNXLLBuf * buf_ptr)
   } else {
     q->last->next = (struct Node *) calloc (1, sizeof (struct Node));
     if (!q->last->next) {
-      fprintf (stderr, "Queue: Memory allocation failed\n");
+      GST_ERROR ("Queue: Memory allocation failed");
       return false;
     }
 
@@ -252,7 +255,7 @@ xvfbsync_syncip_get_latest_chan_status (SyncIp * syncip)
   chan_status.hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
   ret = ioctl (syncip->fd, XLNXSYNC_GET_CHAN_STATUS, &chan_status);
   if (ret)
-    fprintf (stderr, "SyncIp: Couldn't get sync ip channel status\n");
+    GST_ERROR ("SyncIp: Couldn't get sync ip channel status");
   else
     xvfbsync_syncip_parse_chan_status (&chan_status, syncip->channel_statuses,
         syncip->max_channels, syncip->max_users, syncip->max_buffers);
@@ -275,7 +278,7 @@ xvfbsync_syncip_reset_status (SyncIp * syncip, u8 chan_id)
 
   ret = ioctl (syncip->fd, XLNXSYNC_CLR_CHAN_ERR, &clr);
   if (ret)
-    fprintf (stderr, "SyncIp: Couldnt reset status of channel %d\n", chan_id);
+    GST_ERROR ("SyncIp: Couldnt reset status of channel %d", chan_id);
 
   return ret;
 }
@@ -288,7 +291,7 @@ xvfbsync_syncip_enable_channel (SyncIp * syncip, u8 chan_id)
 
   ret = ioctl (syncip->fd, XLNXSYNC_CHAN_ENABLE, (void *) (uintptr_t) chan);
   if (ret)
-    fprintf (stderr, "SyncIp: Couldn't enable channel %d\n", chan_id);
+    GST_ERROR ("SyncIp: Couldn't enable channel %d", chan_id);
 
   return ret;
 }
@@ -301,7 +304,7 @@ xvfbsync_syncip_disable_channel (SyncIp * syncip, u8 chan_id)
 
   ret = ioctl (syncip->fd, XLNXSYNC_CHAN_DISABLE, (void *) (uintptr_t) chan);
   if (ret)
-    fprintf (stderr, "SyncIp: Couldn't disable channel %d\n", chan_id);
+    GST_ERROR ("SyncIp: Couldn't disable channel %d", chan_id);
 
   return ret;
 }
@@ -315,7 +318,7 @@ xvfbsync_syncip_add_buffer (SyncIp * syncip,
   fb_config->hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
   ret = ioctl (syncip->fd, XLNXSYNC_SET_CHAN_CONFIG, fb_config);
   if (ret)
-    fprintf (stderr, "SyncIp: Couldn't add buffer\n");
+    GST_ERROR ("SyncIp: Couldn't add buffer");
 
   return ret;
 }
@@ -412,7 +415,7 @@ xvfbsync_syncip_get_free_channel (SyncIp * syncip)
   xvfbsync_syncip_get_latest_chan_status (syncip);
 
   if (ioctl (syncip->fd, XLNXSYNC_RESERVE_GET_CHAN_ID, &chan_id)) {
-    fprintf (stderr, "SyncIp: Couldn't get sync ip channel ID\n");
+    GST_ERROR ("SyncIp: Couldn't get sync ip channel ID");
     return -1;
   }
 
@@ -427,12 +430,12 @@ xvfbsync_syncip_populate (SyncIp * syncip, u32 fd)
   struct xlnxsync_config config;
   int ret = 0;
 
-  if (getenv ("SYNCIP_LOGS") != NULL)
-    logs_enabled = atoi (getenv ("SYNCIP_LOGS"));
+  GST_DEBUG_CATEGORY_INIT (xvfbsync_debug, "xvfbsync", 0,
+      "Xilinx Frame Synchronizer IP");
 
   t_info = calloc (1, sizeof (ThreadInfo));
   if (!t_info) {
-    fprintf (stderr, "SyncIp: Memory allocation failed\n");
+    GST_ERROR ("SyncIp: Memory allocation failed");
     return -1;
   }
 
@@ -443,11 +446,11 @@ xvfbsync_syncip_populate (SyncIp * syncip, u32 fd)
   config.hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
   ret = ioctl (syncip->fd, XLNXSYNC_GET_CFG, &config);
   if (ret) {
-    fprintf (stderr, "SyncIp: Couldn't get sync ip configuration\n");
+    GST_ERROR ("SyncIp: Couldn't get sync ip configuration");
     return ret;
   }
 
-  fprintf (stdout, "[fd: %d] mode: %s, channel number: %d\n", syncip->fd,
+  GST_DEBUG ("[fd: %d] mode: %s, channel number: %d", syncip->fd,
       config.encode ? "encode" : "decode", config.max_channels);
   syncip->max_channels = config.max_channels;
   syncip->max_users = XLNXSYNC_IO;
@@ -455,26 +458,26 @@ xvfbsync_syncip_populate (SyncIp * syncip, u32 fd)
   syncip->max_cores = XLNXSYNC_MAX_CORES;
   syncip->channel_statuses = calloc (config.max_channels, sizeof (void *));
   if (!syncip->channel_statuses) {
-    fprintf (stderr, "SyncIp: Memory allocation failed\n");
+    GST_ERROR ("SyncIp: Memory allocation failed");
     return -1;
   }
 
   syncip->event_listeners = calloc (config.max_channels, sizeof (void *));
   if (!syncip->event_listeners) {
-    fprintf (stderr, "SyncIp: Memory allocation failed\n");
+    GST_ERROR ("SyncIp: Memory allocation failed");
     return -1;
   }
 
   ret = pthread_mutex_init (&(syncip->mutex), NULL);
   if (ret) {
-    fprintf (stderr, "SyncIp: Couldn't intialize lock");
+    GST_ERROR ("SyncIp: Couldn't intialize lock");
     return ret;
   }
 
   ret = pthread_create (&(syncip->polling_thread), NULL,
       &xvfbsync_syncip_polling_routine, t_info);
   if (ret) {
-    fprintf (stderr, "Couldn't create thread");
+    GST_ERROR ("SyncIp: Couldn't create thread");
     return ret;
   }
 
@@ -684,38 +687,34 @@ static void
 print_framebuffer_config (struct xlnxsync_chan_config *config, u8 max_users,
     u8 max_cores)
 {
-  fprintf (stdout, "********************************\n");
-  fprintf (stdout, "channel_id:%d\n", config->channel_id);
-  fprintf (stdout, "luma_margin:%d\n", config->luma_margin);
-  fprintf (stdout, "chroma_margin:%d\n", config->chroma_margin);
+  GST_TRACE ("************xvfbsync*************");
+  GST_TRACE ("channel_id:%d", config->channel_id);
+  GST_TRACE ("luma_margin:%d", config->luma_margin);
+  GST_TRACE ("chroma_margin:%d", config->chroma_margin);
 
   for (u8 user = 0; user < max_users; ++user) {
-    fprintf (stdout, "%s[%d]:\n",
+    GST_TRACE ("%s[%d]:",
         (user == XLNXSYNC_PROD) ? "prod" : (user ==
             XLNXSYNC_CONS) ? "cons" : "unknown", user);
-    fprintf (stdout, "\t-fb_id:%d %s\n", config->fb_id[user],
+    GST_TRACE ("\t-fb_id:%d %s", config->fb_id[user],
         config->fb_id[user] == XLNXSYNC_AUTO_SEARCH ? "(auto_search)" : "");
-    fprintf (stdout, "\t-ismono:%s\n",
-        (config->ismono[user] == 0) ? "false" : "true");
-    fprintf (stdout, "\t-luma_start_offset:%" PRIx64 "\n",
+    GST_TRACE ("\t-ismono:%s", (config->ismono[user] == 0) ? "false" : "true");
+    GST_TRACE ("\t-luma_start_offset:%" PRIx64,
         config->luma_start_offset[user]);
-    fprintf (stdout, "\t-luma_end_offset:%" PRIx64 "\n",
-        config->luma_end_offset[user]);
-    fprintf (stdout, "\t-chroma_start_offset:%" PRIx64 "\n",
+    GST_TRACE ("\t-luma_end_offset:%" PRIx64, config->luma_end_offset[user]);
+    GST_TRACE ("\t-chroma_start_offset:%" PRIx64,
         config->chroma_start_offset[user]);
-    fprintf (stdout, "\t-chroma_end_offset:%" PRIx64 "\n",
+    GST_TRACE ("\t-chroma_end_offset:%" PRIx64,
         config->chroma_end_offset[user]);
   }
 
   for (int core = 0; core < max_cores; ++core) {
-    fprintf (stdout, "core[%i]:\n", core);
-    fprintf (stdout, "\t-luma_core_offset:%d\n",
-        config->luma_core_offset[core]);
-    fprintf (stdout, "\t-chroma_core_offset:%d\n",
-        config->chroma_core_offset[core]);
+    GST_TRACE ("core[%i]:", core);
+    GST_TRACE ("\t-luma_core_offset:%d", config->luma_core_offset[core]);
+    GST_TRACE ("\t-chroma_core_offset:%d", config->chroma_core_offset[core]);
   }
 
-  fprintf (stdout, "********************************\n");
+  GST_TRACE ("********************************");
 }
 
 static struct xlnxsync_chan_config
@@ -880,7 +879,7 @@ set_dec_framebuffer_config (u8 channel_id, XLNXLLBuf * buf)
 static void
 xvfbsync_sync_chan_listener (ChannelStatus * status)
 {
-  fprintf (stderr, "watchdog: %d, sync: %d, ldiff: %d, cdiff: %d\n",
+  GST_INFO ("watchdog: %d, sync: %d, ldiff: %d, cdiff: %d",
       status->watchdog_error, status->sync_error, status->luma_diff_error,
       status->chroma_diff_error);
 }
@@ -896,8 +895,7 @@ xvfbsync_sync_chan_disable (SyncChannel * sync_chan)
   sync_chan->sync->quit = true;
   ret = xvfbsync_syncip_disable_channel (sync_chan->sync, sync_chan->id);
   sync_chan->enabled = false;
-  if (logs_enabled)
-    fprintf (stdout, "Disable channel %d\n", sync_chan->id);
+  GST_DEBUG ("Disable channel %d", sync_chan->id);
 
   return ret;
 }
@@ -944,8 +942,8 @@ xvfbsync_dec_sync_chan_add_buffer (DecSyncChannel * dec_sync_chan,
   if (buf)
     free (buf);
 
-  if (!ret && logs_enabled)
-    fprintf (stdout, "Decoder: Pushed buffer in sync ip\n");
+  if (!ret)
+    GST_DEBUG ("Decoder: Pushed buffer in sync ip");
 
   return ret;
 }
@@ -957,9 +955,7 @@ xvfbsync_dec_sync_chan_enable (DecSyncChannel * dec_sync_chan)
 
   ret = xvfbsync_syncip_enable_channel (dec_sync_chan->sync_channel.sync,
       dec_sync_chan->sync_channel.id);
-  if (logs_enabled)
-    fprintf (stdout, "Decoder: Enable channel %d\n",
-        dec_sync_chan->sync_channel.id);
+  GST_DEBUG ("Decoder: Enable channel %d", dec_sync_chan->sync_channel.id);
 
   dec_sync_chan->sync_channel.enabled = true;
   return ret;
@@ -1012,18 +1008,16 @@ xvfbsync_enc_sync_chan_add_buffer_ (EncSyncChannel * enc_sync_chan,
           enc_sync_chan->hardware_horizontal_stride_alignment,
           enc_sync_chan->hardware_vertical_stride_alignment);
 
-      if (logs_enabled)
-        print_framebuffer_config (&config,
-            enc_sync_chan->sync_channel.sync->max_users,
-            enc_sync_chan->sync_channel.sync->max_cores);
+      print_framebuffer_config (&config,
+          enc_sync_chan->sync_channel.sync->max_users,
+          enc_sync_chan->sync_channel.sync->max_cores);
 
       ret =
           xvfbsync_syncip_add_buffer (enc_sync_chan->sync_channel.sync,
           &config);
 
       if (!ret) {
-        if (logs_enabled)
-          fprintf (stdout, "Pushed buffer in sync ip\n");
+        GST_DEBUG ("Encoder: Pushed buffer in sync ip");
 
         if (buf)
           free (buf);
@@ -1072,9 +1066,7 @@ xvfbsync_enc_sync_chan_enable (EncSyncChannel * enc_sync_chan)
       xvfbsync_enc_sync_chan_add_buffer_ (enc_sync_chan, NULL,
       num_fb_to_enable);
   enc_sync_chan->sync_channel.enabled = true;
-  if (logs_enabled)
-    fprintf (stdout, "Encoder: Enable channel %d\n",
-        enc_sync_chan->sync_channel.id);
+  GST_DEBUG ("Encoder: Enable channel %d", enc_sync_chan->sync_channel.id);
   pthread_mutex_unlock (&enc_sync_chan->mutex);
 
   return ret;
@@ -1095,7 +1087,7 @@ xvfbsync_enc_sync_chan_populate (EncSyncChannel * enc_sync_chan,
       hardware_vertical_stride_alignment;
 
   if (pthread_mutex_init (&(enc_sync_chan->mutex), NULL)) {
-    fprintf (stderr, "Couldn't intialize lock");
+    GST_ERROR ("Encoder: Couldn't intialize lock");
     return -1;
   }
 
@@ -1134,7 +1126,7 @@ xvfbsync_xlnxll_buf_new (void)
   XLNXLLBuf *buf;
   buf = (XLNXLLBuf *) calloc (1, sizeof (XLNXLLBuf));
   if (!buf)
-    fprintf (stderr, "XLNXLLBuf Memory allocation failed\n");
+    GST_ERROR ("XLNXLLBuf: Memory allocation failed");
 
   return buf;
 }
