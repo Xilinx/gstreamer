@@ -2693,7 +2693,7 @@ gst_omx_video_dec_pick_input_allocation_mode (GstOMXVideoDec * self,
 
   if (can_use_dynamic_buffer_mode (self, inbuf)) {
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-    {
+    if (self->split_input) {
       GstMemory *mem;
 
       mem = gst_buffer_peek_memory (inbuf, 0);
@@ -2704,7 +2704,7 @@ gst_omx_video_dec_pick_input_allocation_mode (GstOMXVideoDec * self,
 
       if (!gst_is_dmabuf_memory (mem)) {
         GST_DEBUG_OBJECT (self,
-            "input is not dmabuf, let OMX allocates its buffer and copy");
+            "input is not dmabuf and split-input=true, let OMX allocates its buffer and copy");
         return GST_OMX_BUFFER_ALLOCATION_ALLOCATE_BUFFER;
       }
     }
