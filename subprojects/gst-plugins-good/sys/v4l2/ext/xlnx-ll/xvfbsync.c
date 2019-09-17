@@ -456,7 +456,8 @@ xvfbsync_syncip_populate (SyncIp * syncip, u32 fd)
   syncip->max_users = XLNXSYNC_IO;
   syncip->max_buffers = XLNXSYNC_BUF_PER_CHAN;
   syncip->max_cores = XLNXSYNC_MAX_CORES;
-  syncip->channel_statuses = calloc (config.max_channels, sizeof (void *));
+  syncip->channel_statuses =
+      calloc (config.max_channels, sizeof (ChannelStatus));
   if (!syncip->channel_statuses) {
     GST_ERROR ("SyncIp: Memory allocation failed");
     return -1;
