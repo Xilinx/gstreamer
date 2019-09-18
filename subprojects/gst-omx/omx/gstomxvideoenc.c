@@ -1959,6 +1959,31 @@ gst_omx_video_enc_pause_loop (GstOMXVideoEnc * self, GstFlowReturn flow_ret)
   g_mutex_unlock (&self->drain_lock);
 }
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+static gboolean
+zynq_seamless_output_transition (GstOMXVideoEnc * self, GstOMXPort * port)
+{
+  OMX_PARAM_PORTDEFINITIONTYPE port_def;
+  OMX_VIDEO_PORTDEFINITIONTYPE new;
+
+  gst_omx_port_get_port_definition (port, &port_def);
+  new = port_def.format.video;
+
+  if (!gst_omx_video_port_support_resolution (port,
+          new.nFrameWidth, new.nFrameHeight)) {
+    GST_DEBUG_OBJECT (self,
+        "Output port does not support new resolution (%ux%u), can't do seamless transition",
+        new.nFrameWidth, new.nFrameHeight);
+    return FALSE;
+  }
+
+  /* No need to check xFramerate, it doesn't affect the buffer size */
+
+  GST_DEBUG_OBJECT (self,
+      "only the output resolution changed; use seamless transition");
+  return TRUE;
+}
+#endif
 static void
 gst_omx_video_enc_loop (GstOMXVideoEnc * self)
 {
@@ -1985,11 +2010,26 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
       || acq_return == GST_OMX_ACQUIRE_BUFFER_RECONFIGURE) {
     GstCaps *caps;
     GstVideoCodecState *state;
+    gboolean disable_port = FALSE, reconfigure_port = FALSE;
 
     GST_DEBUG_OBJECT (self, "Port settings have changed, updating caps");
 
-    if (acq_return == GST_OMX_ACQUIRE_BUFFER_RECONFIGURE
-        && gst_omx_port_is_enabled (port)) {
+    if (acq_return == GST_OMX_ACQUIRE_BUFFER_RECONFIGURE) {
+      reconfigure_port = TRUE;
+      if (gst_omx_port_is_enabled (port))
+        disable_port = TRUE;
+    }
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    if (reconfigure_port && disable_port
+        && zynq_seamless_output_transition (self, port)) {
+      disable_port = FALSE;
+      reconfigure_port = FALSE;
+
+      gst_omx_port_mark_reconfigured (port);
+    }
+#endif
+
+    if (disable_port) {
       /* Reallocate all buffers */
       err = gst_omx_port_set_enabled (port, FALSE);
       if (err != OMX_ErrorNone)
@@ -2034,7 +2074,7 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
 
     GST_VIDEO_ENCODER_STREAM_UNLOCK (self);
 
-    if (acq_return == GST_OMX_ACQUIRE_BUFFER_RECONFIGURE) {
+    if (reconfigure_port) {
       if (!gst_omx_video_enc_ensure_nb_out_buffers (self))
         goto reconfigure_error;
 
@@ -2798,6 +2838,63 @@ gst_omx_video_enc_framerate_changed (GstOMXVideoEnc * self,
 }
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+/* returns TRUE if only the resolution changed and that resolution could be
+ * updated using OMX_ALG_VIDEO_CONFIG_NOTIFY_RESOLUTION_CHANGE */
+static gboolean
+gst_omx_video_enc_resolution_changed (GstOMXVideoEnc * self,
+    GstVideoCodecState * state)
+{
+  GstVideoInfo *info = &state->info;
+  OMX_ALG_VIDEO_CONFIG_NOTIFY_RESOLUTION_CHANGE config;
+  OMX_ERRORTYPE err;
+
+  if (self->input_state->info.finfo->format != info->finfo->format) {
+    GST_LOG_OBJECT (self, "Video format changed, can't do seamless transition");
+    return FALSE;
+  }
+
+  if (!gst_omx_video_port_support_resolution (self->enc_in_port,
+          info->width, info->height)) {
+    GST_DEBUG_OBJECT (self,
+        "Input port does not support new resolution (%dx%d), can't do seamless transition",
+        info->width, info->height);
+    return FALSE;
+  }
+
+  GST_DEBUG_OBJECT (self,
+      "Resolution change detected (%dx%d -> %dx%d) do seameless transition",
+      self->input_state->info.width, self->input_state->info.height,
+      info->width, info->height);
+
+  GST_OMX_INIT_STRUCT (&config);
+  config.nPortIndex = self->enc_in_port->index;
+
+  config.nWidth = info->width;
+  config.nHeight = GST_VIDEO_INFO_FIELD_HEIGHT (info);
+
+  err = gst_omx_component_set_config (self->enc,
+      OMX_ALG_IndexConfigVideoNotifyResolutionChange, &config);
+  if (err == OMX_ErrorNone) {
+    OMX_PARAM_PORTDEFINITIONTYPE port_def;
+
+    gst_video_codec_state_unref (self->input_state);
+    self->input_state = gst_video_codec_state_ref (state);
+
+    /* Port has been updated with the new resolution so update it */
+    gst_omx_port_update_port_definition (self->enc_in_port, NULL);
+    gst_omx_port_get_port_definition (self->enc_in_port, &port_def);
+  } else {
+    GST_WARNING_OBJECT (self,
+        "Failed to set resolution configuration: %s (0x%08x)",
+        gst_omx_error_to_string (err), err);
+    /* if changing the resolution dynamically didn't work, keep going with a full
+     * encoder reset */
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
 static gboolean
 gst_omx_video_enc_set_interlacing_parameters (GstOMXVideoEnc * self,
     GstVideoInfo * info)
@@ -2897,6 +2994,13 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   if (needs_disable) {
     if (gst_omx_video_enc_framerate_changed (self, state))
       return TRUE;
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    if (gst_omx_video_enc_resolution_changed (self, state))
+      return TRUE;
+#endif
+
+    GST_DEBUG_OBJECT (self, "Need to disable input port to reconfigure it");
 
     if (!gst_omx_video_enc_disable (self))
       return FALSE;
