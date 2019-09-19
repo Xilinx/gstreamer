@@ -355,6 +355,41 @@ gst_omx_video_get_port_padding (GstOMXPort * port, GstVideoInfo * info_orig,
   return TRUE;
 }
 
+gboolean
+gst_omx_video_port_support_resolution (GstOMXPort * port, guint width,
+    guint height)
+{
+  OMX_ALG_VIDEO_CONFIG_NOTIFY_RESOLUTION_CHANGE config;
+  OMX_ERRORTYPE err;
+
+  GST_OMX_INIT_STRUCT (&config);
+  config.nPortIndex = port->index;
+
+  err =
+      gst_omx_component_get_config (port->comp,
+      OMX_ALG_IndexConfigVideoMaxResolutionChange, &config);
+
+  if (err != OMX_ErrorNone) {
+    GST_ERROR_OBJECT (port->comp->parent,
+        "Failed to get max resolution change on port %d: %s (0x%08x)",
+        port->index, gst_omx_error_to_string (err), err);
+    return FALSE;
+  }
+
+  if (config.nWidth < width || config.nHeight < height) {
+    GST_DEBUG_OBJECT (port->comp->parent,
+        "Port %d supports max %dx%d so it cannot handle %dx%d",
+        port->index, config.nWidth, config.nHeight, width, height);
+    return FALSE;
+  }
+
+  GST_LOG_OBJECT (port->comp->parent,
+      "Port %d supports max %dx%d so it can handle %dx%d",
+      port->index, config.nWidth, config.nHeight, width, height);
+
+  return TRUE;
+}
+
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
 
 #define SYNC_IP_DEV_ENCODER "/dev/xlnxsync0"

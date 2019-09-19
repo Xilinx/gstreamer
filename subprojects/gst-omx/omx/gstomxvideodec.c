@@ -1908,6 +1908,41 @@ set_decoder_out_time (GstOMXVideoDec * self, GstBuffer * buffer)
 
   gst_object_unref (clock);
 }
+
+static gboolean
+zynq_seamless_output_transition (GstOMXVideoDec * self, GstOMXPort * port)
+{
+  /* Zynq decoder is able to handle dynamic resolution change if only the
+   * resolution changed and the initial resolution, which has been used to
+   * calculate the buffer size, is higher or equal to the new one. */
+  OMX_PARAM_PORTDEFINITIONTYPE port_def;
+  OMX_VIDEO_PORTDEFINITIONTYPE old, new;
+
+  old = port->old_port_def.format.video;
+  gst_omx_port_get_port_definition (port, &port_def);
+  new = port_def.format.video;
+
+  if (old.eColorFormat != new.eColorFormat) {
+    GST_DEBUG_OBJECT (self,
+        "video format changed (%d -> %d); can't do seamless transition",
+        old.eColorFormat, new.eColorFormat);
+    return FALSE;
+  }
+
+  if (!gst_omx_video_port_support_resolution (port,
+          new.nFrameWidth, new.nFrameHeight)) {
+    GST_DEBUG_OBJECT (self,
+        "Input port does not support new resolution (%dx%d), can't do seamless transition",
+        new.nFrameWidth, new.nFrameHeight);
+    return FALSE;
+  }
+
+  /* No need to check xFramerate, it doesn't affect the buffer size */
+
+  GST_DEBUG_OBJECT (self,
+      "only the output resolution changed; use seamless transition");
+  return TRUE;
+}
 #endif
 
 static void
@@ -1949,6 +1984,16 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
       if (gst_omx_port_is_enabled (port))
         disable_port = TRUE;
     }
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    if (reconfigure_port && disable_port
+        && zynq_seamless_output_transition (self, port)) {
+      disable_port = FALSE;
+      reconfigure_port = FALSE;
+
+      gst_omx_port_mark_reconfigured (port);
+    }
+#endif
 
     /* Reallocate all buffers */
     if (disable_port) {
@@ -2999,6 +3044,82 @@ gst_omx_video_dec_set_interlacing_parameters (GstOMXVideoDec * self,
 }
 #endif // USE_OMX_TARGET_ZYNQ_USCALE_PLUS
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+static gboolean
+zynq_seamless_input_transition (GstOMXVideoDec * self,
+    GstVideoCodecState * state)
+{
+  GstOMXVideoDecClass *klass = GST_OMX_VIDEO_DEC_GET_CLASS (self);
+  GstCaps *old, *new;
+  GstStructure *old_s, *new_s;
+  guint old_u, new_u;
+
+  if (!self->input_state)
+    return FALSE;
+
+  old = self->input_state->caps;
+  new = state->caps;
+
+  /* profile/level changes aren't supported */
+  if (klass->is_format_change (self, self->dec_in_port, state)) {
+    GST_DEBUG_OBJECT (self,
+        "input format changed (%" GST_PTR_FORMAT " -> %" GST_PTR_FORMAT
+        "), can't do seamless transition", old, new);
+    return FALSE;
+  }
+
+  old_s = gst_caps_get_structure (old, 0);
+  new_s = gst_caps_get_structure (new, 0);
+
+  /* need to be the same raw video format */
+  if (g_strcmp0 (gst_structure_get_string (old_s, "chroma-format"),
+          gst_structure_get_string (new_s, "chroma-format")) != 0) {
+    GST_DEBUG_OBJECT (self,
+        "input chroma-format changed (%" GST_PTR_FORMAT " -> %" GST_PTR_FORMAT
+        "), can't do seamless transition", old, new);
+    return FALSE;
+  }
+
+  /* .. and the same bit depths */
+  old_u = new_u = 0;
+  gst_structure_get_uint (old_s, "bit-depth-luma", &old_u);
+  gst_structure_get_uint (new_s, "bit-depth-luma", &new_u);
+
+  if (old_u != new_u) {
+    GST_DEBUG_OBJECT (self,
+        "input bit-depth-luma changed (%" GST_PTR_FORMAT " -> %" GST_PTR_FORMAT
+        "), can't do seamless transition", old, new);
+    return FALSE;
+  }
+
+  old_u = new_u = 0;
+  gst_structure_get_uint (old_s, "bit-depth-chroma", &old_u);
+  gst_structure_get_uint (new_s, "bit-depth-chroma", &new_u);
+
+  if (old_u != new_u) {
+    GST_DEBUG_OBJECT (self,
+        "input bit-depth-chroma changed (%" GST_PTR_FORMAT " -> %"
+        GST_PTR_FORMAT "), can't do seamless transition", old, new);
+    return FALSE;
+  }
+
+  if (!gst_omx_video_port_support_resolution (self->dec_in_port,
+          state->info.width, state->info.height)) {
+    GST_DEBUG_OBJECT (self,
+        "Input port does not support new resolution (%dx%d), can't do seamless transition",
+        state->info.width, state->info.height);
+    return FALSE;
+  }
+
+  GST_DEBUG_OBJECT (self,
+      "Input resolution change detected (%dx%d -> %dx%d) do seameless transition",
+      self->input_state->info.width, self->input_state->info.height,
+      state->info.width, state->info.height);
+
+  return TRUE;
+}
+#endif
+
 static gboolean
 gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
     GstVideoCodecState * state)
@@ -3040,6 +3161,12 @@ gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
   if (klass->is_format_change)
     is_format_change |=
         klass->is_format_change (self, self->dec_in_port, state);
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  if (is_format_change && zynq_seamless_input_transition (self, state)) {
+    is_format_change = FALSE;
+  }
+#endif
 
   needs_disable =
       gst_omx_component_get_state (self->dec,
