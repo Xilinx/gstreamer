@@ -4923,6 +4923,7 @@ gst_v4l2_object_match_buffer_layout_from_struct (GstV4l2Object * obj,
   GstVideoInfo info;
   GstVideoAlignment align;
   gsize plane_size[GST_VIDEO_MAX_PLANES];
+  guint padded_height;
 
   if (!validate_video_meta_struct (obj, s))
     return FALSE;
@@ -4962,9 +4963,16 @@ gst_v4l2_object_match_buffer_layout_from_struct (GstV4l2Object * obj,
   GST_DEBUG_OBJECT (obj->dbg_obj,
       "try matching buffer layout requested by downstream");
 
+  /* FIXME: clarify the semantic of GST_VIDEO_INFO_PLANE_HEIGHT() in interlace mode */
+  padded_height = GST_VIDEO_INFO_PLANE_HEIGHT (&info, 0, plane_size);
+  if (GST_VIDEO_INFO_INTERLACE_MODE (&info) ==
+      GST_VIDEO_INTERLACE_MODE_ALTERNATE) {
+    GST_DEBUG_OBJECT (obj->dbg_obj, "The height is halved for interlaced");
+    padded_height /= 2;
+  }
+
   gst_v4l2_object_match_buffer_layout (obj, GST_VIDEO_INFO_N_PLANES (&info),
-      info.offset, info.stride, buffer_size,
-      GST_VIDEO_INFO_PLANE_HEIGHT (&info, 0, plane_size));
+      info.offset, info.stride, buffer_size, padded_height);
 
   return TRUE;
 }
