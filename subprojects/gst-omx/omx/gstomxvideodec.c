@@ -1940,12 +1940,18 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
     GstVideoCodecState *state;
     OMX_PARAM_PORTDEFINITIONTYPE port_def;
     GstVideoFormat format;
+    gboolean disable_port = FALSE, reconfigure_port = FALSE;
 
     GST_DEBUG_OBJECT (self, "Port settings have changed, updating caps");
 
+    if (acq_return == GST_OMX_ACQUIRE_BUFFER_RECONFIGURE) {
+      reconfigure_port = TRUE;
+      if (gst_omx_port_is_enabled (port))
+        disable_port = TRUE;
+    }
+
     /* Reallocate all buffers */
-    if (acq_return == GST_OMX_ACQUIRE_BUFFER_RECONFIGURE
-        && gst_omx_port_is_enabled (port)) {
+    if (disable_port) {
       err = gst_omx_port_set_enabled (port, FALSE);
       if (err != OMX_ErrorNone)
         goto reconfigure_error;
@@ -1962,7 +1968,7 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
         goto reconfigure_error;
     }
 
-    if (acq_return == GST_OMX_ACQUIRE_BUFFER_RECONFIGURE) {
+    if (reconfigure_port) {
       /* We have the possibility to reconfigure everything now */
       err = gst_omx_video_dec_reconfigure_output_port (self);
       if (err != OMX_ErrorNone)
