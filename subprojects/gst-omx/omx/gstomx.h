@@ -343,6 +343,11 @@ struct _GstOMXPort {
    */
   gint settings_cookie;
   gint configured_settings_cookie;
+
+  /* The previous port definition. This is set when handling
+   * EventPortSettingsChanged callback from OMX so elements can check
+   * what actually changed in the port definition. */
+  OMX_PARAM_PORTDEFINITIONTYPE old_port_def;
 };
 
 struct _GstOMXComponent {
