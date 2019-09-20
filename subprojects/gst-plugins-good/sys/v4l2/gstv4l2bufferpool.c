@@ -1952,19 +1952,13 @@ gst_v4l2_buffer_pool_new (GstV4l2Object * obj, GstCaps * caps)
    * because min and max are not valid */
   gst_buffer_pool_set_config (GST_BUFFER_POOL_CAST (pool), config);
 
-  features = gst_caps_get_features (caps, 0);
-  if (features &&
-      gst_caps_features_contains (features, GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
-    GST_DEBUG_OBJECT (pool, "XLNX-LL Enabled");
-    obj->xlnx_ll = TRUE;
-
+  if (obj->xlnx_ll) {
+    GST_DEBUG_OBJECT (pool, "Disable CREATE_BUFS for low latency mode");
     /* Disable CREATE_BUFS in low latency mode */
     GST_OBJECT_FLAG_UNSET (pool->vallocator,
         GST_V4L2_ALLOCATOR_FLAG_MMAP_CREATE_BUFS
         | GST_V4L2_ALLOCATOR_FLAG_USERPTR_CREATE_BUFS
         | GST_V4L2_ALLOCATOR_FLAG_DMABUF_CREATE_BUFS);
-  } else {
-    obj->xlnx_ll = FALSE;
   }
 
   return GST_BUFFER_POOL (pool);
