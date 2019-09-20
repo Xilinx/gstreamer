@@ -4168,15 +4168,18 @@ gst_v4l2_object_set_format_full (GstV4l2Object * v4l2object, GstCaps * caps,
     GST_VIDEO_INFO_FPS_D (&info) = fps_d;
   }
 
+done:
   features = gst_caps_get_features (caps, 0);
   if (features &&
       gst_caps_features_contains (features, GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
+    GST_DEBUG_OBJECT (v4l2object, "Found XLNX-LL memory feature");
     v4l2object->xlnx_ll = TRUE;
-    if (!gst_v4l2_object_set_low_latency_capture_mode (v4l2object, TRUE))
+    if (!gst_v4l2_object_set_low_latency_capture_mode (v4l2object, TRUE)) {
       GST_ERROR_OBJECT (v4l2object, "Driver failed to activate XLNX-LL");
+      v4l2object->xlnx_ll = FALSE;
+    }
   }
 
-done:
   /* add boolean return, so we can fail on drivers bugs */
   gst_v4l2_object_save_format (v4l2object, fmtdesc, &format, &info, &align);
 
