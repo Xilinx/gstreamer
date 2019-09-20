@@ -775,7 +775,7 @@ gst_v4l2src_setup_source_crop (GstV4l2Src * v4l2src,
 static gboolean
 gst_v4l2src_negotiate (GstBaseSrc * basesrc)
 {
-  GstV4l2Src *v4l2src = GST_V4L2SRC (basesrc);
+  GstV4l2Src *v4l2src;
   GstCaps *thiscaps;
   GstCaps *caps = NULL;
   GstCaps *peercaps = NULL;
@@ -785,6 +785,8 @@ gst_v4l2src_negotiate (GstBaseSrc * basesrc)
     3840, 2160, 120, 1
   };
   gboolean have_pref;
+
+  v4l2src = GST_V4L2SRC (basesrc);
 
   /* For drivers that has DV timings or other default size query
    * capabilities, we will prefer that resolution. This must happen before we

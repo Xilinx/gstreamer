@@ -50,8 +50,6 @@ typedef uint64_t u64;
                        { FCC, { ChromaMode, BD, StorageMode, ChromaOrder, \
 				Compression, Packed10 } }
 
-#define MIN(a, b) ((a) < (b) ? a : b)
-
 GST_DEBUG_CATEGORY (xvfbsync_debug);
 #define GST_CAT_DEFAULT xvfbsync_debug
 

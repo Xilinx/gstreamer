@@ -1253,6 +1253,7 @@ gst_v4l2_buffer_pool_qbuf (GstV4l2BufferPool * pool, GstBuffer * buf,
 
   if (obj->xlnx_ll) {
     const GstVideoInfo *info;
+    GstV4l2Object *obj_unlocked = pool->obj;
     XLNXLLBuf *xlnxll_buf = xvfbsync_xlnxll_buf_new ();
 
     if (gst_is_v4l2_memory (group->mem[0]))
@@ -1274,7 +1275,8 @@ gst_v4l2_buffer_pool_qbuf (GstV4l2BufferPool * pool, GstBuffer * buf,
     xlnxll_buf->t_planes[PLANE_MAP_Y].i_pitch = info->stride[PLANE_MAP_Y];
     xlnxll_buf->t_planes[PLANE_MAP_UV].i_offset = info->offset[PLANE_MAP_UV];
     xlnxll_buf->t_planes[PLANE_MAP_UV].i_pitch = info->stride[PLANE_MAP_UV];
-    xvfbsync_enc_sync_chan_add_buffer (&obj->enc_sync_chan, xlnxll_buf);
+    xvfbsync_enc_sync_chan_add_buffer (&obj_unlocked->enc_sync_chan,
+        xlnxll_buf);
   }
 
   if (!gst_v4l2_allocator_qbuf (pool->vallocator, group))
@@ -1843,7 +1845,6 @@ gst_v4l2_buffer_pool_new (GstV4l2Object * obj, GstCaps * caps)
   GstStructure *config;
   gchar *name, *parent_name;
   gint fd;
-  GstCapsFeatures *features;
 
   fd = obj->dup (obj->video_fd);
   if (fd < 0)
