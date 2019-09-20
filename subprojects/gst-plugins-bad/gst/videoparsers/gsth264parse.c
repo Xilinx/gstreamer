@@ -1483,8 +1483,11 @@ gst_h264_parse_handle_frame (GstBaseParse * parse,
     GST_DEBUG_OBJECT (h264parse, "%p complete nal found. Off: %u, Size: %u",
         data, nalu.offset, nalu.size);
 
-    if (nalu.type == GST_H264_NAL_PREFIX_UNIT)
+    if (nalu.type == GST_H264_NAL_PREFIX_UNIT) {
       h264parse->prefix_off = nalu.sc_offset;
+    } else if (nalu.type == GST_H264_NAL_AU_DELIMITER) {
+      h264parse->prefix_off = -1;
+    }
 
     if (gst_h264_parse_collect_nal (h264parse, &nalu)) {
       h264parse->aud_needed = TRUE;
