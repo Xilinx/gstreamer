@@ -2437,6 +2437,9 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
   GstVideoDecoderPrivate *priv;
   GstVideoDecoderClass *klass;
   GstFlowReturn ret = GST_FLOW_OK;
+  gboolean last_subframe =
+      GST_BUFFER_FLAG_IS_SET (buf, GST_VIDEO_BUFFER_FLAG_MARKER);
+  gboolean header = GST_BUFFER_FLAG_IS_SET (buf, GST_BUFFER_FLAG_HEADER);
 
   klass = GST_VIDEO_DECODER_GET_CLASS (decoder);
   priv = decoder->priv;
@@ -2457,6 +2460,14 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
     gst_video_decoder_add_buffer_info (decoder, buf);
 
   priv->input_offset += gst_buffer_get_size (buf);
+
+  if (priv->subframe_mode) {
+    if (last_subframe)
+      priv->current_frame->abidata.ABI.num_subframes = 0;
+    else if (!header)
+      priv->current_frame->abidata.ABI.num_subframes++;
+  }
+
 
   if (priv->packetized) {
     GstVideoCodecFrame *frame;
@@ -2490,12 +2501,14 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
 
     if (decoder->input_segment.rate < 0.0) {
       priv->parse_gather = g_list_prepend (priv->parse_gather, frame);
-      priv->current_frame = NULL;
     } else {
       ret = gst_video_decoder_decode_frame (decoder, frame);
-      if (!gst_video_decoder_get_subframe_mode (decoder))
-        priv->current_frame = NULL;
     }
+    /* keep the current frame until we reach the last subframe in subframe mode */
+    if (gst_video_decoder_get_subframe_mode (decoder) || last_subframe)
+      priv->current_frame = NULL;
+    else
+      gst_buffer_unref (priv->current_frame->input_buffer);
     /* If in trick mode and it was a keyframe, drain decoder to avoid extra
      * latency. Only do this for forwards playback as reverse playback handles
      * draining on keyframes in flush_parse(), and would otherwise call back
@@ -3901,6 +3914,10 @@ gst_video_decoder_have_frame (GstVideoDecoder * decoder)
     /* Decode the frame, which gives away our ref */
     ret = gst_video_decoder_decode_frame (decoder, frame);
   }
+ 
+  if (!gst_video_decoder_get_subframe_mode (decoder) || !priv->current_frame->abidata.ABI.num_subframes)
+    priv->current_frame = NULL;
+
 
   GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
 
