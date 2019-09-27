@@ -247,7 +247,7 @@ xvfbsync_syncip_parse_chan_status (struct xlnxsync_stat *status,
 static int
 xvfbsync_syncip_get_latest_chan_status (SyncIp * syncip)
 {
-  struct xlnxsync_stat chan_status;
+  struct xlnxsync_stat chan_status = { 0 };
   int ret = 0;
 
   chan_status.hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
@@ -264,7 +264,7 @@ xvfbsync_syncip_get_latest_chan_status (SyncIp * syncip)
 static int
 xvfbsync_syncip_reset_status (SyncIp * syncip, u8 chan_id)
 {
-  struct xlnxsync_clr_err clr;
+  struct xlnxsync_clr_err clr = { 0 };
   int ret = 0;
 
   clr.hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
@@ -287,7 +287,7 @@ xvfbsync_syncip_enable_channel (SyncIp * syncip, u8 chan_id)
   u8 chan = chan_id;
   int ret = 0;
 
-  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_ENABLE, (void *) (uintptr_t) chan);
+  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_ENABLE, chan);
   if (ret)
     GST_ERROR ("SyncIp: Couldn't enable channel %d", chan_id);
 
@@ -300,7 +300,7 @@ xvfbsync_syncip_disable_channel (SyncIp * syncip, u8 chan_id)
   u8 chan = chan_id;
   int ret = 0;
 
-  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_DISABLE, (void *) (uintptr_t) chan);
+  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_DISABLE, chan);
   if (ret)
     GST_ERROR ("SyncIp: Couldn't disable channel %d", chan_id);
 
@@ -425,7 +425,7 @@ int
 xvfbsync_syncip_populate (SyncIp * syncip, u32 fd)
 {
   ThreadInfo *t_info;
-  struct xlnxsync_config config;
+  struct xlnxsync_config config = { 0 };
   int ret = 0;
 
   GST_DEBUG_CATEGORY_INIT (xvfbsync_debug, "xvfbsync", 0,
@@ -721,7 +721,7 @@ set_enc_framebuffer_config (u8 channel_id, XLNXLLBuf * buf,
     u32 hardware_horizontal_stride_alignment,
     u32 hardware_vertical_stride_alignment)
 {
-  struct xlnxsync_chan_config config;
+  struct xlnxsync_chan_config config = { 0 };
   int src_row_size;
   int i_hardware_pitch, i_hardware_luma_vertical_pitch;
   int i_vertical_factor, i_hardware_chroma_vertical_pitch;
@@ -803,7 +803,7 @@ set_enc_framebuffer_config (u8 channel_id, XLNXLLBuf * buf,
 static struct xlnxsync_chan_config
 set_dec_framebuffer_config (u8 channel_id, XLNXLLBuf * buf)
 {
-  struct xlnxsync_chan_config config;
+  struct xlnxsync_chan_config config = { 0 };
   int src_row_size = is_10bit_packed (buf->t_fourcc) ?
       ((buf->t_dim.i_width + 2) / 3 * 4) :
       buf->t_dim.i_width * get_pixel_size (buf->t_fourcc);
@@ -934,7 +934,7 @@ xvfbsync_dec_sync_chan_add_buffer (DecSyncChannel * dec_sync_chan,
     XLNXLLBuf * buf)
 {
   int ret = 0;
-  struct xlnxsync_chan_config config;
+  struct xlnxsync_chan_config config = { 0 };
 
   config = set_dec_framebuffer_config (dec_sync_chan->sync_channel.id, buf);
   ret = xvfbsync_syncip_add_buffer (dec_sync_chan->sync_channel.sync, &config);
@@ -983,7 +983,7 @@ xvfbsync_enc_sync_chan_add_buffer_ (EncSyncChannel * enc_sync_chan,
     XLNXLLBuf * buf, int num_fb_to_enable)
 {
   int ret = 0;
-  struct xlnxsync_chan_config config;
+  struct xlnxsync_chan_config config = { 0 };
 
   if (!enc_sync_chan->is_running) {
     if (buf)
