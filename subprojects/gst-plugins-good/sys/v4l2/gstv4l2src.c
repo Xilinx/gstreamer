@@ -148,6 +148,8 @@ gst_v4l2src_class_init (GstV4l2SrcClass * klass)
   GstElementClass *element_class;
   GstBaseSrcClass *basesrc_class;
   GstPushSrcClass *pushsrc_class;
+  GstCaps *caps, *caps_xlnx_ll;
+  guint i;
 
   gobject_class = G_OBJECT_CLASS (klass);
   element_class = GST_ELEMENT_CLASS (klass);
@@ -186,10 +188,35 @@ gst_v4l2src_class_init (GstV4l2SrcClass * klass)
       "Edgard Lima <edgard.lima@gmail.com>, "
       "Stefan Kost <ensonic@users.sf.net>");
 
+  caps = gst_v4l2_object_get_all_caps ();
+  /* We don't own caps */
+  caps = gst_caps_copy (caps);
+  caps_xlnx_ll = gst_caps_new_empty ();
+
+  for (i = 0; i < gst_caps_get_size (caps); i++) {
+    GstStructure *s = gst_caps_get_structure (caps, i);
+
+    if (gst_structure_has_name (s, "video/x-raw")) {
+      GstCapsFeatures *features;
+
+      features = gst_caps_get_features (caps, i);
+      features = gst_caps_features_copy (features);
+      gst_caps_features_remove (features,
+          GST_CAPS_FEATURE_MEMORY_SYSTEM_MEMORY);
+      gst_caps_features_add (features, GST_CAPS_FEATURE_MEMORY_XLNX_LL);
+
+      gst_caps_append_structure_full (caps_xlnx_ll, gst_structure_copy (s),
+          features);
+    }
+  }
+
+  caps = gst_caps_merge (caps, caps_xlnx_ll);
+
   gst_element_class_add_pad_template
       (element_class,
-      gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
-          gst_v4l2_object_get_all_caps ()));
+      gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS, caps));
+
+  gst_caps_unref (caps);
 
   basesrc_class->get_caps = GST_DEBUG_FUNCPTR (gst_v4l2src_get_caps);
   basesrc_class->start = GST_DEBUG_FUNCPTR (gst_v4l2src_start);

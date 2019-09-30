@@ -1710,13 +1710,6 @@ gst_v4l2_object_get_caps_helper (GstV4L2FormatFlags flags)
       }
 
       add_alternate_variant (NULL, caps_interlaced, structure);
-
-      /* Add one variant for XLNX LL */
-      alt_s = gst_structure_copy (structure);
-
-      gst_caps_append_structure (caps, alt_s);
-      gst_caps_set_features (caps, gst_caps_get_size (caps) - 1,
-          gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_XLNX_LL, NULL));
     }
   }
 
