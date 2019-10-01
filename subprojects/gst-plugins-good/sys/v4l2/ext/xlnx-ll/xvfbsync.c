@@ -410,7 +410,6 @@ xvfbsync_syncip_get_free_channel (SyncIp * syncip)
   u8 chan_id;
 
   pthread_mutex_lock (&(syncip->mutex));
-  xvfbsync_syncip_get_latest_chan_status (syncip);
 
   if (ioctl (syncip->fd, XLNXSYNC_RESERVE_GET_CHAN_ID, &chan_id)) {
     GST_ERROR ("SyncIp: Couldn't get sync ip channel ID");
