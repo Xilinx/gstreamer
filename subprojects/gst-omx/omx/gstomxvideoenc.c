@@ -27,6 +27,7 @@
 #include <gst/allocators/gstdmabuf.h>
 #include <gst/video/video.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "gstomxbufferpool.h"
 #include "gstomxvideo.h"
@@ -1924,7 +1925,10 @@ gst_omx_video_enc_ensure_nb_out_buffers (GstOMXVideoEnc * self)
    * if it keeps them downstream (like when using dynamic mode). */
   if (self->nb_downstream_buffers)
     extra = self->nb_downstream_buffers;
-
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  if (g_getenv ("ENC_EXTRA_OP_BUFFERS") != NULL)
+    extra += atoi (g_getenv ("ENC_EXTRA_OP_BUFFERS"));
+#endif
   if (!gst_omx_port_ensure_buffer_count_actual (self->enc_out_port, extra))
     return FALSE;
 
@@ -2523,6 +2527,7 @@ gst_omx_video_enc_configure_input_buffer (GstOMXVideoEnc * self,
 static gboolean
 gst_omx_video_enc_ensure_nb_in_buffers (GstOMXVideoEnc * self)
 {
+  guint extra = 0;
   GstOMXVideoEncClass *klass = GST_OMX_VIDEO_ENC_GET_CLASS (self);
 
   if (self->input_allocation == GST_OMX_BUFFER_ALLOCATION_USE_BUFFER_DYNAMIC &&
@@ -2535,7 +2540,11 @@ gst_omx_video_enc_ensure_nb_in_buffers (GstOMXVideoEnc * self)
             self->nb_upstream_buffers))
       return FALSE;
   } else if ((klass->cdata.hacks & GST_OMX_HACK_ENSURE_BUFFER_COUNT_ACTUAL)) {
-    if (!gst_omx_port_ensure_buffer_count_actual (self->enc_in_port, 0))
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    if (g_getenv ("ENC_EXTRA_IP_BUFFERS") != NULL)
+      extra = atoi (g_getenv ("ENC_EXTRA_IP_BUFFERS"));
+#endif
+    if (!gst_omx_port_ensure_buffer_count_actual (self->enc_in_port, extra))
       return FALSE;
   }
 
@@ -4050,6 +4059,9 @@ gst_omx_video_enc_propose_allocation (GstVideoEncoder * encoder,
   num_buffers = self->enc_in_port->port_def.nBufferCountMin + 1;
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  if (g_getenv ("ENC_EXTRA_IP_BUFFERS") != NULL)
+    num_buffers += atoi (g_getenv ("ENC_EXTRA_IP_BUFFERS"));
+
   /* dmabuf export is currently only supported on Zynqultrascaleplus */
   pool = create_input_pool (self, caps, num_buffers);
   if (!pool) {
