@@ -202,7 +202,8 @@ set_subframe_mode (GstOMXVideoDec * self, GstVideoCodecState * state)
   s = gst_caps_get_structure (state->caps, 0);
   alignment = gst_structure_get_string (s, "alignment");
   enabled = g_strcmp0 (alignment, "nal") == 0;
-
+  gst_video_decoder_set_subframe_mode (GST_VIDEO_DECODER (self), enabled);
+  GST_DEBUG_OBJECT (self, "subframe mode %d", enabled);
   return gst_omx_port_set_subframe (self->dec_in_port, enabled);
 }
 
