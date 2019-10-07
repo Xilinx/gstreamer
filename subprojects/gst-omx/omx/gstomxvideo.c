@@ -355,6 +355,8 @@ gst_omx_video_get_port_padding (GstOMXPort * port, GstVideoInfo * info_orig,
   return TRUE;
 }
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+
 gboolean
 gst_omx_video_port_support_resolution (GstOMXPort * port, guint width,
     guint height)
@@ -389,8 +391,6 @@ gst_omx_video_port_support_resolution (GstOMXPort * port, guint width,
 
   return TRUE;
 }
-
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
 
 #define SYNC_IP_DEV_ENCODER "/dev/xlnxsync0"
 #define SYNC_IP_DEV_DECODER "/dev/xlnxsync1"
