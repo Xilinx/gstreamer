@@ -4079,6 +4079,9 @@ done:
       gst_caps_features_contains (features, GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
     GST_DEBUG_OBJECT (v4l2object, "Found XLNX-LL memory feature");
     v4l2object->xlnx_ll = TRUE;
+    /* HACK: Always reset low latency mode to ensure v4l2 cache is updated */
+    if (!gst_v4l2_object_set_low_latency_capture_mode (v4l2object, FALSE))
+      GST_ERROR_OBJECT (v4l2object, "Driver failed to deactivate XLNX-LL");
     if (!gst_v4l2_object_set_low_latency_capture_mode (v4l2object, TRUE)) {
       GST_ERROR_OBJECT (v4l2object, "Driver failed to activate XLNX-LL");
       v4l2object->xlnx_ll = FALSE;
