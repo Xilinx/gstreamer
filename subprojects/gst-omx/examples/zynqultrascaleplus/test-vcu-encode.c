@@ -70,7 +70,7 @@ typedef enum
 #define DYNAMIC_PARAM_DELIMIT ":"
 #define DYNAMIC_PARAM_DELIMIT_ROI ":x"
 
-#define QP_MAX_VALUE 51
+#define QP_MAX_VALUE 63
 /* 64 byte buffer needed in beginning of qp table */
 #define QP_BUF_OFFSET 64
 
@@ -626,7 +626,7 @@ main (int argc, char *argv[])
     {"loop-filter-mode", 't', 0, G_OPTION_ARG_INT, &enc.loop_filter_mode,
         "Loop filter mode", NULL},
     {"qp-mode", 'q', 0, G_OPTION_ARG_INT, &enc.qp_mode,
-          "Encoder qp Mode: 0:uniform, 1:auto, 2:roi, 3:load_qp_absolute & 4:load_qp_relative",
+          "Encoder qp Mode: 0:uniform, 1:roi, 2:auto, 3:load_qp_absolute & 4:load_qp_relative",
         NULL},
     {"force-intra-support", 'n', FORCE_INTRA_DISABLED, G_OPTION_ARG_INT,
           &enc.force_intra_mode,
@@ -637,7 +637,7 @@ main (int argc, char *argv[])
   const char *summary =
       "Dynamic Bitrate Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -o /run/op.h264 -i /run/input.yuv -d BR:100:1000\n"
       "Dynamic Bframes Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e hevc -f 30 -c 2 -g 30 -b 4 -o /run/op.h265 -i /run/input.yuv -d BFrm:10:2\n"
-      "ROI Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -o /run/op.h264 -i /run/input.yuv -d ROI:10:1200x300:200x200:high\n\n"
+      "ROI Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -o /run/op.h264 -i /run/input.yuv -d ROI:10:1200x300:200x200:high -q 1 \n\n"
       "Dynamic-string pattern should be:\n"
       "'BR:frm_num:new_value_in_kbps' -> Dynamic Bitrate\n"
       "'BFrm:frame_num:new_value' -> Dynamic Bframes \n"
