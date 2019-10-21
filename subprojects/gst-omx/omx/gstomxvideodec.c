@@ -2020,16 +2020,6 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
         disable_port = TRUE;
     }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-    if (reconfigure_port && disable_port
-        && zynq_seamless_output_transition (self, port)) {
-      disable_port = FALSE;
-      reconfigure_port = FALSE;
-
-      gst_omx_port_mark_reconfigured (port);
-    }
-#endif
-
     /* Reallocate all buffers */
     if (disable_port) {
       err = gst_omx_port_set_enabled (port, FALSE);
@@ -2067,6 +2057,22 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
       return;
     }
   }
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  if (acq_return == GST_OMX_ACQUIRE_BUFFER_RESOLUTION_CHANGE) {
+    GST_DEBUG_OBJECT (self,
+        "Output resolution changed; use seamless transition");
+
+    if (!zynq_seamless_output_transition (self, port)
+        || !set_output_state (self, port)) {
+      gst_omx_port_release_buffer (port, buf);
+      GST_ELEMENT_ERROR (self, LIBRARY, FAILED, (NULL),
+          ("Seamless output transition failed"));
+    }
+    /* Now get a buffer */
+    return;
+  }
+#endif
 
   g_assert (acq_return == GST_OMX_ACQUIRE_BUFFER_OK);
 
