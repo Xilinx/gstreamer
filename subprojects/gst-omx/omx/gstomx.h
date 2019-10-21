@@ -228,6 +228,9 @@ typedef enum {
   GST_OMX_ACQUIRE_BUFFER_ERROR,
   /* No buffer is currently available (used when calling gst_omx_port_acquire_buffer() in not waiting mode) */
   GST_OMX_ACQUIRE_BUFFER_NO_AVAILABLE,
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  GST_OMX_ACQUIRE_BUFFER_RESOLUTION_CHANGE,
+#endif
 } GstOMXAcquireBufferReturn;
 
 struct _GstOMXCore {
@@ -258,6 +261,7 @@ typedef enum {
   GST_OMX_MESSAGE_BUFFER_DONE,
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   GST_OMX_MESSAGE_SEI_PARSED,
+  GST_OMX_MESSAGE_ALG_RESOLUTION_CHANGED,
 #endif
 } GstOMXMessageType;
 
@@ -348,6 +352,12 @@ struct _GstOMXPort {
    * EventPortSettingsChanged callback from OMX so elements can check
    * what actually changed in the port definition. */
   OMX_PARAM_PORTDEFINITIONTYPE old_port_def;
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  /* If TRUE, OMX notified a resolution change which should be resolved
+   * before handling the next upcoming buffer. */
+  gboolean resolution_changed;
+#endif
 };
 
 struct _GstOMXComponent {

@@ -531,6 +531,22 @@ gst_omx_component_handle_messages (GstOMXComponent * comp)
 
         break;
       }
+      case GST_OMX_MESSAGE_ALG_RESOLUTION_CHANGED:{
+        guint i, n;
+
+        n = (comp->ports ? comp->ports->len : 0);
+        for (i = 0; i < n; i++) {
+          GstOMXPort *port = g_ptr_array_index (comp->ports, i);
+
+          /* HACK: output port has always index 1 on zynq */
+          if (port->index == 1) {
+            port->old_port_def = port->port_def;
+            port->resolution_changed = TRUE;
+          }
+        }
+
+        break;
+      }
 #endif
       default:{
         g_assert_not_reached ();
@@ -644,6 +660,8 @@ omx_event_type_to_str (OMX_EVENTTYPE event)
       return "ALG_EventSEIPrefixParsed";
     case OMX_ALG_EventSEISuffixParsed:
       return "ALG_EventSEISuffixParsed";
+    case OMX_ALG_EventResolutionChanged:
+      return "ALG_EventResolutionChanged";
     case OMX_ALG_EventVendorStartUnused:
     case OMX_ALG_EventMax:
       break;
@@ -729,6 +747,9 @@ omx_event_to_debug_struct (OMX_EVENTTYPE event,
     case OMX_ALG_EventSEISuffixParsed:
       return gst_structure_new (name, "payload-type", G_TYPE_UINT, data1,
           "payload-size", G_TYPE_UINT, data2, NULL);
+    case OMX_ALG_EventResolutionChanged:
+      return gst_structure_new (name, "width", G_TYPE_UINT, data1,
+          "height", G_TYPE_UINT, data2, NULL);
     case OMX_ALG_EventVendorStartUnused:
     case OMX_ALG_EventMax:
       break;
@@ -784,6 +805,17 @@ AlgEventHandler (GstOMXComponent * comp, OMX_PTR pAppData, OMX_EVENTTYPE eEvent,
       msg->content.sei_parsed.payload_type = nData1;
       msg->content.sei_parsed.payload_size = nData2;
       msg->content.sei_parsed.payload = g_memdup (pEventData, nData2);
+
+      gst_omx_component_send_message (comp, msg);
+      return TRUE;
+    }
+    case OMX_ALG_EventResolutionChanged:{
+      GstOMXMessage *msg = g_slice_new (GstOMXMessage);
+
+      GST_DEBUG_OBJECT (comp->parent, "Output resolution change: %dx%d", nData1,
+          nData2);
+
+      msg->type = GST_OMX_MESSAGE_ALG_RESOLUTION_CHANGED;
 
       gst_omx_component_send_message (comp, msg);
       return TRUE;
@@ -2387,6 +2419,15 @@ retry:
     ret = GST_OMX_ACQUIRE_BUFFER_RECONFIGURE;
     goto done;
   }
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  if (port->resolution_changed) {
+    GST_DEBUG_OBJECT (comp->parent, "Component %s port %d resolution changed",
+        comp->name, port->index);
+    ret = GST_OMX_ACQUIRE_BUFFER_RESOLUTION_CHANGE;
+    port->resolution_changed = FALSE;
+    goto done;
+  }
+#endif
 
   if (port->port_def.eDir == OMX_DirOutput && port->eos) {
     if (!g_queue_is_empty (&port->pending_buffers)) {
