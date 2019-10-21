@@ -1946,6 +1946,43 @@ zynq_seamless_output_transition (GstOMXVideoDec * self, GstOMXPort * port)
 }
 #endif
 
+static gboolean
+set_output_state (GstOMXVideoDec * self, GstOMXPort * port)
+{
+  GstVideoCodecState *state;
+  OMX_PARAM_PORTDEFINITIONTYPE port_def;
+  GstVideoFormat format;
+  gboolean result = FALSE;
+
+  GST_VIDEO_DECODER_STREAM_LOCK (self);
+
+  gst_omx_port_get_port_definition (port, &port_def);
+  g_assert (port_def.format.video.eCompressionFormat == OMX_VIDEO_CodingUnused);
+
+  format =
+      gst_omx_video_get_format_from_omx (port_def.format.video.eColorFormat);
+
+  if (format == GST_VIDEO_FORMAT_UNKNOWN) {
+    GST_ERROR_OBJECT (self, "Unsupported color format: %d",
+        port_def.format.video.eColorFormat);
+    goto out;
+  }
+
+  state = gst_omx_video_dec_set_output_state (self, format);
+
+  /* Take framerate and pixel-aspect-ratio from sinkpad caps */
+
+  if (!gst_video_decoder_negotiate (GST_VIDEO_DECODER (self)))
+    goto out;
+
+  gst_video_codec_state_unref (state);
+
+  result = TRUE;
+out:
+  GST_VIDEO_DECODER_STREAM_UNLOCK (self);
+  return result;
+}
+
 static void
 gst_omx_video_dec_loop (GstOMXVideoDec * self)
 {
@@ -1973,9 +2010,6 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
 
   if (!gst_pad_has_current_caps (GST_VIDEO_DECODER_SRC_PAD (self)) ||
       acq_return == GST_OMX_ACQUIRE_BUFFER_RECONFIGURE) {
-    GstVideoCodecState *state;
-    OMX_PARAM_PORTDEFINITIONTYPE port_def;
-    GstVideoFormat format;
     gboolean disable_port = FALSE, reconfigure_port = FALSE;
 
     GST_DEBUG_OBJECT (self, "Port settings have changed, updating caps");
@@ -2021,39 +2055,11 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
         goto reconfigure_error;
     } else {
       /* Just update caps */
-      GST_VIDEO_DECODER_STREAM_LOCK (self);
-
-      gst_omx_port_get_port_definition (port, &port_def);
-      g_assert (port_def.format.video.eCompressionFormat ==
-          OMX_VIDEO_CodingUnused);
-
-      format =
-          gst_omx_video_get_format_from_omx (port_def.format.video.
-          eColorFormat);
-
-      if (format == GST_VIDEO_FORMAT_UNKNOWN) {
-        GST_ERROR_OBJECT (self, "Unsupported color format: %d",
-            port_def.format.video.eColorFormat);
+      if (!set_output_state (self, port)) {
         if (buf)
           gst_omx_port_release_buffer (port, buf);
-        GST_VIDEO_DECODER_STREAM_UNLOCK (self);
         goto caps_failed;
       }
-
-      state = gst_omx_video_dec_set_output_state (self, format);
-
-      /* Take framerate and pixel-aspect-ratio from sinkpad caps */
-
-      if (!gst_video_decoder_negotiate (GST_VIDEO_DECODER (self))) {
-        if (buf)
-          gst_omx_port_release_buffer (port, buf);
-        gst_video_codec_state_unref (state);
-        goto caps_failed;
-      }
-
-      gst_video_codec_state_unref (state);
-
-      GST_VIDEO_DECODER_STREAM_UNLOCK (self);
     }
 
     /* Now get a buffer */
