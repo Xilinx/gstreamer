@@ -1806,6 +1806,33 @@ get_output_caps (GstOMXVideoEnc * self)
   return caps;
 }
 
+static gboolean
+set_output_state (GstOMXVideoEnc * self)
+{
+  GstCaps *caps;
+  GstVideoCodecState *state;
+  gboolean result = FALSE;
+
+  caps = get_output_caps (self);
+  if (!caps)
+    goto out;
+
+  GST_DEBUG_OBJECT (self, "Setting output state: %" GST_PTR_FORMAT, caps);
+
+  state =
+      gst_video_encoder_set_output_state (GST_VIDEO_ENCODER (self), caps,
+      self->input_state);
+  gst_video_codec_state_unref (state);
+
+  if (!gst_video_encoder_negotiate (GST_VIDEO_ENCODER (self)))
+    goto out;
+
+  result = TRUE;
+out:
+  GST_VIDEO_ENCODER_STREAM_UNLOCK (self);
+  return result;
+}
+
 static GstFlowReturn
 gst_omx_video_enc_handle_output_frame (GstOMXVideoEnc * self, GstOMXPort * port,
     GstOMXBuffer * buf, GstVideoCodecFrame * frame)
@@ -2012,8 +2039,6 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
 
   if (!gst_pad_has_current_caps (GST_VIDEO_ENCODER_SRC_PAD (self))
       || acq_return == GST_OMX_ACQUIRE_BUFFER_RECONFIGURE) {
-    GstCaps *caps;
-    GstVideoCodecState *state;
     gboolean disable_port = FALSE, reconfigure_port = FALSE;
 
     GST_DEBUG_OBJECT (self, "Port settings have changed, updating caps");
@@ -2052,31 +2077,11 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
         goto reconfigure_error;
     }
 
-    GST_VIDEO_ENCODER_STREAM_LOCK (self);
-
-    caps = get_output_caps (self);
-    if (!caps) {
+    if (!set_output_state (self)) {
       if (buf)
         gst_omx_port_release_buffer (self->enc_out_port, buf);
-      GST_VIDEO_ENCODER_STREAM_UNLOCK (self);
       goto caps_failed;
     }
-
-    GST_DEBUG_OBJECT (self, "Setting output state: %" GST_PTR_FORMAT, caps);
-
-    state =
-        gst_video_encoder_set_output_state (GST_VIDEO_ENCODER (self), caps,
-        self->input_state);
-    gst_video_codec_state_unref (state);
-
-    if (!gst_video_encoder_negotiate (GST_VIDEO_ENCODER (self))) {
-      if (buf)
-        gst_omx_port_release_buffer (self->enc_out_port, buf);
-      GST_VIDEO_ENCODER_STREAM_UNLOCK (self);
-      goto caps_failed;
-    }
-
-    GST_VIDEO_ENCODER_STREAM_UNLOCK (self);
 
     if (reconfigure_port) {
       if (!gst_omx_video_enc_ensure_nb_out_buffers (self))
