@@ -313,16 +313,20 @@ load_qp_file (gint * size, gchar * qp_file)
 {
   guint8 *qp_table;
   gchar *line, *end_of_line;
-  gint num_to_read = 0, num_read = 0, block_size = 0, qp = 0;
+  gint num_to_read = 0, num_read = 0, block_size = 0, qp = 0, num_to_read_w =
+      0, num_to_read_h = 0;
   gsize line_len = 0;
   GIOChannel *in_channel;
   GError *error = NULL;
 
   if (!g_strcmp0 (enc.type, "avc"))
-    block_size = 16 * 16;
+    block_size = 16;
   else
-    block_size = 32 * 32;
-  num_to_read = enc.width * enc.height / block_size + QP_BUF_OFFSET;
+    block_size = 32;
+  num_to_read_w = ((enc.width / block_size) + ((enc.width % block_size) != 0));
+  num_to_read_h =
+      ((enc.height / block_size) + ((enc.height % block_size) != 0));
+  num_to_read = (num_to_read_w * num_to_read_h) + QP_BUF_OFFSET;
   num_read = QP_BUF_OFFSET;
 
   qp_table = g_malloc0 (num_to_read);
