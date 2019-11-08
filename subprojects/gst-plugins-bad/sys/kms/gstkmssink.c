@@ -1346,11 +1346,15 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
 
   if (!gst_video_info_from_caps (&vinfo, caps))
     goto invalid_format;
+
+  self->last_width = GST_VIDEO_SINK_WIDTH (self);
+  self->last_height = GST_VIDEO_SINK_HEIGHT (self);
+  self->last_vinfo = self->vinfo;
   self->vinfo = vinfo;
 
   if (!gst_kms_sink_calculate_display_ratio (self, &vinfo,
           &GST_VIDEO_SINK_WIDTH (self), &GST_VIDEO_SINK_HEIGHT (self)))
-    goto no_disp_ratio;
+	 goto no_disp_ratio;
 
   if (GST_VIDEO_SINK_WIDTH (self) <= 0 || GST_VIDEO_SINK_HEIGHT (self) <= 0)
     goto invalid_size;
@@ -1876,8 +1880,8 @@ retry_set_plane:
     src.w = crop->width;
     src.h = crop->height;
   } else {
-    src.w = video_width;
-    src.h = video_height;
+    src.w = GST_VIDEO_INFO_WIDTH (vinfo);
+    src.h = GST_VIDEO_INFO_HEIGHT (vinfo);
   }
 
   /* handle out of screen case */
