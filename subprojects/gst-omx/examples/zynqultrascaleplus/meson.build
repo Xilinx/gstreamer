@@ -13,3 +13,10 @@ dependencies : [gst_dep]
 )
 
 executable('gst-n-launch-1.0', 'gstnlaunch.c', dependencies : [gst_dep])
+
+executable ('zynqmp_relative_qp_insertion',
+sources : ['zynqmp_relative_qp_insertion.c'],
+c_args : gst_omx_args,
+include_directories : [configinc],
+dependencies : [gst_dep, gstvideo_dep]
+)
