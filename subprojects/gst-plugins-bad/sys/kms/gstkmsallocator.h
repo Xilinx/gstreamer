@@ -59,6 +59,7 @@ struct _GstKMSMemory
   guint32 old_fb_id;
   guint32 gem_handle[GST_VIDEO_MAX_PLANES];
   gsize mem_offsets[GST_VIDEO_MAX_PLANES];
+  gsize pitches[GST_VIDEO_MAX_PLANES];
   struct kms_bo *bo;
 };
 

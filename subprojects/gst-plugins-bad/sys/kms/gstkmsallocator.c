@@ -252,7 +252,7 @@ gst_kms_allocator_memory_create (GstKMSAllocator * allocator,
     /* Overwrite the video info's stride and offset using the pitch calculcated
      * by the kms driver. */
     pitch = extrapolate_stride (vinfo->finfo, i, arg.pitch);
-    GST_VIDEO_INFO_PLANE_STRIDE (vinfo, i) = pitch;
+    GST_VIDEO_INFO_PLANE_STRIDE (vinfo, i) = kmsmem->pitches[i] = pitch;
     GST_VIDEO_INFO_PLANE_OFFSET (vinfo, i) = kmsmem->mem_offsets[i] = offs;
 
     /* Note that we cannot negotiate special padding betweem each planes,
@@ -511,7 +511,7 @@ gst_kms_memory_add_fb (GstMemory * mem, GstVideoInfo * vinfo, guint32 flags)
     else
       bo_handles[i] = kmsmem->gem_handle[i];
 
-    pitches[i] = GST_VIDEO_INFO_PLANE_STRIDE (vinfo, i);
+    pitches[i] = kmsmem->pitches[i];
     offsets[i] = kmsmem->mem_offsets[i];
 
     GST_LOG_OBJECT (alloc, "[%i] pitch %u, offset %u", i, pitches[i],
