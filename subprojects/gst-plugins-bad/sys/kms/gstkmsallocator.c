@@ -540,6 +540,8 @@ gst_kms_allocator_dmabuf_import (GstAllocator * allocator, gint * prime_fds,
         &kmsmem->gem_handle[i]);
     if (ret)
       goto import_fd_failed;
+
+    kmsmem->pitches[i] = GST_VIDEO_INFO_PLANE_STRIDE (vinfo, i);
     /* This is per memory offset, in contrast with the vinfo offsets which are
      * relative to the GstBuffer layout. */
     kmsmem->mem_offsets[i] = offsets[i];
