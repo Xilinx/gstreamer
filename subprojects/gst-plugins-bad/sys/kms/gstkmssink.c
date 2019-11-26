@@ -2109,7 +2109,7 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
   GstMemory *mem;
   guint32 fb_id;
   GstKMSSink *self;
-  GstVideoInfo *vinfo;
+  GstVideoInfo *vinfo = NULL;
   GstVideoCropMeta *crop;
   GstVideoRectangle src = { 0, };
   gint video_width, video_height;
@@ -2133,9 +2133,6 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
     video_width = src.w = self->last_width;
     video_height = src.h = self->last_height;
   }
-
-  /* Make sure buf is not used accidentally */
-  buf = NULL;
 
   if (!buffer)
     return GST_FLOW_ERROR;
