@@ -132,6 +132,7 @@ typedef struct
   gchar *input_filename;
   gchar *dynamic_str;
   gchar *type;
+  gchar *max_picture_sizes_str;
 } EncoderSettings;
 
 /* Globals */
@@ -631,13 +632,17 @@ main (int argc, char *argv[])
     {"force-intra-support", 'n', FORCE_INTRA_DISABLED, G_OPTION_ARG_INT,
           &enc.force_intra_mode,
         "Force intra support", NULL},
+    {"max-picture-sizes", 'p', 0, G_OPTION_ARG_STRING,
+          &enc.max_picture_sizes_str,
+          "Max picture sizes based on frame types ('<I, P, B>')",
+        NULL},
     {NULL}
   };
 
   const char *summary =
-      "Dynamic Bitrate Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -o /run/op.h264 -i /run/input.yuv -d BR:100:1000\n"
-      "Dynamic Bframes Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e hevc -f 30 -c 2 -g 30 -b 4 -o /run/op.h265 -i /run/input.yuv -d BFrm:10:2\n"
-      "ROI Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -o /run/op.h264 -i /run/input.yuv -d ROI:10:1200x300:200x200:high -q 1 \n\n"
+      "Dynamic Bitrate Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30 -p \'<333, 166, 0>\' -o /run/op.h264 -i /run/input.yuv -d BR:100:1000\n"
+      "Dynamic Bframes Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e hevc -f 30 -c 2 -g 30  -p \'<333, 166, 0>\' -b 4 -o /run/op.h265 -i /run/input.yuv -d BFrm:10:2\n"
+      "ROI Ex: ./zynqmp_vcu_encode -w 3840 -h 2160 -e avc -f 30 -c 2 -g 30  -p \'<333, 166, 0>\' -o /run/op.h264 -i /run/input.yuv -d ROI:10:1200x300:200x200:high -q 1 \n\n"
       "Dynamic-string pattern should be:\n"
       "'BR:frm_num:new_value_in_kbps' -> Dynamic Bitrate\n"
       "'BFrm:frame_num:new_value' -> Dynamic Bframes \n"
@@ -706,6 +711,30 @@ main (int argc, char *argv[])
       || !enc_capsfilter) {
     g_printerr ("elements could not be created \n");
     return -1;
+  }
+
+  /* max-picture-sizes support */
+  if (enc.max_picture_sizes_str != NULL) {
+    GValue temp_val = G_VALUE_INIT;
+    GValue max_picture_sizes = G_VALUE_INIT;
+    gint max_sizes[3];
+    gint i = 0;
+
+    sscanf (enc.max_picture_sizes_str, " < %d , %d , %d > ", &max_sizes[0],
+        &max_sizes[1], &max_sizes[2]);
+    g_value_init (&max_picture_sizes, GST_TYPE_ARRAY);
+
+    /* Iterate 3 times - as need to fill out array in following format: <I,P,B> */
+    for (i = 0; i < 3; i++) {
+      g_value_init (&temp_val, G_TYPE_INT);
+      g_value_set_int (&temp_val, max_sizes[i]);
+      gst_value_array_append_value (&max_picture_sizes, &temp_val);
+      g_value_unset (&temp_val);
+    }
+
+    g_object_set_property (G_OBJECT (encoder), "max-picture-sizes",
+        &max_picture_sizes);
+    g_value_unset (&max_picture_sizes);
   }
 
   /* set element properties */
@@ -798,6 +827,8 @@ main (int argc, char *argv[])
     g_free (enc.dynamic_str);
   if (enc.type)
     g_free (enc.type);
+  if (enc.max_picture_sizes_str)
+    g_free (enc.max_picture_sizes_str);
 
   g_print ("Deleting pipeline\n");
   gst_caps_unref (enc_caps);
