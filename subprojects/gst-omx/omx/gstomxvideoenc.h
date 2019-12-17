@@ -105,6 +105,12 @@ struct _GstOMXVideoEnc
   guint32 max_picture_size_b;
 #endif
 
+  /* for HDR10 support */
+  GstVideoMasteringDisplayInfo minfo;
+  GstVideoContentLightLevel linfo;
+  gboolean has_mcdv_sei;
+  gboolean has_cll_sei;
+
   guint32 default_target_bitrate;
 
   GstFlowReturn downstream_flow_ret;

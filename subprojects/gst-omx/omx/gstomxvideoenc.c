@@ -693,6 +693,9 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->max_picture_size_b = GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_B_DEFAULT;
 #endif
 
+  gst_video_mastering_display_info_init (&self->minfo);
+  gst_video_content_light_level_init (&self->linfo);
+
   self->default_target_bitrate = GST_OMX_PROP_OMX_DEFAULT;
 
   g_mutex_init (&self->drain_lock);
@@ -3177,6 +3180,58 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   }
 #endif
 
+  /* If HDR caps are set, enable corresponding SEIs */
+  if ((self->has_mcdv_sei =
+          gst_video_mastering_display_info_from_caps (&self->minfo,
+              state->caps))) {
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    OMX_ALG_VIDEO_PARAM_MASTERING_DISPLAY_COLOUR_VOLUME_SEI mdcv_sei_param;
+    OMX_ERRORTYPE err;
+
+    GST_OMX_INIT_STRUCT (&mdcv_sei_param);
+    mdcv_sei_param.nPortIndex = self->enc_out_port->index;
+    mdcv_sei_param.bEnableMasteringDisplayColourVolumeSEI = OMX_TRUE;
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        OMX_ALG_IndexParamVideoMasteringDisplayColourVolumeSEI,
+        &mdcv_sei_param);
+    if (err != OMX_ErrorNone) {
+      GST_ERROR_OBJECT (self, "Failed to enable MDCV SEI: %s (0x%08x)",
+          gst_omx_error_to_string (err), err);
+      return FALSE;
+    }
+    GST_DEBUG_OBJECT (self, "MDCV SEI insertion enabled");
+#else
+    GST_DEBUG_OBJECT (self, "Enabling MDCV is not implemented for this target");
+#endif
+  }
+
+  if ((self->has_cll_sei =
+          gst_video_content_light_level_from_caps (&self->linfo,
+              state->caps))) {
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    OMX_ALG_VIDEO_PARAM_CONTENT_LIGHT_LEVEL_SEI cll_sei_param;
+    OMX_ERRORTYPE err;
+
+    GST_OMX_INIT_STRUCT (&cll_sei_param);
+    cll_sei_param.nPortIndex = self->enc_out_port->index;
+    cll_sei_param.bEnableContentLightLevelSEI = OMX_TRUE;
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        OMX_ALG_IndexParamVideoContentLightLevelSEI, &cll_sei_param);
+    if (err != OMX_ErrorNone) {
+      GST_ERROR_OBJECT (self, "Failed to enable CLL SEI: %s (0x%08x)",
+          gst_omx_error_to_string (err), err);
+      return FALSE;
+    }
+    GST_DEBUG_OBJECT (self, "CLL SEI insertion enabled");
+#else
+    GST_DEBUG_OBJECT (self, "Enabling CLL is not implemented for this target");
+#endif
+  }
+
   self->downstream_flow_ret = GST_FLOW_OK;
   return TRUE;
 }
@@ -3554,6 +3609,15 @@ handle_roi_metadata (GstOMXVideoEnc * self, GstBuffer * input)
 }
 #endif
 
+static inline guint16
+fraction_to_uint (guint num, guint den, guint scale)
+{
+  gdouble val;
+  gst_util_fraction_to_double (num, den, &val);
+
+  return (guint16) (val * scale);
+}
+
 static GstFlowReturn
 gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
     GstVideoCodecFrame * frame)
@@ -3752,6 +3816,78 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
     handle_roi_metadata (self, frame->input_buffer);
 #endif
+
+    if ((self->has_mcdv_sei || self->has_cll_sei) && starting) {
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+      /*
+       * Precision defined by spec.
+       * Chromaticity coordinates have a precision of 0.00002
+       * Luminance have a precision of 0.0001
+       * See D.3.28 Mastering display colour volume SEI message semantics
+       *
+       */
+      const guint chroma_den = 50000;
+      const guint luma_den = 10000;
+      OMX_ALG_VIDEO_CONFIG_HIGH_DYNAMIC_RANGE_SEI hdr_sei_config;
+      OMX_ERRORTYPE err;
+
+      GST_OMX_INIT_STRUCT (&hdr_sei_config);
+      hdr_sei_config.nPortIndex = self->enc_out_port->index;
+
+      if (self->has_mcdv_sei) {
+        hdr_sei_config.bHasMDCV = OMX_TRUE;
+        hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[0].nX =
+            fraction_to_uint (self->minfo.Gx_n, self->minfo.Gx_d, chroma_den);
+        hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[0].nY =
+            fraction_to_uint (self->minfo.Gy_n, self->minfo.Gy_d, chroma_den);
+        hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[1].nX =
+            fraction_to_uint (self->minfo.Bx_n, self->minfo.Bx_d, chroma_den);
+        hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[1].nY =
+            fraction_to_uint (self->minfo.By_n, self->minfo.By_d, chroma_den);
+        hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[2].nX =
+            fraction_to_uint (self->minfo.Rx_n, self->minfo.Rx_d, chroma_den);
+        hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[2].nY =
+            fraction_to_uint (self->minfo.Ry_n, self->minfo.Ry_d, chroma_den);
+        hdr_sei_config.masteringDisplayColourVolume.whitePoint.nX =
+            fraction_to_uint (self->minfo.Wx_n, self->minfo.Wx_d, chroma_den);
+        hdr_sei_config.masteringDisplayColourVolume.whitePoint.nY =
+            fraction_to_uint (self->minfo.Wy_n, self->minfo.Wy_d, chroma_den);
+        hdr_sei_config.masteringDisplayColourVolume.
+            nMaxDisplayMasteringLuminance =
+            fraction_to_uint (self->minfo.max_luma_n, self->minfo.max_luma_d,
+            luma_den);
+        hdr_sei_config.masteringDisplayColourVolume.
+            nMinDisplayMasteringLuminance =
+            fraction_to_uint (self->minfo.min_luma_n, self->minfo.min_luma_d,
+            luma_den);
+      } else {
+        hdr_sei_config.bHasMDCV = OMX_FALSE;
+      }
+
+      if (self->has_cll_sei) {
+        hdr_sei_config.bHasCLL = OMX_TRUE;
+        hdr_sei_config.contentLightLevel.nMaxContentLightLevel =
+            fraction_to_uint (self->linfo.maxCLL_n, self->linfo.maxCLL_d, 1);
+        hdr_sei_config.contentLightLevel.nMaxPicAverageLightLevel =
+            fraction_to_uint (self->linfo.maxFALL_n, self->linfo.maxFALL_d, 1);
+      } else {
+        hdr_sei_config.bHasCLL = OMX_FALSE;
+      }
+
+      err =
+          gst_omx_component_set_config (self->enc,
+          OMX_ALG_IndexConfigVideoHighDynamicRangeSEI, &hdr_sei_config);
+      if (err != OMX_ErrorNone) {
+        GST_ERROR_OBJECT (self, "Failed to insert HDR SEIs: %s (0x%08x)",
+            gst_omx_error_to_string (err), err);
+        return FALSE;
+      }
+      GST_DEBUG_OBJECT (self, "HDR SEIs successfully inserted");
+#else
+      GST_DEBUG_OBJECT (self,
+          "Setting HDR SEI is not implemented for this target");
+#endif
+    }
 
     /* Copy the buffer content in chunks of size as requested
      * by the port */
