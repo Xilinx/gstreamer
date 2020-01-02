@@ -1483,6 +1483,21 @@ gst_h264_parse_handle_frame (GstBaseParse * parse,
     GST_DEBUG_OBJECT (h264parse, "%p complete nal found. Off: %u, Size: %u",
         data, nalu.offset, nalu.size);
 
+    if (!nonext) {
+      /* expect at least 3 bytes start_code, and 1 bytes NALU header.
+       * the length of the NALU payload can be zero.
+       * (e.g. EOS/EOB placed at the end of an AU.) */
+      if (nalu.offset + nalu.size + 3 + 1 > size) {
+        GST_DEBUG_OBJECT (h264parse, "not enough data for next NALU");
+        if (drain) {
+          GST_DEBUG_OBJECT (h264parse, "but draining anyway");
+          nonext = TRUE;
+        } else {
+          goto more;
+        }
+      }
+    }
+
     if (nalu.type == GST_H264_NAL_PREFIX_UNIT) {
       h264parse->prefix_off = nalu.sc_offset;
     } else if (nalu.type == GST_H264_NAL_AU_DELIMITER) {
