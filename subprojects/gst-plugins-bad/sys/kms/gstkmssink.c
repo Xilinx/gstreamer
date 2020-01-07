@@ -55,6 +55,7 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <drm_fourcc.h>
+#include <drm_mode.h>
 #include <string.h>
 
 #include "gstkmssink.h"
@@ -107,6 +108,19 @@ enum
   PROP_PLANE_PROPS,
   PROP_FULLSCREEN_OVERLAY,
   PROP_N,
+};
+
+enum
+{
+  DRM_STATIC_METADATA_TYPE1 = 1,
+};
+
+enum
+{
+  DRM_EOTF_TRADITIONAL_GAMMA_SDR,
+  DRM_EOTF_TRADITIONAL_GAMMA_HDR,
+  DRM_EOTF_SMPTE_ST2084,
+  DRM_EOTF_BT_2100_HLG,
 };
 
 static GParamSpec *g_properties[PROP_N] = { NULL, };
@@ -1336,6 +1350,92 @@ out:
   return TRUE;
 }
 
+static void
+gst_kms_sink_hdr_set_metadata (GstKMSSink * self, GstCaps * caps)
+{
+  guint32 id;
+  gint ret;
+  GstVideoMasteringDisplayInfo minfo;
+  GstVideoContentLightLevel cinfo;
+
+  gst_video_mastering_display_info_init (&minfo);
+  gst_video_content_light_level_init (&cinfo);
+
+  if (gst_video_colorimetry_matches (&self->vinfo.colorimetry,
+          GST_VIDEO_COLORIMETRY_BT2100_PQ)) {
+    struct gen_hdr_output_metadata hdr_metadata = { 0 };
+    struct hdr_metadata_infoframe *hdr_infoframe =
+        (struct hdr_metadata_infoframe *) hdr_metadata.payload;
+    int i;
+
+    hdr_metadata.metadata_type = DRM_HDR_TYPE_HDR10;
+    hdr_metadata.size = sizeof (struct hdr_metadata_infoframe);
+    hdr_infoframe->metadata_type = DRM_STATIC_METADATA_TYPE1;
+
+    hdr_infoframe->eotf = DRM_EOTF_SMPTE_ST2084;
+    GST_LOG_OBJECT (self, "Setting EOTF to: %u", DRM_EOTF_SMPTE_ST2084);
+
+    if (gst_video_mastering_display_info_from_caps (&minfo, caps)) {
+      for (i = 0; i < 3; i++) {
+        hdr_infoframe->display_primaries[i].x = minfo.display_primaries[i].x;
+        hdr_infoframe->display_primaries[i].y = minfo.display_primaries[i].y;
+      }
+
+      hdr_infoframe->white_point.x = minfo.white_point.x;
+      hdr_infoframe->white_point.y = minfo.white_point.y;
+      hdr_infoframe->max_display_mastering_luminance =
+          minfo.max_display_mastering_luminance;
+      hdr_infoframe->min_display_mastering_luminance =
+          minfo.min_display_mastering_luminance;
+      GST_LOG_OBJECT (self, "Setting mastering display info: "
+          "Red(%u, %u) "
+          "Green(%u, %u) "
+          "Blue(%u, %u) "
+          "White(%u, %u) "
+          "max_luminance(%u) "
+          "min_luminance(%u) ",
+          minfo.display_primaries[0].x,
+          minfo.display_primaries[0].y,
+          minfo.display_primaries[1].x,
+          minfo.display_primaries[1].y,
+          minfo.display_primaries[2].x,
+          minfo.display_primaries[2].y, minfo.white_point.x,
+          minfo.white_point.y,
+          minfo.max_display_mastering_luminance,
+          minfo.min_display_mastering_luminance);
+    }
+
+    if (gst_video_content_light_level_from_caps (&cinfo, caps)) {
+      hdr_infoframe->max_cll = cinfo.max_content_light_level;
+      hdr_infoframe->max_fall = cinfo.max_frame_average_light_level;
+      GST_LOG_OBJECT (self, "Setting content light level: "
+          "maxCLL:(%u), maxFALL:(%u)",
+          cinfo.max_content_light_level, cinfo.max_frame_average_light_level);
+    }
+
+    ret =
+        drmModeCreatePropertyBlob (self->fd, &hdr_metadata,
+        sizeof (struct gen_hdr_output_metadata), &id);
+    if (ret)
+      GST_WARNING_OBJECT (self, "drmModeCreatePropertyBlob failed: %s (%d)",
+          strerror (-ret), ret);
+
+    if (!self->connector_props)
+      self->connector_props =
+          gst_structure_new ("connector-props", "GEN_HDR_OUTPUT_METADATA",
+          G_TYPE_INT64, id, NULL);
+    else
+      gst_structure_set (self->connector_props, "GEN_HDR_OUTPUT_METADATA",
+          G_TYPE_INT64, id, NULL);
+
+    gst_kms_sink_update_connector_properties (self);
+    ret = drmModeDestroyPropertyBlob (self->fd, id);
+    if (ret)
+      GST_WARNING_OBJECT (self, "drmModeDestroyPropertyBlob failed: %s (%d)",
+          strerror (-ret), ret);
+  }
+}
+
 static gboolean
 gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
 {
@@ -1391,6 +1491,8 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
     self->render_rect = self->pending_rect;
   }
   GST_OBJECT_UNLOCK (self);
+
+  gst_kms_sink_hdr_set_metadata (self, caps);
 
   GST_DEBUG_OBJECT (self, "negotiated caps = %" GST_PTR_FORMAT, caps);
 
