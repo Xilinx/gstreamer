@@ -713,8 +713,6 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
 #endif
 }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-
 #define CHECK_ERR(setting) \
   if (err == OMX_ErrorUnsupportedIndex || err == OMX_ErrorUnsupportedSetting) { \
     GST_WARNING_OBJECT (self, \
@@ -729,10 +727,11 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
 static gboolean
 gst_omx_video_enc_set_color_primaries (GstOMXVideoEnc * self)
 {
-  OMX_ALG_VIDEO_PARAM_COLOR_PRIMARIES param;
+  OMX_ERRORTYPE err = OMX_ErrorNone;
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   GstVideoInfo *info = &self->input_state->info;
   GstVideoColorimetry cinfo = GST_VIDEO_INFO_COLORIMETRY (info);
-  OMX_ERRORTYPE err;
+  OMX_ALG_VIDEO_PARAM_COLOR_PRIMARIES param;
 
   GST_OMX_INIT_STRUCT (&param);
   param.nPortIndex = self->enc_in_port->index;
@@ -783,11 +782,16 @@ gst_omx_video_enc_set_color_primaries (GstOMXVideoEnc * self)
   err =
       gst_omx_component_set_parameter (self->enc,
       (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoColorPrimaries, &param);
+#else
+  GST_DEBUG_OBJECT (self,
+      "Setting color primaries is not implemented for this target");
+#endif
   CHECK_ERR ("color-primaries");
 
   return TRUE;
 }
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
 static gboolean
 set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
 {
@@ -3168,10 +3172,11 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
     gst_video_codec_state_unref (self->input_state);
   self->input_state = gst_video_codec_state_ref (state);
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-  gst_omx_video_enc_set_latency (self);
   if (!gst_omx_video_enc_set_color_primaries (self))
     return FALSE;
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  gst_omx_video_enc_set_latency (self);
 
   {
     GstCapsFeatures *features;
@@ -3634,9 +3639,7 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
   GstOMXBuffer *buf;
   OMX_ERRORTYPE err;
   GstClockTimeDiff deadline;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   gboolean starting = FALSE;
-#endif
 
   self = GST_OMX_VIDEO_ENC (encoder);
 
