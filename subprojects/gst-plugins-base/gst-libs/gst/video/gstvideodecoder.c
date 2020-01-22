@@ -2437,10 +2437,7 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
   GstVideoDecoderPrivate *priv;
   GstVideoDecoderClass *klass;
   GstFlowReturn ret = GST_FLOW_OK;
-  gboolean last_subframe =
-      GST_BUFFER_FLAG_IS_SET (buf, GST_VIDEO_BUFFER_FLAG_MARKER);
-  gboolean header = GST_BUFFER_FLAG_IS_SET (buf, GST_BUFFER_FLAG_HEADER);
-
+  
   klass = GST_VIDEO_DECODER_GET_CLASS (decoder);
   priv = decoder->priv;
 
@@ -2453,39 +2450,29 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
       && (decoder->input_segment.flags & GST_SEEK_FLAG_TRICKMODE_KEY_UNITS))
     ret = gst_video_decoder_drain_out (decoder, FALSE);
 
-  if (priv->current_frame == NULL)
-    priv->current_frame = gst_video_decoder_new_frame (decoder);
 
   if (!priv->packetized)
     gst_video_decoder_add_buffer_info (decoder, buf);
 
   priv->input_offset += gst_buffer_get_size (buf);
 
-  if (priv->subframe_mode) {
-    if (last_subframe)
-      priv->current_frame->abidata.ABI.num_subframes = 0;
-    else if (!header)
-      priv->current_frame->abidata.ABI.num_subframes++;
-  }
-
 
   if (priv->packetized) {
     GstVideoCodecFrame *frame;
     gboolean was_keyframe = FALSE;
 
-    frame = priv->current_frame;
+    if (priv->current_frame != NULL)
+      frame = priv->current_frame;
+    else
+      frame = gst_video_decoder_new_frame (decoder);
+    priv->current_frame = NULL;
 
-    frame->abidata.ABI.num_subframes++;
     if (gst_video_decoder_get_subframe_mode (decoder)) {
+      frame->abidata.ABI.num_subframes++; 	    
       /* End the frame if the marker flag is set */
-      if (!GST_BUFFER_FLAG_IS_SET (buf, GST_VIDEO_BUFFER_FLAG_MARKER)
-          && (decoder->input_segment.rate > 0.0))
+      if (!GST_BUFFER_FLAG_IS_SET (buf, GST_VIDEO_BUFFER_FLAG_MARKER))
         priv->current_frame = gst_video_codec_frame_ref (frame);
-      else
-        priv->current_frame = NULL;
-    } else {
-      priv->current_frame = frame;
-    }
+    } 
 
     if (!GST_BUFFER_FLAG_IS_SET (buf, GST_BUFFER_FLAG_DELTA_UNIT)) {
       was_keyframe = TRUE;
@@ -2494,7 +2481,6 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
     }
 
     if (frame->input_buffer) {
-      gst_video_decoder_copy_metas (decoder, frame, frame->input_buffer, buf);
       gst_buffer_unref (frame->input_buffer);
     }
     frame->input_buffer = buf;
@@ -2504,11 +2490,6 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
     } else {
       ret = gst_video_decoder_decode_frame (decoder, frame);
     }
-    /* keep the current frame until we reach the last subframe in subframe mode */
-    if (gst_video_decoder_get_subframe_mode (decoder) || last_subframe)
-      priv->current_frame = NULL;
-    else
-      gst_buffer_unref (priv->current_frame->input_buffer);
     /* If in trick mode and it was a keyframe, drain decoder to avoid extra
      * latency. Only do this for forwards playback as reverse playback handles
      * draining on keyframes in flush_parse(), and would otherwise call back
@@ -3225,6 +3206,12 @@ gst_video_decoder_release_frame (GstVideoDecoder * dec,
         g_list_concat (frame->events, dec->priv->pending_events);
     frame->events = NULL;
   }
+
+  if (dec->priv->current_frame == frame) {
+    dec->priv->current_frame = NULL;
+    gst_video_codec_frame_unref (frame);
+  }
+
   GST_VIDEO_DECODER_STREAM_UNLOCK (dec);
 
   /* unref because this function takes ownership */
@@ -3864,8 +3851,6 @@ gst_video_decoder_have_frame (GstVideoDecoder * decoder)
   }
 
   if (priv->current_frame->input_buffer) {
-    gst_video_decoder_copy_metas (decoder, priv->current_frame,
-        priv->current_frame->input_buffer, buffer);
     gst_buffer_unref (priv->current_frame->input_buffer);
   }
   priv->current_frame->input_buffer = buffer;
@@ -3901,7 +3886,6 @@ gst_video_decoder_have_frame (GstVideoDecoder * decoder)
     priv->current_frame = NULL;
   } else {
     GstVideoCodecFrame *frame = priv->current_frame;
-    frame->abidata.ABI.num_subframes++;
     /* In subframe mode, we keep a ref for ourselves
      * as this frame will be kept during the data collection
      * in parsed mode. The frame reference will be released by
