@@ -2473,11 +2473,13 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
       GST_VIDEO_CODEC_FRAME_SET_SYNC_POINT (frame);
     }
 
-    gst_video_decoder_replace_input_buffer (decoder, frame, &buf);
+    if (frame->input_buffer) {
+      gst_buffer_unref (frame->input_buffer);
+    }
+    frame->input_buffer = buf;
 
     if (decoder->input_segment.rate < 0.0) {
       priv->parse_gather = g_list_prepend (priv->parse_gather, frame);
-      priv->current_frame = NULL;
     } else {
       ret = gst_video_decoder_decode_frame (decoder, frame);
       if (!gst_video_decoder_get_subframe_mode (decoder))
@@ -3199,6 +3201,12 @@ gst_video_decoder_release_frame (GstVideoDecoder * dec,
         g_list_concat (frame->events, dec->priv->pending_events);
     frame->events = NULL;
   }
+
+  if (dec->priv->current_frame == frame) {
+    dec->priv->current_frame = NULL;
+    gst_video_codec_frame_unref (frame);
+  }
+
   GST_VIDEO_DECODER_STREAM_UNLOCK (dec);
 
   /* unref because this function takes ownership */
@@ -3854,8 +3862,10 @@ gst_video_decoder_have_frame (GstVideoDecoder * decoder)
     buffer = gst_buffer_new_and_alloc (0);
   }
 
-  gst_video_decoder_replace_input_buffer (decoder, priv->current_frame,
-      &buffer);
+  if (priv->current_frame->input_buffer) {
+    gst_buffer_unref (priv->current_frame->input_buffer);
+  }
+  priv->current_frame->input_buffer = buffer;
 
   gst_video_decoder_get_buffer_info_at_offset (decoder,
       priv->frame_offset, &pts, &dts, &duration, &flags);
@@ -3888,7 +3898,6 @@ gst_video_decoder_have_frame (GstVideoDecoder * decoder)
     priv->current_frame = NULL;
   } else {
     GstVideoCodecFrame *frame = priv->current_frame;
-    frame->abidata.ABI.num_subframes++;
     /* In subframe mode, we keep a ref for ourselves
      * as this frame will be kept during the data collection
      * in parsed mode. The frame reference will be released by
@@ -3901,6 +3910,10 @@ gst_video_decoder_have_frame (GstVideoDecoder * decoder)
     /* Decode the frame, which gives away our ref */
     ret = gst_video_decoder_decode_frame (decoder, frame);
   }
+
+  if (!gst_video_decoder_get_subframe_mode (decoder) || !priv->current_frame->abidata.ABI.num_subframes)
+    priv->current_frame = NULL;
+
 
   GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
 
