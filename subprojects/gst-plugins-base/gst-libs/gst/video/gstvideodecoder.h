@@ -214,9 +214,8 @@ struct _GstVideoDecoder
  * @reset:          Optional.
  *                  Allows subclass (decoder) to perform post-seek semantics reset.
  *                  Deprecated.
- * @handle_frame:   Provides input data frame to subclass. In subframe mode, the subclass needs
- *                  to take ownership of @GstVideoCodecFrame.input_buffer as it will be modified
- *                  by the base class on the next subframe buffer receiving.
+ * @handle_frame:   Provides input data frame to subclass. Transfer the frame
+ *                  ownership to the subclass
  * @finish:         Optional.
  *                  Called to request subclass to dispatch any pending remaining
  *                  data at EOS. Sub-classes can refuse to decode new data after.
