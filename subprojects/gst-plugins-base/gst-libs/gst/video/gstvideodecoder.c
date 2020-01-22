@@ -3938,9 +3938,28 @@ gst_video_decoder_decode_frame (GstVideoDecoder * decoder,
   g_return_val_if_fail (decoder_class->handle_frame != NULL, GST_FLOW_ERROR);
   g_return_val_if_fail (frame != NULL, GST_FLOW_ERROR);
 
-  frame->pts = GST_BUFFER_PTS (frame->input_buffer);
-  frame->dts = GST_BUFFER_DTS (frame->input_buffer);
-  frame->duration = GST_BUFFER_DURATION (frame->input_buffer);
+  if (frame->abidata.ABI.num_subframes == 1) {
+    frame->distance_from_sync = priv->distance_from_sync;
+    priv->distance_from_sync++;
+  }
+
+  /* The if() conditions are to work around bugs in h264parse that don't
+   * put the timestamp & duration correctly on some of the buffers if there
+   * is more than one buffer per frame.
+   */
+  if (!GST_CLOCK_TIME_IS_VALID (frame->pts) ||
+      (GST_BUFFER_PTS_IS_VALID (frame->input_buffer) &&
+          GST_BUFFER_PTS (frame->input_buffer) > frame->pts))
+    frame->pts = GST_BUFFER_PTS (frame->input_buffer);
+  if (!GST_CLOCK_TIME_IS_VALID (frame->dts) ||
+      (GST_BUFFER_DTS_IS_VALID (frame->input_buffer) &&
+          GST_BUFFER_DTS (frame->input_buffer) > frame->dts))
+    frame->dts = GST_BUFFER_DTS (frame->input_buffer);
+  if (!GST_CLOCK_TIME_IS_VALID (frame->duration) ||
+      (GST_BUFFER_DURATION_IS_VALID (frame->input_buffer) &&
+          GST_BUFFER_DURATION (frame->input_buffer) > frame->duration))
+    frame->duration = GST_BUFFER_DURATION (frame->input_buffer);
+  //NOTE: NEED REVIEW
   frame->deadline =
       gst_segment_to_running_time (&decoder->input_segment, GST_FORMAT_TIME,
       frame->pts);
