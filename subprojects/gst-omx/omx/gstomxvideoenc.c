@@ -26,6 +26,7 @@
 #include <gst/video/gstvideometa.h>
 #include <gst/allocators/gstdmabuf.h>
 #include <gst/video/video.h>
+#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -3724,13 +3725,13 @@ handle_roi_metadata (GstOMXVideoEnc * self, GstBuffer * input)
 }
 #endif
 
-static inline guint16
+static inline guint32
 fraction_to_uint (guint num, guint den, guint scale)
 {
   gdouble val;
   gst_util_fraction_to_double (num, den, &val);
 
-  return (guint16) (val * scale);
+  return (guint32) round (val * scale);
 }
 
 static GstFlowReturn
