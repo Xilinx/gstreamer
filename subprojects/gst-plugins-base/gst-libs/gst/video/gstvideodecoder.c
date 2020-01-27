@@ -5003,7 +5003,7 @@ gst_video_decoder_set_subframe_mode (GstVideoDecoder * decoder,
 gboolean
 gst_video_decoder_get_subframe_mode (GstVideoDecoder * decoder)
 {
-  return decoder->priv->subframe_mode;
+  return decoder->priv->subframe_mode && decoder->input_segment.rate > 0.0;
 }
 
 /**
