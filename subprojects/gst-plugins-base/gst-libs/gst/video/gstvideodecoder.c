@@ -3386,11 +3386,21 @@ foreach_metadata (GstBuffer * inbuf, GstMeta ** meta, gpointer user_data)
    * function and when it returns %TRUE */
   if (do_copy && info->transform_func) {
     GstMetaTransformCopy copy_data = { FALSE, 0, -1 };
+    GstBuffer *buffer;
+
     GST_DEBUG_OBJECT (decoder, "copy metadata %s", g_type_name (info->api));
     /* simply copy then */
 
+    buffer = frame->output_buffer;
+    if (G_UNLIKELY (buffer)) {
+      if (frame->abidata.ABI.meta_buffer == NULL)
+        frame->abidata.ABI.meta_buffer = gst_buffer_new ();
+      buffer = frame->abidata.ABI.meta_buffer;
+    }
+
     info->transform_func (buffer, *meta, inbuf, _gst_meta_transform_copy,
         &copy_data);
+
   }
   return TRUE;
 }
@@ -3551,6 +3561,9 @@ gst_video_decoder_finish_frame (GstVideoDecoder * decoder,
     GST_BUFFER_FLAG_SET (output_buffer, GST_BUFFER_FLAG_CORRUPTED);
   }
 
+  if (G_UNLIKELY (frame->abidata.ABI.meta_buffer))
+    gst_video_decoder_copy_metas (decoder, frame,
+        frame->abidata.ABI.meta_buffer, frame->output_buffer);
   gst_video_decoder_copy_metas (decoder, frame, frame->input_buffer,
       frame->output_buffer);
 
@@ -3871,6 +3884,8 @@ gst_video_decoder_have_frame (GstVideoDecoder * decoder)
   }
 
   if (priv->current_frame->input_buffer) {
+    gst_video_decoder_copy_metas (decoder, priv->current_frame,
+        priv->current_frame->input_buffer, priv->current_frame->output_buffer);
     gst_buffer_unref (priv->current_frame->input_buffer);
   }
   priv->current_frame->input_buffer = buffer;

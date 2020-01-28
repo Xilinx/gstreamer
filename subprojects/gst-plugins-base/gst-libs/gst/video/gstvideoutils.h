@@ -296,6 +296,7 @@ struct _GstVideoCodecFrame
       GstClockTime ts2;
       guint num_subframes;
       guint subframes_processed;
+      GstBuffer *meta_buffer;
     } ABI;
     gpointer padding[GST_PADDING_LARGE];
   } abidata;
