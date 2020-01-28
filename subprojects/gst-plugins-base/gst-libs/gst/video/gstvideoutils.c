@@ -52,6 +52,9 @@ _gst_video_codec_frame_free (GstVideoCodecFrame * frame)
     gst_buffer_unref (frame->output_buffer);
   }
 
+  if (frame->abidata.ABI.meta_buffer)
+    gst_buffer_unref (frame->abidata.ABI.meta_buffer);
+
   g_list_free_full (frame->events, (GDestroyNotify) gst_event_unref);
   frame->events = NULL;
 
