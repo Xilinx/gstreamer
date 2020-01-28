@@ -3332,6 +3332,14 @@ gst_video_decoder_transform_meta_default (GstVideoDecoder *
     NULL,
   };
 
+  /* By default, only keep the first instance of a meta, subclasses
+   * are free to do otherwise.
+   */
+  if (frame->output_buffer != NULL) {
+    if (gst_buffer_get_meta (frame->output_buffer, info->type))
+      return FALSE;
+  }
+
   tags = gst_meta_api_type_get_tags (info->api);
 
   if (!tags)
