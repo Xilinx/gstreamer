@@ -113,6 +113,12 @@ gst_omx_video_enc_qp_mode_get_type (void)
   return qtype;
 }
 
+enum
+{
+  MIN_RELATIVE_QP = -32,
+  MAX_RELATIVE_QP = 31,
+};
+
 #define GST_TYPE_OMX_VIDEO_ENC_GOP_MODE (gst_omx_video_enc_gop_mode_get_type ())
 static GType
 gst_omx_video_enc_gop_mode_get_type (void)
@@ -3664,7 +3670,6 @@ handle_roi_metadata (GstOMXVideoEnc * self, GstBuffer * input)
           gst_buffer_iterate_meta_filtered (input, &state,
               GST_VIDEO_REGION_OF_INTEREST_META_API_TYPE))) {
     GstVideoRegionOfInterestMeta *roi = (GstVideoRegionOfInterestMeta *) meta;
-    OMX_ALG_VIDEO_CONFIG_REGION_OF_INTEREST roi_param;
     GstStructure *s;
 
     GST_LOG_OBJECT (self, "Input buffer ROI: type=%s id=%d (%d, %d) %dx%d",
@@ -3678,17 +3683,17 @@ handle_roi_metadata (GstOMXVideoEnc * self, GstBuffer * input)
       continue;
     }
 
-    GST_OMX_INIT_STRUCT (&roi_param);
-    roi_param.nPortIndex = self->enc_in_port->index;
-    roi_param.nLeft = roi->x;
-    roi_param.nTop = roi->y;
-    roi_param.nWidth = roi->w;
-    roi_param.nHeight = roi->h;
-
-    s = gst_video_region_of_interest_meta_get_param (roi, "roi/omx-alg");
-    if (s) {
+    if ((s = gst_video_region_of_interest_meta_get_param (roi, "roi/omx-alg"))) {
       const gchar *quality;
       GEnumValue *evalue;
+      OMX_ALG_VIDEO_CONFIG_REGION_OF_INTEREST roi_param;
+
+      GST_OMX_INIT_STRUCT (&roi_param);
+      roi_param.nPortIndex = self->enc_in_port->index;
+      roi_param.nLeft = roi->x;
+      roi_param.nTop = roi->y;
+      roi_param.nWidth = roi->w;
+      roi_param.nHeight = roi->h;
 
       quality = gst_structure_get_string (s, "quality");
 
@@ -3706,15 +3711,51 @@ handle_roi_metadata (GstOMXVideoEnc * self, GstBuffer * input)
         GST_LOG_OBJECT (self, "Use encoding quality '%s' from upstream",
             quality);
       }
+      gst_omx_component_set_config (self->enc,
+          (OMX_INDEXTYPE) OMX_ALG_IndexConfigVideoRegionOfInterest, &roi_param);
+
+    } else if ((s =
+            gst_video_region_of_interest_meta_get_param (roi,
+                "roi-by-value/omx-alg"))) {
+      gint delta_qp;
+      OMX_ALG_VIDEO_CONFIG_REGION_OF_INTEREST_BY_VALUE roi_by_value;
+
+      GST_OMX_INIT_STRUCT (&roi_by_value);
+      roi_by_value.nPortIndex = self->enc_in_port->index;
+      roi_by_value.nLeft = roi->x;
+      roi_by_value.nTop = roi->y;
+      roi_by_value.nWidth = roi->w;
+      roi_by_value.nHeight = roi->h;
+
+      if (gst_structure_get_int (s, "delta-qp", &delta_qp))
+        roi_by_value.nQuality = delta_qp;
+      else
+        roi_by_value.nQuality = 0;
+
+      if (roi_by_value.nQuality > MAX_RELATIVE_QP) {
+        GST_WARNING_OBJECT (self,
+            "delta-qp is set higher than the maximum relative qp. Changing delta-qp from %d to %d",
+            roi_by_value.nQuality, MAX_RELATIVE_QP);
+        roi_by_value.nQuality = MAX_RELATIVE_QP;
+      } else if (roi_by_value.nQuality < MIN_RELATIVE_QP) {
+        GST_WARNING_OBJECT (self,
+            "delta-qp is set lower than the minimum relative qp. Changing delta-qp from %d to %d",
+            roi_by_value.nQuality, MIN_RELATIVE_QP);
+        roi_by_value.nQuality = MIN_RELATIVE_QP;
+      }
+
+      GST_LOG_OBJECT (self, "Using ROI delta-qp '%d' from upstream",
+          roi_by_value.nQuality);
+
+      gst_omx_component_set_config (self->enc,
+          (OMX_INDEXTYPE) OMX_ALG_IndexConfigVideoRegionOfInterestByValue,
+          &roi_by_value);
+
     } else {
-      roi_param.eQuality = self->default_roi_quality;
-
-      GST_LOG_OBJECT (self, "No quality specified upstream, use default (%d)",
-          self->default_roi_quality);
+      GST_WARNING_OBJECT (self,
+          "No ROI quality/delta-qp specified by upstream. Skipping ROI.");
+      continue;
     }
-
-    gst_omx_component_set_config (self->enc,
-        (OMX_INDEXTYPE) OMX_ALG_IndexConfigVideoRegionOfInterest, &roi_param);
   }
 }
 #endif
