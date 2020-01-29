@@ -56,6 +56,7 @@ typedef enum
 #define DYNAMIC_GOP_LENGTH_STR "GL"
 #define DYNAMIC_B_FRAMES_STR "BFrm"
 #define DYNAMIC_ROI_STR "ROI"
+#define DYNAMIC_ROI_BY_VALUE_STR "ROI_BY_VALUE"
 #define DYNAMIC_KEY_FRAME_STR "KF"
 #define DYNAMIC_SCENE_CHANGE_STR "SC"
 #define DYNAMIC_INSERT_LONGTERM_STR "IL"
@@ -81,6 +82,7 @@ typedef enum
   DYNAMIC_KEY_FRAME,
   DYNAMIC_B_FRAMES,
   DYNAMIC_ROI,
+  DYNAMIC_ROI_BY_VALUE,
   DYNAMIC_SCENE_CHANGE,
   DYNAMIC_INSERT_LONGTERM,
   DYNAMIC_USE_LONGTERM,
@@ -105,6 +107,7 @@ typedef struct
       guint width;
       guint height;
       gchar *quality;
+      gint quality_value;
     } roi;
     guint value;
     gchar *qp_file;
@@ -152,6 +155,8 @@ get_dynamic_str_enum (gchar * user_string)
     return DYNAMIC_B_FRAMES;
   else if (!g_strcmp0 (user_string, DYNAMIC_ROI_STR))
     return DYNAMIC_ROI;
+  else if (!g_strcmp0 (user_string, DYNAMIC_ROI_BY_VALUE_STR))
+    return DYNAMIC_ROI_BY_VALUE;
   else if (!g_strcmp0 (user_string, DYNAMIC_SCENE_CHANGE_STR))
     return DYNAMIC_SCENE_CHANGE;
   else if (!g_strcmp0 (user_string, DYNAMIC_INSERT_LONGTERM_STR))
@@ -239,7 +244,7 @@ parse_dynamic_user_string (const char *str, GstElement * encoder)
   dynamic->type = get_dynamic_str_enum (*token);
 
   /* Only use x as delimiter for ROI */
-  if (dynamic->type == DYNAMIC_ROI)
+  if (dynamic->type == DYNAMIC_ROI || dynamic->type == DYNAMIC_ROI_BY_VALUE)
     token = g_strsplit_set (str, DYNAMIC_PARAM_DELIMIT_ROI, -1);
 
   switch (dynamic->type) {
@@ -259,7 +264,14 @@ parse_dynamic_user_string (const char *str, GstElement * encoder)
       dynamic->param.roi.width = atoi (token[4]);
       dynamic->param.roi.height = atoi (token[5]);
       dynamic->param.roi.quality = g_strdup (token[6]);
-
+      break;
+    case DYNAMIC_ROI_BY_VALUE:
+      dynamic->start_frame = atoi (token[1]);
+      dynamic->param.roi.x = atoi (token[2]);
+      dynamic->param.roi.y = atoi (token[3]);
+      dynamic->param.roi.width = atoi (token[4]);
+      dynamic->param.roi.height = atoi (token[5]);
+      dynamic->param.roi.quality_value = atoi (token[6]);
       break;
     case DYNAMIC_SCENE_CHANGE:
       dynamic->start_frame = atoi (token[1]);
@@ -496,6 +508,23 @@ videoparser_src_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
             gst_structure_new ("roi/omx-alg",
                 "quality", G_TYPE_STRING, dynamic->param.roi.quality, NULL));
         break;
+      case DYNAMIC_ROI_BY_VALUE:
+        g_print (" Adding ROI at pos = %d X %d, wxh = %dx%d, quality_value = %d \n",
+            dynamic->param.roi.x, dynamic->param.roi.y,
+            dynamic->param.roi.width, dynamic->param.roi.height,
+            dynamic->param.roi.quality_value);
+        meta =
+            gst_buffer_add_video_region_of_interest_meta (buffer,
+            "face", dynamic->param.roi.x,
+            dynamic->param.roi.y, dynamic->param.roi.width,
+            dynamic->param.roi.height);
+        g_assert (meta);
+
+        gst_video_region_of_interest_meta_add_param (meta,
+            gst_structure_new ("roi-by-value/omx-alg",
+                "delta-qp", G_TYPE_INT, dynamic->param.roi.quality_value,
+                NULL));
+        break;
       case DYNAMIC_SCENE_CHANGE:
       {
         GstStructure *s;
@@ -655,7 +684,8 @@ main (int argc, char *argv[])
       "'SEIs:frame_num' -> Insert SEI suffix\n"
       "'LOADQP:frame_num:file_name' -> Load external QP table from file_name\n"
       "'BO:frame_num:new_value' -> Dynamic Beta Offset\n"
-      "'TO:frame_num:new_value' -> Dynamic Tc Offset";
+      "'TO:frame_num:new_value' -> Dynamic Tc Offset\n"
+      "'ROI_BY_VALUE:frame_num:XPOSxYPOS:roi_widthxroi_height:delta-qp' -> Set ROI by value";
 
   /* Set Encoder defalut parameters */
   enc.width = DEFAULT_VIDEO_WIDTH;
