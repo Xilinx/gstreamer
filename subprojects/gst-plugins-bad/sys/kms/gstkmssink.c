@@ -1349,7 +1349,11 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
 
   self->last_width = GST_VIDEO_SINK_WIDTH (self);
   self->last_height = GST_VIDEO_SINK_HEIGHT (self);
-  self->last_vinfo = self->vinfo;
+  /* on the first set_caps self->vinfo is not initialized, yet. */
+  if (self->vinfo.finfo->format != GST_VIDEO_FORMAT_UNKNOWN)
+    self->last_vinfo = self->vinfo;
+  else
+    self->last_vinfo = vinfo;
   self->vinfo = vinfo;
 
   if (!gst_kms_sink_calculate_display_ratio (self, &vinfo,
@@ -1680,7 +1684,7 @@ ensure_internal_pool (GstKMSSink * self, GstVideoInfo * in_vinfo,
   }
 
   caps = gst_video_info_to_caps (&vinfo);
-  pool = gst_kms_sink_create_pool (self, caps, gst_buffer_get_size (inbuf), 2);
+  pool = gst_kms_sink_create_pool (self, caps, GST_VIDEO_INFO_SIZE (&vinfo), 2);
   gst_caps_unref (caps);
 
   if (!pool)
