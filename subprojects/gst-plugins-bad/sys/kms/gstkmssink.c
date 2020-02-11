@@ -2315,7 +2315,10 @@ gst_kms_sink_drain (GstKMSSink * self)
     dumb_buf = gst_kms_sink_copy_to_dumb_buffer (self, &self->last_vinfo,
         parent_meta->buffer);
     last_buf = self->last_buffer;
-    self->last_buffer = dumb_buf;
+    /* Take an additional ref as 'self->last_buffer' will be unreferenced
+     *  twice during the 'stop'. It will be unreferenced explicitely
+     *  and then during the pool destruction. */
+    self->last_buffer = gst_buffer_ref (dumb_buf);
 
     gst_kms_allocator_clear_cache (self->allocator);
     gst_kms_sink_show_frame (GST_VIDEO_SINK (self), NULL);
