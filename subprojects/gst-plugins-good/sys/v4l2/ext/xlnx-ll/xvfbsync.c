@@ -224,85 +224,75 @@ xvfbsync_queue_push (Queue * q, XLNXLLBuf * buf_ptr)
 
 static void
 xvfbsync_syncip_parse_chan_status (struct xlnxsync_stat *status,
-    ChannelStatus * channel_statuses, u8 max_channels,
-    u8 max_users, u8 max_buffers)
+    ChannelStatus * channel_status, u8 max_users, u8 max_buffers)
 {
-  for (u8 channel = 0; channel < max_channels; ++channel) {
-    ChannelStatus *channel_status = &(channel_statuses[channel]);
-
-    for (u8 buffer = 0; buffer < max_buffers; ++buffer) {
-      for (u8 user = 0; user < max_users; ++user)
-        channel_status->fb_avail[buffer][user] =
-            status->fbdone[channel][buffer][user];
-    }
-
-    channel_status->enable = status->enable[channel];
-    channel_status->sync_error = status->sync_err[channel];
-    channel_status->watchdog_error = status->wdg_err[channel];
-    channel_status->luma_diff_error = status->ldiff_err[channel];
-    channel_status->chroma_diff_error = status->cdiff_err[channel];
+  for (u8 buffer = 0; buffer < max_buffers; ++buffer) {
+    for (u8 user = 0; user < max_users; ++user)
+      channel_status->fb_avail[buffer][user] = status->fbdone[buffer][user];
   }
+  channel_status->enable = status->enable;
+  channel_status->sync_error = status->sync_err;
+  channel_status->watchdog_error = status->wdg_err;
+  channel_status->luma_diff_error = status->ldiff_err;
+  channel_status->chroma_diff_error = status->cdiff_err;
+
+  GST_INFO ("watchdog: %d, sync: %d, ldiff: %d, cdiff: %d",
+      channel_status->watchdog_error, channel_status->sync_error,
+      channel_status->luma_diff_error, channel_status->chroma_diff_error);
+
 }
 
 static int
-xvfbsync_syncip_get_latest_chan_status (SyncIp * syncip)
+xvfbsync_syncip_get_latest_chan_status (SyncChannel * sync_chan)
 {
   struct xlnxsync_stat chan_status = { 0 };
   int ret = 0;
 
   chan_status.hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
-  ret = ioctl (syncip->fd, XLNXSYNC_GET_CHAN_STATUS, &chan_status);
+  ret = ioctl (sync_chan->sync->fd, XLNXSYNC_CHAN_GET_STATUS, &chan_status);
+
   if (ret)
     GST_ERROR ("SyncIp: Couldn't get sync ip channel status");
   else
-    xvfbsync_syncip_parse_chan_status (&chan_status, syncip->channel_statuses,
-        syncip->max_channels, syncip->max_users, syncip->max_buffers);
+    xvfbsync_syncip_parse_chan_status (&chan_status, sync_chan->channel_status,
+        sync_chan->sync->max_users, sync_chan->sync->max_buffers);
 
   return ret;
 }
 
 static int
-xvfbsync_syncip_reset_status (SyncIp * syncip, u8 chan_id)
+xvfbsync_syncip_reset_status (SyncIp * syncip)
 {
   struct xlnxsync_clr_err clr = { 0 };
   int ret = 0;
 
   clr.hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
-  clr.channel_id = chan_id;
   clr.sync_err = 1;
   clr.wdg_err = 1;
   clr.ldiff_err = 1;
   clr.cdiff_err = 1;
 
-  ret = ioctl (syncip->fd, XLNXSYNC_CLR_CHAN_ERR, &clr);
-  if (ret)
-    GST_ERROR ("SyncIp: Couldnt reset status of channel %d", chan_id);
+  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_CLR_ERR, &clr);
 
   return ret;
 }
 
 static int
-xvfbsync_syncip_enable_channel (SyncIp * syncip, u8 chan_id)
+xvfbsync_syncip_enable_channel (SyncIp * syncip)
 {
-  u8 chan = chan_id;
   int ret = 0;
 
-  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_ENABLE, chan);
-  if (ret)
-    GST_ERROR ("SyncIp: Couldn't enable channel %d", chan_id);
+  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_ENABLE);
 
   return ret;
 }
 
 static int
-xvfbsync_syncip_disable_channel (SyncIp * syncip, u8 chan_id)
+xvfbsync_syncip_disable_channel (SyncIp * syncip)
 {
-  u8 chan = chan_id;
   int ret = 0;
 
-  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_DISABLE, chan);
-  if (ret)
-    GST_ERROR ("SyncIp: Couldn't disable channel %d", chan_id);
+  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_DISABLE);
 
   return ret;
 }
@@ -314,7 +304,8 @@ xvfbsync_syncip_add_buffer (SyncIp * syncip,
   int ret = 0;
 
   fb_config->hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
-  ret = ioctl (syncip->fd, XLNXSYNC_SET_CHAN_CONFIG, fb_config);
+  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_SET_CONFIG, fb_config);
+
   if (ret)
     GST_ERROR ("SyncIp: Couldn't add buffer");
 
@@ -322,106 +313,69 @@ xvfbsync_syncip_add_buffer (SyncIp * syncip,
 }
 
 static void
-xvfbsync_syncip_poll_errors (SyncIp * syncip, int timeout)
+xvfbsync_syncip_poll_errors (SyncChannel * sync_channel, int timeout)
 {
   EPollError ret_code;
   struct pollfd poll_data;
+  int ret = 0;
+  ChannelStatus *status;
 
   poll_data.events = POLLPRI;
-  poll_data.fd = (int) (intptr_t) syncip->fd;
+  poll_data.fd = (int) (intptr_t) sync_channel->sync->fd;
 
   ret_code = poll (&poll_data, 1, timeout);
+
+
   if (ret_code == POLL_TIMEOUT)
     return;
 
-  pthread_mutex_lock (&(syncip->mutex));
-  xvfbsync_syncip_get_latest_chan_status (syncip);
+  pthread_mutex_lock (&(sync_channel->mutex));
+  xvfbsync_syncip_get_latest_chan_status (sync_channel);
+  status = sync_channel->channel_status;
 
-  for (u8 i = 0; i < syncip->max_channels; ++i) {
-    ChannelStatus *status = &(syncip->channel_statuses[i]);
-
-    if (syncip->event_listeners[i] && (status->sync_error
-            || status->watchdog_error || status->luma_diff_error
-            || status->chroma_diff_error)) {
-      syncip->event_listeners[i] (status);
-      xvfbsync_syncip_reset_status (syncip, i);
-    }
+  if (status->sync_error || status->watchdog_error || status->luma_diff_error
+      || status->chroma_diff_error) {
+    GST_ERROR ("watchdog: %d, sync: %d, ldiff: %d, cdiff: %d",
+        status->watchdog_error, status->sync_error, status->luma_diff_error,
+        status->chroma_diff_error);
+    ret = xvfbsync_syncip_reset_status (sync_channel->sync);
+    if (ret)
+      GST_ERROR ("SyncIp: Couldnt reset status of channel %d",
+          sync_channel->id);
   }
 
-  pthread_mutex_unlock (&(syncip->mutex));
+  pthread_mutex_unlock (&(sync_channel->mutex));
 }
 
 static void *
 xvfbsync_syncip_polling_routine (void *arg)
 {
-  SyncIp *syncip = ((ThreadInfo *) arg)->syncip;
-
+  SyncChannel *sync_channel = ((ThreadInfo *) arg)->sync_channel;
   while (true) {
-    pthread_mutex_lock (&(syncip->mutex));
-    if (syncip->quit) {
+    pthread_mutex_lock (&(sync_channel->mutex));
+    if (sync_channel->quit) {
       break;
     }
-    pthread_mutex_unlock (&(syncip->mutex));
-    xvfbsync_syncip_poll_errors (syncip, 500);
+    pthread_mutex_unlock (&(sync_channel->mutex));
+    xvfbsync_syncip_poll_errors (sync_channel, 500);
   }
 
-  pthread_mutex_unlock (&(syncip->mutex));
-  xvfbsync_syncip_poll_errors (syncip, 0);
+  pthread_mutex_unlock (&(sync_channel->mutex));
+
+  xvfbsync_syncip_poll_errors (sync_channel, 0);
   if (arg)
     free ((ThreadInfo *) arg);
 
   return NULL;
 }
 
-static void
-xvfbsync_syncip_add_listener (SyncIp * syncip, u8 chan_id,
-    void (*delegate) (ChannelStatus *))
-{
-  pthread_mutex_lock (&(syncip->mutex));
-  syncip->event_listeners[chan_id] = delegate;
-  pthread_mutex_unlock (&(syncip->mutex));
-}
-
-static void
-xvfbsync_syncip_remove_listener (SyncIp * syncip, u8 chan_id)
-{
-  pthread_mutex_lock (&(syncip->mutex));
-  syncip->event_listeners[chan_id] = NULL;
-  pthread_mutex_unlock (&(syncip->mutex));
-}
-
 /*******************/
 /* xvfbsync syncIP */
 /*******************/
 
-ChannelStatus *
-xvfbsync_syncip_get_status (SyncIp * syncip, u8 chan_id)
-{
-  pthread_mutex_lock (&(syncip->mutex));
-  xvfbsync_syncip_get_latest_chan_status (syncip);
-  pthread_mutex_unlock (&(syncip->mutex));
-
-  return &(syncip->channel_statuses[chan_id]);
-}
-
 int
-xvfbsync_syncip_get_free_channel (SyncIp * syncip)
-{
-  u8 chan_id;
-
-  pthread_mutex_lock (&(syncip->mutex));
-
-  if (ioctl (syncip->fd, XLNXSYNC_RESERVE_GET_CHAN_ID, &chan_id)) {
-    GST_ERROR ("SyncIp: Couldn't get sync ip channel ID");
-    return -1;
-  }
-
-  pthread_mutex_unlock (&(syncip->mutex));
-  return chan_id;
-}
-
-int
-xvfbsync_syncip_populate (SyncIp * syncip, u32 fd)
+xvfbsync_syncip_chan_populate (SyncIp * syncip, SyncChannel * sync_channel,
+    u32 fd)
 {
   ThreadInfo *t_info;
   struct xlnxsync_config config = { 0 };
@@ -436,10 +390,9 @@ xvfbsync_syncip_populate (SyncIp * syncip, u32 fd)
     return -1;
   }
 
-  t_info->syncip = syncip;
-  syncip->quit = false;
+  t_info->sync_channel = sync_channel;
   syncip->fd = fd;
-
+  sync_channel->quit = false;
   config.hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
   ret = ioctl (syncip->fd, XLNXSYNC_GET_CFG, &config);
   if (ret) {
@@ -447,52 +400,38 @@ xvfbsync_syncip_populate (SyncIp * syncip, u32 fd)
     return ret;
   }
 
-  GST_DEBUG ("[fd: %d] mode: %s, channel number: %d", syncip->fd,
-      config.encode ? "encode" : "decode", config.max_channels);
+  GST_DEBUG ("[fd: %d] mode: %s, max channel number: %d, active channel %d",
+      syncip->fd, config.encode ? "encode" : "decode", config.max_channels,
+      syncip->active_channels);
+
+
   syncip->max_channels = config.max_channels;
+  syncip->active_channels = config.active_channels;
   syncip->max_users = XLNXSYNC_IO;
   syncip->max_buffers = XLNXSYNC_BUF_PER_CHAN;
   syncip->max_cores = XLNXSYNC_MAX_CORES;
-  syncip->channel_statuses =
-      calloc (config.max_channels, sizeof (ChannelStatus));
-  if (!syncip->channel_statuses) {
-    GST_ERROR ("SyncIp: Memory allocation failed");
+  sync_channel->sync = syncip;
+  sync_channel->channel_status = calloc (1, sizeof (ChannelStatus));
+
+  if (!sync_channel->channel_status) {
+    GST_ERROR ("SyncIp: Memory allocation for channel status failed");
     return -1;
   }
 
-  syncip->event_listeners = calloc (config.max_channels, sizeof (void *));
-  if (!syncip->event_listeners) {
-    GST_ERROR ("SyncIp: Memory allocation failed");
-    return -1;
-  }
+  sync_channel->id = config.reserved_id;
 
-  ret = pthread_mutex_init (&(syncip->mutex), NULL);
+  ret = pthread_mutex_init (&(sync_channel->mutex), NULL);
   if (ret) {
     GST_ERROR ("SyncIp: Couldn't intialize lock");
     return ret;
   }
 
-  ret = pthread_create (&(syncip->polling_thread), NULL,
+  ret = pthread_create (&(sync_channel->polling_thread), NULL,
       &xvfbsync_syncip_polling_routine, t_info);
   if (ret) {
     GST_ERROR ("SyncIp: Couldn't create thread");
     return ret;
   }
-
-  return 0;
-}
-
-int
-xvfbsync_syncip_depopulate (SyncIp * syncip)
-{
-  syncip->quit = true;
-  pthread_join (syncip->polling_thread, NULL);
-  pthread_mutex_destroy (&(syncip->mutex));
-  if (syncip->channel_statuses)
-    free (syncip->channel_statuses);
-
-  if (syncip->event_listeners)
-    free (syncip->event_listeners);
 
   return 0;
 }
@@ -686,7 +625,6 @@ print_framebuffer_config (struct xlnxsync_chan_config *config, u8 max_users,
     u8 max_cores)
 {
   GST_TRACE ("************xvfbsync*************");
-  GST_TRACE ("channel_id:%d", config->channel_id);
   GST_TRACE ("luma_margin:%d", config->luma_margin);
   GST_TRACE ("chroma_margin:%d", config->chroma_margin);
 
@@ -716,7 +654,7 @@ print_framebuffer_config (struct xlnxsync_chan_config *config, u8 max_users,
 }
 
 static struct xlnxsync_chan_config
-set_enc_framebuffer_config (u8 channel_id, XLNXLLBuf * buf,
+set_enc_framebuffer_config (XLNXLLBuf * buf,
     u32 hardware_horizontal_stride_alignment,
     u32 hardware_vertical_stride_alignment)
 {
@@ -794,13 +732,12 @@ set_enc_framebuffer_config (u8 channel_id, XLNXLLBuf * buf,
 
   config.fb_id[XLNXSYNC_PROD] = XLNXSYNC_AUTO_SEARCH;
   config.fb_id[XLNXSYNC_CONS] = XLNXSYNC_AUTO_SEARCH;
-  config.channel_id = channel_id;
 
   return config;
 }
 
 static struct xlnxsync_chan_config
-set_dec_framebuffer_config (u8 channel_id, XLNXLLBuf * buf)
+set_dec_framebuffer_config (XLNXLLBuf * buf)
 {
   struct xlnxsync_chan_config config = { 0 };
   int src_row_size = is_10bit_packed (buf->t_fourcc) ?
@@ -865,7 +802,6 @@ set_dec_framebuffer_config (u8 channel_id, XLNXLLBuf * buf)
 
   config.fb_id[XLNXSYNC_PROD] = XLNXSYNC_AUTO_SEARCH;
   config.fb_id[XLNXSYNC_CONS] = XLNXSYNC_AUTO_SEARCH;
-  config.channel_id = channel_id;
 
   return config;
 }
@@ -873,14 +809,6 @@ set_dec_framebuffer_config (u8 channel_id, XLNXLLBuf * buf)
 /******************************/
 /* xvfbsync sync_chan helpers */
 /******************************/
-
-static void
-xvfbsync_sync_chan_listener (ChannelStatus * status)
-{
-  GST_INFO ("watchdog: %d, sync: %d, ldiff: %d, cdiff: %d",
-      status->watchdog_error, status->sync_error, status->luma_diff_error,
-      status->chroma_diff_error);
-}
 
 static int
 xvfbsync_sync_chan_disable (SyncChannel * sync_chan)
@@ -890,11 +818,17 @@ xvfbsync_sync_chan_disable (SyncChannel * sync_chan)
   if (!sync_chan->enabled)
     assert (0 == "Tried to disable a channel twice");
 
-  sync_chan->sync->quit = true;
-  ret = xvfbsync_syncip_disable_channel (sync_chan->sync, sync_chan->id);
+  ret = xvfbsync_syncip_disable_channel (sync_chan->sync);
+  if (ret) {
+    GST_ERROR ("SyncIp: Couldn't disable channel %d", sync_chan->id);
+    goto err;
+  }
+
+  sync_chan->quit = true;
   sync_chan->enabled = false;
   GST_DEBUG ("Disable channel %d", sync_chan->id);
 
+err:
   return ret;
 }
 
@@ -903,12 +837,10 @@ xvfbsync_sync_chan_disable (SyncChannel * sync_chan)
 /**********************/
 
 static int
-xvfbsync_sync_chan_populate (SyncChannel * sync_chan, SyncIp * syncip, u8 id)
+xvfbsync_sync_chan_populate (SyncChannel * sync_chan, SyncIp * syncip)
 {
   sync_chan->sync = syncip;
-  sync_chan->id = id;
   sync_chan->enabled = false;
-  xvfbsync_syncip_add_listener (syncip, id, &xvfbsync_sync_chan_listener);
   return 0;
 }
 
@@ -920,7 +852,12 @@ xvfbsync_sync_chan_depopulate (SyncChannel * sync_chan)
   if (sync_chan->enabled)
     ret = xvfbsync_sync_chan_disable (sync_chan);
 
-  xvfbsync_syncip_remove_listener (sync_chan->sync, sync_chan->id);
+  pthread_join (sync_chan->polling_thread, NULL);
+  pthread_mutex_destroy (&(sync_chan->mutex));
+
+  if (sync_chan->channel_status)
+    free (sync_chan->channel_status);
+
   return ret;
 }
 
@@ -935,7 +872,7 @@ xvfbsync_dec_sync_chan_add_buffer (DecSyncChannel * dec_sync_chan,
   int ret = 0;
   struct xlnxsync_chan_config config = { 0 };
 
-  config = set_dec_framebuffer_config (dec_sync_chan->sync_channel.id, buf);
+  config = set_dec_framebuffer_config (buf);
   ret = xvfbsync_syncip_add_buffer (dec_sync_chan->sync_channel.sync, &config);
   if (buf)
     free (buf);
@@ -951,8 +888,7 @@ xvfbsync_dec_sync_chan_enable (DecSyncChannel * dec_sync_chan)
 {
   int ret = 0;
 
-  ret = xvfbsync_syncip_enable_channel (dec_sync_chan->sync_channel.sync,
-      dec_sync_chan->sync_channel.id);
+  ret = xvfbsync_syncip_enable_channel (dec_sync_chan->sync_channel.sync);
   GST_DEBUG ("Decoder: Enable channel %d", dec_sync_chan->sync_channel.id);
 
   dec_sync_chan->sync_channel.enabled = true;
@@ -961,10 +897,9 @@ xvfbsync_dec_sync_chan_enable (DecSyncChannel * dec_sync_chan)
 
 int
 xvfbsync_dec_sync_chan_populate (DecSyncChannel * dec_sync_chan,
-    SyncIp * syncip, u8 id)
+    SyncIp * syncip)
 {
-  return xvfbsync_sync_chan_populate (&(dec_sync_chan->sync_channel), syncip,
-      id);
+  return xvfbsync_sync_chan_populate (&(dec_sync_chan->sync_channel), syncip);
 }
 
 int
@@ -984,7 +919,8 @@ xvfbsync_enc_sync_chan_add_buffer_ (EncSyncChannel * enc_sync_chan,
   int ret = 0;
   struct xlnxsync_chan_config config = { 0 };
 
-  if (!enc_sync_chan->is_running) {
+  if (!enc_sync_chan->sync_channel->enabled) {
+
     if (buf)
       ret = xvfbsync_queue_push (&enc_sync_chan->buffers, buf);
 
@@ -997,21 +933,21 @@ xvfbsync_enc_sync_chan_add_buffer_ (EncSyncChannel * enc_sync_chan,
     if (ret)
       return ret;
 
-    while (enc_sync_chan->is_running && num_fb_to_enable > 0
+    while (enc_sync_chan->sync_channel->enabled && num_fb_to_enable > 0
         && !xvfbsync_queue_empty (&enc_sync_chan->buffers)) {
       buf = xvfbsync_queue_front (&enc_sync_chan->buffers);
 
       config =
-          set_enc_framebuffer_config (enc_sync_chan->sync_channel.id, buf,
+          set_enc_framebuffer_config (buf,
           enc_sync_chan->hardware_horizontal_stride_alignment,
           enc_sync_chan->hardware_vertical_stride_alignment);
 
       print_framebuffer_config (&config,
-          enc_sync_chan->sync_channel.sync->max_users,
-          enc_sync_chan->sync_channel.sync->max_cores);
+          enc_sync_chan->sync_channel->sync->max_users,
+          enc_sync_chan->sync_channel->sync->max_cores);
 
       ret =
-          xvfbsync_syncip_add_buffer (enc_sync_chan->sync_channel.sync,
+          xvfbsync_syncip_add_buffer (enc_sync_chan->sync_channel->sync,
           &config);
 
       if (!ret) {
@@ -1052,19 +988,20 @@ xvfbsync_enc_sync_chan_enable (EncSyncChannel * enc_sync_chan)
   int ret = 0;
 
   pthread_mutex_lock (&enc_sync_chan->mutex);
-  enc_sync_chan->is_running = true;
   num_fb_to_enable = MIN ((int) enc_sync_chan->buffers.size,
-      enc_sync_chan->sync_channel.sync->max_buffers);
-  ret = xvfbsync_syncip_enable_channel (enc_sync_chan->sync_channel.sync,
-      enc_sync_chan->sync_channel.id);
-  if (ret)
+      enc_sync_chan->sync_channel->sync->max_buffers);
+  ret = xvfbsync_syncip_enable_channel (enc_sync_chan->sync_channel->sync);
+  if (ret) {
+    GST_ERROR ("SyncIp: Couldn't enable channel %d",
+        enc_sync_chan->sync_channel->id);
     return ret;
+  }
 
+  GST_DEBUG ("Encoder: Enable channel %d", enc_sync_chan->sync_channel->id);
+  enc_sync_chan->sync_channel->enabled = true;
   ret =
       xvfbsync_enc_sync_chan_add_buffer_ (enc_sync_chan, NULL,
       num_fb_to_enable);
-  enc_sync_chan->sync_channel.enabled = true;
-  GST_DEBUG ("Encoder: Enable channel %d", enc_sync_chan->sync_channel.id);
   pthread_mutex_unlock (&enc_sync_chan->mutex);
 
   return ret;
@@ -1072,21 +1009,21 @@ xvfbsync_enc_sync_chan_enable (EncSyncChannel * enc_sync_chan)
 
 int
 xvfbsync_enc_sync_chan_populate (EncSyncChannel * enc_sync_chan,
-    SyncIp * syncip, u8 id, u32 hardware_horizontal_stride_alignment,
+    SyncChannel * sync_chan, u32 hardware_horizontal_stride_alignment,
     u32 hardware_vertical_stride_alignment)
 {
   int ret = 0;
 
-  xvfbsync_sync_chan_populate (&(enc_sync_chan->sync_channel), syncip, id);
-  enc_sync_chan->is_running = false;
   enc_sync_chan->hardware_horizontal_stride_alignment =
       hardware_horizontal_stride_alignment;
   enc_sync_chan->hardware_vertical_stride_alignment =
       hardware_vertical_stride_alignment;
+  enc_sync_chan->sync_channel = sync_chan;
 
-  if (pthread_mutex_init (&(enc_sync_chan->mutex), NULL)) {
-    GST_ERROR ("Encoder: Couldn't intialize lock");
-    return -1;
+  ret = pthread_mutex_init (&(enc_sync_chan->mutex), NULL);
+  if (ret) {
+    GST_ERROR ("SyncIp: Couldn't intialize lock");
+    return ret;
   }
 
   ret = !xvfbsync_queue_init (&(enc_sync_chan->buffers));
@@ -1099,7 +1036,7 @@ xvfbsync_enc_sync_chan_depopulate (EncSyncChannel * enc_sync_chan)
 {
   int ret = 0;
 
-  ret = xvfbsync_sync_chan_depopulate (&enc_sync_chan->sync_channel);
+  ret = xvfbsync_sync_chan_depopulate (enc_sync_chan->sync_channel);
   if (ret)
     return ret;
 
