@@ -227,6 +227,7 @@ struct _GstV4l2Object {
   /* For Xilinx Low Latency */
   gboolean xlnx_ll;
   SyncIp syncip;
+  SyncChannel sync_chan;
   EncSyncChannel enc_sync_chan;
 };
 

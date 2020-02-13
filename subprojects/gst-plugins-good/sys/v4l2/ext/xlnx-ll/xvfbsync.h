@@ -106,28 +106,20 @@ typedef struct
 /**
  * struct SyncIp - SyncIp Hardware Configuration
  * @max_channels: Maximum supported channels
+ * @active_channels: Number of active Sync IP channels
  * @max_users: Maximum supported users
  * @max_buffers: Maximum frame buffers
  * @max_cores: Maximum cores to use
  * @fd: File descriptor of SyncIp driver
- * @quit: True if SyncIp exited
- * @polling_thread: Thread for polling for errors
- * @mutex: Mutex for locking
- * @event_listeners: Listening functions to output errors
- * @channel_statuses: Channel statuses for all channels
  */
 typedef struct
 {
   uint8_t max_channels;
+  uint8_t active_channels;
   uint8_t max_users;
   uint8_t max_buffers;
   uint8_t max_cores;
   uint32_t fd;
-  bool quit;
-  pthread_t polling_thread;
-  pthread_mutex_t mutex;
-  void (*(*event_listeners)) (ChannelStatus *);
-  ChannelStatus *channel_statuses;
 } SyncIp;
 
 /**
@@ -135,29 +127,35 @@ typedef struct
  * @id: Channel number
  * @enabled: True if channel enabled bit is on
  * @sync: SyncIp configuration to be followed
- */
+ * @polling_thread: Thread for polling for errors
+ * @mutex: Mutex for locking in Sync IP channel specific context
+ * @channel_status: Channel status for current channel
+ * @quit: True if SyncIp Channel exited
+*/
 typedef struct
 {
   uint8_t id;
   bool enabled;
   SyncIp *sync;
+  pthread_t polling_thread;
+  pthread_mutex_t mutex;
+  ChannelStatus *channel_status;
+  bool quit;
 } SyncChannel;
 
 /**
  * struct EncSyncChannel - Encoder SyncIp Channel
  * @sync_channel: Base SyncIp channel
- * @buffers: Internal queue for channel
- * @mutex: Mutex for locking
- * @is_running: True if channel is operating correctly
+ * @mutex: Mutex for locking in Encoder specific Sync IP channel context
+ * @buffers: Internal queue for buffers in a channel
  * @hardware_horizontal_stride_alignment: VCU horizontal requirement
  * @hardware_vertical_stride_alignment: VCU vertical requirement
  */
 typedef struct
 {
-  SyncChannel sync_channel;
-  Queue buffers;
+  SyncChannel *sync_channel;
   pthread_mutex_t mutex;
-  bool is_running;
+  Queue buffers;
   uint32_t hardware_horizontal_stride_alignment;
   uint32_t hardware_vertical_stride_alignment;
 } EncSyncChannel;
@@ -172,43 +170,22 @@ typedef struct
 } DecSyncChannel;
 
 /**
- * struct ThreadInfo - Wrap SyncIp for polling thread
- * @syncip: SyncIp configuration to wrapped
+ * struct ThreadInfo - Wrap SyncChannel for polling thread
+ * @syncchannel: SyncChannel configuration to wrapped
  */
 typedef struct
 {
-  SyncIp *syncip;
+  SyncChannel *sync_channel;
 } ThreadInfo;
 
-/**
- * xvfbsync_syncip_get_free_channel - Reserve channel from SyncIp driver
- * @syncip: SyncIp configuration to be queried
- * Returns channel reserved to be used, else -1
- */
-int xvfbsync_syncip_get_free_channel (SyncIp * syncip);
 
 /**
- * xvfbsync_syncip_get_status - Obtain status from SyncIp driver
- * @syncip: SyncIp configuration to be queried
- * @chan_id: Channel to be queried
- * Returns pointer if no errors, else NULL
- */
-ChannelStatus *xvfbsync_syncip_get_status (SyncIp * syncip, uint8_t chan_id);
-
-/**
- * xvfbsync_syncip_populate - Initialize SyncIp configuration
- * @syncip: Configuration to be initialized
+ * xvfbsync_syncip_chan_populate - Initialize SyncIp configuration
+ * @syncip_chan: Configuration to be initialized
  * @fd: fd of SyncIp device
  * Returns 0 if no errors, else -1
  */
-int xvfbsync_syncip_populate (SyncIp * syncip, uint32_t fd);
-
-/**
- * xvfbsync_syncip_depopulate - Clean up SyncIp configuration
- * @syncip: Configuration to be destroyed
- * Returns 0 if no errors, else -1
- */
-int xvfbsync_syncip_depopulate (SyncIp * syncip);
+int xvfbsync_syncip_chan_populate (SyncIp *syncip, SyncChannel * syncip_chan, uint32_t fd);
 
 /**
  * xvfbsync_dec_sync_chan_add_buffer - Push buffer to SyncIp channel
@@ -221,20 +198,18 @@ int xvfbsync_dec_sync_chan_add_buffer (DecSyncChannel * dec_sync_chan,
 
 /**
  * xvfbsync_dec_sync_chan_enable - Enable SyncIp channel
- * @dec_sync_chan: Channel to be enabled
+ * @dec_sync_chan: Decoder SyncIp Channel to be enabled
  * Returns 0 if no errors, else -1
  */
 int xvfbsync_dec_sync_chan_enable (DecSyncChannel * dec_sync_chan);
 
 /**
  * xvfbsync_dec_sync_chan_populate - Initialize SyncIp channel
- * @dec_sync_chan: Channel to be created
+ * @dec_sync_chan: Decoder SyncIP channel to be created
  * @syncip: SyncIp configuration to be followed
- * @id: Channel number
  * Returns 0 if no errors, else -1
  */
-int xvfbsync_dec_sync_chan_populate (DecSyncChannel * dec_sync_chan,
-    SyncIp * syncip, uint8_t id);
+int xvfbsync_dec_sync_chan_populate (DecSyncChannel * dec_sync_chan, SyncIp * syncip);
 
 /**
  * xvfbsync_dec_sync_chan_depopulate - Clean up SyncIp channel
@@ -260,18 +235,15 @@ int xvfbsync_enc_sync_chan_add_buffer (EncSyncChannel * enc_sync_chan,
 int xvfbsync_enc_sync_chan_enable (EncSyncChannel * enc_sync_chan);
 
 /**
- * xvfbsync_enc_sync_chan_populate - Initialize SyncIp channel
- * @enc_sync_chan: Channel to be created
- * @syncip: SyncIp configuration to be followed
- * @id: Channel number
+ * xvfbsync_enc_sync_chan_populate - Initialize Encoder SyncIp channel
+ * @enc_sync_chan: Encoder SYncIP channel to be created
+ * @sync_chan: SyncIp channel configuration to be used as base
  * @hardware_horizontal_stride_alignment: VCU horizontal stride alignment
  * @hardware_vertical_stride_alignment: VCU vertical stride alignment
  * Returns 0 if no errors, else -1
  */
-int xvfbsync_enc_sync_chan_populate (EncSyncChannel * enc_sync_chan,
-    SyncIp * syncip, uint8_t id,
-    uint32_t hardware_horizontal_stride_alignment,
-    uint32_t hardware_vertical_stride_alignment);
+int xvfbsync_enc_sync_chan_populate (EncSyncChannel * enc_sync_chan, SyncChannel *sync_chan,
+    uint32_t hardware_horizontal_stride_alignment, uint32_t hardware_vertical_stride_alignment);
 
 /**
  * xvfbsync_encSyncChan_depopulate - Clean up SyncIp channel

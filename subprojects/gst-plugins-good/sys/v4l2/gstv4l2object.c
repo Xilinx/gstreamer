@@ -523,7 +523,7 @@ gst_v4l2_object_new (GstElement * element,
 
   v4l2object->no_initial_format = FALSE;
 
-  v4l2object->enc_sync_chan.sync_channel.enabled = FALSE;
+  v4l2object->sync_chan.enabled = FALSE;
   /* We now disable libv4l2 by default, but have an env to enable it. */
 #ifdef HAVE_LIBV4L2
   if (g_getenv ("GST_V4L2_USE_LIBV4L2")) {
@@ -4620,9 +4620,8 @@ gst_v4l2_object_stop (GstV4l2Object * v4l2object)
     }
   }
 
-  if (v4l2object->enc_sync_chan.sync_channel.enabled) {
+  if (v4l2object->sync_chan.enabled) {
     xvfbsync_enc_sync_chan_depopulate (&v4l2object->enc_sync_chan);
-    xvfbsync_syncip_depopulate (&v4l2object->syncip);
     close (v4l2object->syncip.fd);
     if (!gst_v4l2_object_set_low_latency_capture_mode (v4l2object, FALSE))
       GST_ERROR_OBJECT (v4l2object, "Driver failed to deactivate XLNX-LL");

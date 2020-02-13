@@ -803,21 +803,17 @@ gst_v4l2_buffer_pool_start (GstBufferPool * bpool)
   GST_DEBUG_OBJECT (pool, "activating pool");
 
   if (obj->xlnx_ll) {
-    gint syncip_fd, syncip_channel;
+    gint syncip_fd;
 
     syncip_fd = open (SYNC_IP_DEV_ENCODER, O_RDWR);
     if (syncip_fd == -1)
       goto xvfbsync_open_failed;
 
-    if (xvfbsync_syncip_populate (&obj->syncip, syncip_fd))
+    if (xvfbsync_syncip_chan_populate (&obj->syncip, &obj->sync_chan,
+            syncip_fd))
       goto xvfbsync_populate_failed;
 
-    syncip_channel = xvfbsync_syncip_get_free_channel (&obj->syncip);
-    if (syncip_channel == -1)
-      goto xvfbsync_reserve_failed;
-
-    if (xvfbsync_enc_sync_chan_populate (&obj->enc_sync_chan,
-            &obj->syncip, syncip_channel,
+    if (xvfbsync_enc_sync_chan_populate (&obj->enc_sync_chan, &obj->sync_chan,
             HORIZONTAL_ALIGNMENT, VERTICAL_ALIGNMENT))
       goto xvfbsync_chan_populate_failed;
   }
@@ -1021,11 +1017,6 @@ xvfbsync_open_failed:
 xvfbsync_populate_failed:
   {
     GST_ERROR_OBJECT (pool, "Failed to initialize syncip");
-    return FALSE;
-  }
-xvfbsync_reserve_failed:
-  {
-    GST_ERROR_OBJECT (pool, "Failed to reserve channel");
     return FALSE;
   }
 xvfbsync_chan_populate_failed:
