@@ -2515,6 +2515,37 @@ gst_omx_video_dec_negotiate (GstOMXVideoDec * self)
   comp_supported_caps = gst_omx_video_get_caps_for_map (negotiation_map);
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  {
+    GstCapsFeatures *features;
+
+    features = gst_caps_get_features (intersection, 0);
+    if (features
+        && gst_caps_features_contains (features,
+            GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
+      OMX_ALG_PORT_PARAM_EARLY_CALLBACK param;
+      OMX_ERRORTYPE err;
+
+      GST_OMX_INIT_STRUCT (&param);
+      param.bEnableEarlyCallback = OMX_TRUE;
+      param.nPortIndex = self->dec_out_port->index;
+
+      GST_DEBUG_OBJECT (self, "Enable XLNX-LowLatency");
+
+      err =
+          gst_omx_component_set_parameter (self->dec,
+          (OMX_INDEXTYPE) OMX_ALG_IndexPortParamEarlyCallback, &param);
+      if (err != OMX_ErrorNone) {
+        GST_ERROR_OBJECT (self,
+            "Failed to set parameter: %s (0x%08x)",
+            gst_omx_error_to_string (err), err);
+        return FALSE;
+      }
+      self->xlnx_ll = TRUE;
+      /* Correct reported latency since syncip decoder give early callback */
+      gst_omx_video_dec_set_latency (self);
+    }
+  }
+
   comp_supported_caps =
       gst_omx_video_add_xlnx_ll_to_caps (comp_supported_caps, FALSE);
 #endif
@@ -2590,38 +2621,6 @@ gst_omx_video_dec_negotiate (GstOMXVideoDec * self)
     GST_ERROR_OBJECT (self, "Failed to set video port format: %s (0x%08x)",
         gst_omx_error_to_string (err), err);
   }
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-  {
-    GstCapsFeatures *features;
-
-    features = gst_caps_get_features (intersection, 0);
-    if (features
-        && gst_caps_features_contains (features,
-            GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
-      OMX_ALG_PORT_PARAM_EARLY_CALLBACK param;
-      OMX_ERRORTYPE err;
-
-      GST_OMX_INIT_STRUCT (&param);
-      param.bEnableEarlyCallback = OMX_TRUE;
-      param.nPortIndex = self->dec_out_port->index;
-
-      GST_DEBUG_OBJECT (self, "Enable XLNX-LowLatency");
-
-      err =
-          gst_omx_component_set_parameter (self->dec,
-          (OMX_INDEXTYPE) OMX_ALG_IndexPortParamEarlyCallback, &param);
-      if (err != OMX_ErrorNone) {
-        GST_ERROR_OBJECT (self,
-            "Failed to set parameter: %s (0x%08x)",
-            gst_omx_error_to_string (err), err);
-        return FALSE;
-      }
-      self->xlnx_ll = TRUE;
-      /* Correct reported latency since syncip decoder give early callback */
-      gst_omx_video_dec_set_latency (self);
-    }
-  }
-#endif
 
   gst_caps_unref (intersection);
   return (err == OMX_ErrorNone);
