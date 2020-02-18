@@ -284,6 +284,9 @@ gst_omx_video_dec_class_init (GstOMXVideoDecClass * klass)
       "RGBA") "; "
 #endif
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+      GST_VIDEO_CAPS_MAKE_WITH_FEATURES (GST_CAPS_FEATURE_MEMORY_XLNX_LL ","
+      GST_CAPS_FEATURE_FORMAT_INTERLACED, GST_OMX_VIDEO_DEC_SUPPORTED_FORMATS)
+      ", interlace-mode = (string) alternate ; "
       GST_VIDEO_CAPS_MAKE_WITH_FEATURES (GST_CAPS_FEATURE_FORMAT_INTERLACED,
       GST_OMX_VIDEO_DEC_SUPPORTED_FORMATS)
       ", interlace-mode = (string) alternate ; "
