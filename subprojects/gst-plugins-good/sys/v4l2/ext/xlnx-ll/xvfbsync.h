@@ -138,7 +138,6 @@ typedef struct
   bool enabled;
   SyncIp *sync;
   pthread_t polling_thread;
-  pthread_mutex_t mutex;
   ChannelStatus *channel_status;
   bool quit;
 } SyncChannel;
@@ -146,7 +145,6 @@ typedef struct
 /**
  * struct EncSyncChannel - Encoder SyncIp Channel
  * @sync_channel: Base SyncIp channel
- * @mutex: Mutex for locking in Encoder specific Sync IP channel context
  * @buffers: Internal queue for buffers in a channel
  * @hardware_horizontal_stride_alignment: VCU horizontal requirement
  * @hardware_vertical_stride_alignment: VCU vertical requirement
@@ -154,7 +152,6 @@ typedef struct
 typedef struct
 {
   SyncChannel *sync_channel;
-  pthread_mutex_t mutex;
   Queue buffers;
   uint32_t hardware_horizontal_stride_alignment;
   uint32_t hardware_vertical_stride_alignment;
