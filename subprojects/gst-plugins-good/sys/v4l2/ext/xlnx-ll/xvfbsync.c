@@ -325,11 +325,9 @@ xvfbsync_syncip_poll_errors (SyncChannel * sync_channel, int timeout)
 
   ret_code = poll (&poll_data, 1, timeout);
 
-
   if (ret_code == POLL_TIMEOUT)
     return;
 
-  pthread_mutex_lock (&(sync_channel->mutex));
   xvfbsync_syncip_get_latest_chan_status (sync_channel);
   status = sync_channel->channel_status;
 
@@ -344,7 +342,6 @@ xvfbsync_syncip_poll_errors (SyncChannel * sync_channel, int timeout)
           sync_channel->id);
   }
 
-  pthread_mutex_unlock (&(sync_channel->mutex));
 }
 
 static void *
@@ -352,15 +349,12 @@ xvfbsync_syncip_polling_routine (void *arg)
 {
   SyncChannel *sync_channel = ((ThreadInfo *) arg)->sync_channel;
   while (true) {
-    pthread_mutex_lock (&(sync_channel->mutex));
     if (sync_channel->quit) {
       break;
     }
-    pthread_mutex_unlock (&(sync_channel->mutex));
     xvfbsync_syncip_poll_errors (sync_channel, 500);
   }
 
-  pthread_mutex_unlock (&(sync_channel->mutex));
 
   xvfbsync_syncip_poll_errors (sync_channel, 0);
   if (arg)
@@ -419,12 +413,6 @@ xvfbsync_syncip_chan_populate (SyncIp * syncip, SyncChannel * sync_channel,
   }
 
   sync_channel->id = config.reserved_id;
-
-  ret = pthread_mutex_init (&(sync_channel->mutex), NULL);
-  if (ret) {
-    GST_ERROR ("SyncIp: Couldn't intialize lock");
-    return ret;
-  }
 
   ret = pthread_create (&(sync_channel->polling_thread), NULL,
       &xvfbsync_syncip_polling_routine, t_info);
@@ -853,8 +841,6 @@ xvfbsync_sync_chan_depopulate (SyncChannel * sync_chan)
     ret = xvfbsync_sync_chan_disable (sync_chan);
 
   pthread_join (sync_chan->polling_thread, NULL);
-  pthread_mutex_destroy (&(sync_chan->mutex));
-
   if (sync_chan->channel_status)
     free (sync_chan->channel_status);
 
@@ -974,9 +960,7 @@ xvfbsync_enc_sync_chan_add_buffer (EncSyncChannel * enc_sync_chan,
 {
   int ret = 0;
 
-  pthread_mutex_lock (&enc_sync_chan->mutex);
   ret = xvfbsync_enc_sync_chan_add_buffer_ (enc_sync_chan, buf, 1);
-  pthread_mutex_unlock (&enc_sync_chan->mutex);
 
   return ret;
 }
@@ -987,7 +971,6 @@ xvfbsync_enc_sync_chan_enable (EncSyncChannel * enc_sync_chan)
   int num_fb_to_enable;
   int ret = 0;
 
-  pthread_mutex_lock (&enc_sync_chan->mutex);
   num_fb_to_enable = MIN ((int) enc_sync_chan->buffers.size,
       enc_sync_chan->sync_channel->sync->max_buffers);
   ret = xvfbsync_syncip_enable_channel (enc_sync_chan->sync_channel->sync);
@@ -1002,7 +985,6 @@ xvfbsync_enc_sync_chan_enable (EncSyncChannel * enc_sync_chan)
   ret =
       xvfbsync_enc_sync_chan_add_buffer_ (enc_sync_chan, NULL,
       num_fb_to_enable);
-  pthread_mutex_unlock (&enc_sync_chan->mutex);
 
   return ret;
 }
@@ -1019,12 +1001,6 @@ xvfbsync_enc_sync_chan_populate (EncSyncChannel * enc_sync_chan,
   enc_sync_chan->hardware_vertical_stride_alignment =
       hardware_vertical_stride_alignment;
   enc_sync_chan->sync_channel = sync_chan;
-
-  ret = pthread_mutex_init (&(enc_sync_chan->mutex), NULL);
-  if (ret) {
-    GST_ERROR ("SyncIp: Couldn't intialize lock");
-    return ret;
-  }
 
   ret = !xvfbsync_queue_init (&(enc_sync_chan->buffers));
 
