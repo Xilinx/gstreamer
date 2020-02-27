@@ -37,6 +37,8 @@
 #include <gst/gst-i18n-plugin.h>
 #include "ext/media.h"
 #include "ext/xilinx-v4l2-controls.h"
+#include "ext/media-bus-format.h"
+#include "ext/v4l2-subdev.h"
 
 #define DEFAULT_PROP_DEVICE "/dev/video0"
 #define DEFAULT_PROP_THRESHOLD 50
@@ -447,6 +449,83 @@ gst_xilinx_scd_stop (GstBaseTransform * trans)
 }
 
 static gboolean
+gst_xilinx_scd_set_subdev_format (GstBaseTransform * trans, GstCaps * incaps)
+{
+  GstXilinxScd *self = GST_XILINX_SCD (trans);
+  GstVideoInfo info;
+  struct v4l2_subdev_format fmt;
+  struct v4l2_mbus_framefmt format;
+
+  if (!gst_video_info_from_caps (&info, incaps))
+    goto s_fmt_failed;
+
+  /* Convert from GST format to media bus format */
+  switch (GST_VIDEO_INFO_FORMAT (&info)) {
+    case GST_VIDEO_FORMAT_YUY2:
+    case GST_VIDEO_FORMAT_UYVY:
+      format.code = MEDIA_BUS_FMT_UYVY8_1X16;
+      break;
+    case GST_VIDEO_FORMAT_NV12:
+      format.code = MEDIA_BUS_FMT_VYYUYY8_1X24;
+      break;
+    case GST_VIDEO_FORMAT_NV12_10LE32:
+      format.code = MEDIA_BUS_FMT_VYYUYY10_4X20;
+      break;
+    case GST_VIDEO_FORMAT_NV16_10LE32:
+      format.code = MEDIA_BUS_FMT_UYVY10_1X20;
+      break;
+    case GST_VIDEO_FORMAT_NV16:
+      format.code = MEDIA_BUS_FMT_UYVY8_1X16;
+      break;
+    case GST_VIDEO_FORMAT_RGB:
+    case GST_VIDEO_FORMAT_BGR:
+    case GST_VIDEO_FORMAT_BGRx:
+      format.code = MEDIA_BUS_FMT_RBG888_1X24;
+      break;
+    default:
+      GST_ERROR_OBJECT (self, "Color format %d is not supported by Xilinx SCD",
+          GST_VIDEO_INFO_FORMAT (&info));
+      goto s_fmt_failed;
+  }
+
+  /* Convert from GST field to V4L2 field */
+  if (!GST_VIDEO_INFO_IS_INTERLACED (&info))
+    format.field = V4L2_FIELD_NONE;
+
+  if (GST_VIDEO_INFO_INTERLACE_MODE (&info) ==
+      GST_VIDEO_INTERLACE_MODE_ALTERNATE)
+    format.field = V4L2_FIELD_ALTERNATE;
+
+  switch (GST_VIDEO_INFO_FIELD_ORDER (&info)) {
+    case GST_VIDEO_FIELD_ORDER_TOP_FIELD_FIRST:
+      format.field = V4L2_FIELD_INTERLACED_TB;
+    case GST_VIDEO_FIELD_ORDER_BOTTOM_FIELD_FIRST:
+      format.field = V4L2_FIELD_INTERLACED_BT;
+    case GST_VIDEO_FIELD_ORDER_UNKNOWN:
+    default:
+      format.field = V4L2_FIELD_INTERLACED;
+  }
+
+  format.width = GST_VIDEO_INFO_WIDTH (&info);
+  format.height = GST_VIDEO_INFO_FIELD_HEIGHT (&info);
+
+  fmt.pad = 0;
+  fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+  fmt.format = format;
+
+  /* Set format of subdev pad based on caps */
+  if (ioctl (self->subdev->video_fd, VIDIOC_SUBDEV_S_FMT, &fmt)) {
+    GST_ERROR_OBJECT (self, "VIDIOC_SUBDEV_S_FMT on Xilinx SCD subdev failed");
+    goto s_fmt_failed;
+  }
+
+  return TRUE;
+
+s_fmt_failed:
+  return FALSE;
+}
+
+static gboolean
 gst_xilinx_scd_set_caps (GstBaseTransform * trans, GstCaps * incaps,
     GstCaps * outcaps)
 {
@@ -460,6 +539,12 @@ gst_xilinx_scd_set_caps (GstBaseTransform * trans, GstCaps * incaps,
     return TRUE;
 
   g_return_val_if_fail (!GST_V4L2_IS_ACTIVE (self->v4l2output), FALSE);
+
+  if (!gst_xilinx_scd_set_subdev_format (trans, incaps))
+    goto incaps_failed;
+
+  /* Clear format list as subdev format has changed */
+  g_slist_free_full (g_steal_pointer (&self->v4l2output->formats), g_free);
 
   if (!gst_v4l2_object_set_format (self->v4l2output, incaps, &error))
     goto incaps_failed;
