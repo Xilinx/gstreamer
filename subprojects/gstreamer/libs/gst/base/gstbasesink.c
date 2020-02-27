@@ -309,7 +309,8 @@ struct _GstBaseSinkPrivate
 #define DEFAULT_THROTTLE_TIME       0
 #define DEFAULT_MAX_BITRATE         0
 #define DEFAULT_DROP_OUT_OF_SEGMENT TRUE
-#define DEFAULT_PROCESSING_DEADLINE (20 * GST_MSECOND)
+/* XILINX specific set default to instead of 20ms upstream */
+#define DEFAULT_PROCESSING_DEADLINE 0
 
 enum
 {
@@ -1246,9 +1247,12 @@ gst_base_sink_query_latency (GstBaseSink * sink, gboolean * live,
         max = us_max;
 
         if (l) {
-          if (max == -1 || min + processing_deadline <= max)
+          if (max == -1 || min + processing_deadline <= max) {
+            GST_DEBUG_OBJECT (sink,
+                "Adding processing deadline %" GST_TIME_FORMAT
+                "to min latency ", GST_TIME_ARGS (processing_deadline));
             min += processing_deadline;
-          else {
+          } else {
             GST_ELEMENT_WARNING (sink, CORE, CLOCK,
                 (_("Pipeline construction is invalid, please add queues.")),
                 ("Not enough buffering available for "
