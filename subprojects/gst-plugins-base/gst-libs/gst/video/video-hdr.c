@@ -21,8 +21,6 @@
 #  include "config.h"
 #endif
 
-#include <string.h>
-
 #include "video-hdr.h"
 
 #define N_ELEMENT_MASTERING_DISPLAY_INFO 10
