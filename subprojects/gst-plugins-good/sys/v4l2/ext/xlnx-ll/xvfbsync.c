@@ -395,9 +395,8 @@ xvfbsync_syncip_chan_populate (SyncIp * syncip, SyncChannel * sync_channel,
   }
 
   GST_DEBUG ("[fd: %d] mode: %s, max channel number: %d, active channel %d",
-      syncip->fd, config.encode ? "encode" : "decode", config.max_channels,
-      syncip->active_channels);
-
+      fd, config.encode ? "encode" : "decode", config.max_channels,
+      config.active_channels);
 
   syncip->max_channels = config.max_channels;
   syncip->active_channels = config.active_channels;
