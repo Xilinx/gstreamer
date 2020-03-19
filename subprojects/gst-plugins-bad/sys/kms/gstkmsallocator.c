@@ -115,21 +115,6 @@ gst_kms_memory_remove_fb (GstMemory * mem)
 }
 
 static void
-gst_kms_memory_remove_old_fb (GstMemory * mem)
-{
-  GstKMSAllocator *alloc = GST_KMS_ALLOCATOR (mem->allocator);
-  GstKMSMemory *kmsmem = (GstKMSMemory *) mem;
-
-  if (kmsmem->old_fb_id) {
-    GST_DEBUG_OBJECT (alloc, "removing fb id %d", kmsmem->fb_id);
-    drmModeRmFB (alloc->priv->fd, kmsmem->old_fb_id);
-    kmsmem->old_fb_id = 0;
-  }
-  kmsmem->old_fb_id = kmsmem->fb_id;
-  kmsmem->fb_id = 0;
-}
-
-static void
 gst_kms_allocator_memory_reset (GstKMSAllocator * allocator, GstKMSMemory * mem)
 {
   int err;
@@ -140,7 +125,6 @@ gst_kms_allocator_memory_reset (GstKMSAllocator * allocator, GstKMSMemory * mem)
     return;
 
   gst_kms_memory_remove_fb ((GstMemory *) mem);
-  gst_kms_memory_remove_old_fb ((GstMemory *) mem);
 
   for (i = 0; i < GST_VIDEO_MAX_PLANES; i++) {
     struct drm_gem_close arg = { mem->gem_handle[i], };
@@ -499,7 +483,7 @@ gst_kms_memory_add_fb (GstMemory * mem, GstVideoInfo * vinfo, guint32 flags)
   alloc = GST_KMS_ALLOCATOR (mem->allocator);
   kmsmem = (GstKMSMemory *) mem;
 
-  gst_kms_memory_remove_old_fb (mem);
+  gst_kms_memory_remove_fb (mem);
 
   w = GST_VIDEO_INFO_WIDTH (vinfo);
   h = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo);
