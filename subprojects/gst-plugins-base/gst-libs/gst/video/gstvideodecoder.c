@@ -350,6 +350,10 @@ struct _GstVideoDecoderPrivate
   /* whether input is considered as subframes */
   gboolean subframe_mode;
 
+  /* whether input is considered as subframes
+   * and subclass supports XLNXLL */
+  gboolean xlnx_ll;
+
   /* Error handling */
   gint max_errors;
   gint error_count;
@@ -784,6 +788,8 @@ gst_video_decoder_init (GstVideoDecoder * decoder, GstVideoDecoderClass * klass)
       DEFAULT_AUTOMATIC_REQUEST_SYNC_POINTS;
   decoder->priv->automatic_request_sync_point_flags =
       DEFAULT_AUTOMATIC_REQUEST_SYNC_POINT_FLAGS;
+
+  decoder->priv->xlnx_ll = FALSE;
 
   gst_video_decoder_reset (decoder, TRUE, TRUE);
 }
@@ -3464,6 +3470,7 @@ gst_video_decoder_finish_frame (GstVideoDecoder * decoder,
   GstVideoDecoderPrivate *priv = decoder->priv;
   GstBuffer *output_buffer;
   gboolean needs_reconfigure = FALSE;
+  GstVideoCodecFrame *early_decoded_frame = NULL;
 
   GST_LOG_OBJECT (decoder, "finish frame %p", frame);
 
@@ -3576,8 +3583,25 @@ gst_video_decoder_finish_frame (GstVideoDecoder * decoder,
    * if possible, i.e. if the subclass does not hold additional references
    * to the frame
    */
+  if (decoder->priv->xlnx_ll && decoder->priv->current_frame == frame
+      && !GST_BUFFER_FLAG_IS_SET (frame->input_buffer,
+          GST_BUFFER_FLAG_MARKER)) {
+    GST_LOG_OBJECT (decoder,
+        "received early finish_frame in xlnx-ll mode. Save current_frame");
+    early_decoded_frame = gst_video_codec_frame_ref (frame);
+  }
   gst_video_decoder_release_frame (decoder, frame);
   frame = NULL;
+
+  if (decoder->priv->xlnx_ll && early_decoded_frame) {
+    GST_LOG_OBJECT (decoder,
+        "restore current_frame after frame is released in xlnx-ll mode");
+    decoder->priv->current_frame =
+        gst_video_codec_frame_ref (early_decoded_frame);
+    decoder->priv->current_frame->events = NULL;
+    gst_video_codec_frame_unref (early_decoded_frame);
+    early_decoded_frame = NULL;
+  }
 
   if (decoder->output_segment.rate < 0.0
       && !(decoder->output_segment.flags & GST_SEEK_FLAG_TRICKMODE_KEY_UNITS)) {
@@ -4531,6 +4555,24 @@ gst_video_decoder_negotiate_default (GstVideoDecoder * decoder)
     state->allocation_caps = gst_caps_ref (state->caps);
 
   GST_DEBUG_OBJECT (decoder, "setting caps %" GST_PTR_FORMAT, state->caps);
+
+  {
+    GstCapsFeatures *features;
+
+    features = gst_caps_get_features (state->caps, 0);
+    if (features
+        && gst_caps_features_contains (features,
+            GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
+      if (decoder->input_segment.rate > 0.0) {
+        GST_DEBUG_OBJECT (decoder, "decoder is using XLNX-LL");
+        decoder->priv->xlnx_ll = TRUE;
+      } else {
+        GST_DEBUG_OBJECT (decoder,
+            "XLNX-LL caps set but doing reverse playback. Disable XLNX-LL mode");
+        decoder->priv->xlnx_ll = FALSE;
+      }
+    }
+  }
 
   /* Push all pending pre-caps events of the oldest frame before
    * setting caps */
