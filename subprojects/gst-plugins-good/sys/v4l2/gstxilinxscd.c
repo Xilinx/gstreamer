@@ -568,6 +568,14 @@ gst_xilinx_scd_query (GstBaseTransform * trans, GstPadDirection direction,
 {
   GstXilinxScd *self = GST_XILINX_SCD (trans);
   gboolean ret = TRUE;
+  gint xscd_supported_formats[] =
+      { GST_VIDEO_FORMAT_YUY2, GST_VIDEO_FORMAT_UYVY, GST_VIDEO_FORMAT_NV12,
+    GST_VIDEO_FORMAT_NV12_10LE32, GST_VIDEO_FORMAT_NV16_10LE32,
+    GST_VIDEO_FORMAT_NV16, GST_VIDEO_FORMAT_RGB, GST_VIDEO_FORMAT_BGR,
+    GST_VIDEO_FORMAT_BGRx
+  };
+  GValue xscd_formats = G_VALUE_INIT;
+  gint i;
 
   switch (GST_QUERY_TYPE (query)) {
     case GST_QUERY_CAPS:{
@@ -600,6 +608,23 @@ gst_xilinx_scd_query (GstBaseTransform * trans, GstPadDirection direction,
       result = gst_pad_peer_query_caps (otherpad, caps);
       result = gst_caps_make_writable (result);
       gst_caps_append (result, caps);
+
+      /* HACK: Advertise all formats because we automatically set media graph */
+      g_value_init (&xscd_formats, GST_TYPE_LIST);
+      for (i = 0;
+          i <
+          sizeof (xscd_supported_formats) / sizeof (*xscd_supported_formats);
+          i++) {
+        GValue value = G_VALUE_INIT;
+
+        g_value_init (&value, G_TYPE_STRING);
+        g_value_set_string (&value,
+            gst_video_format_to_string (xscd_supported_formats[i]));
+        gst_value_list_append_and_take_value (&xscd_formats, &value);
+      }
+
+      gst_caps_set_value (result, "format", &xscd_formats);
+      g_value_unset (&xscd_formats);
 
       GST_DEBUG_OBJECT (self, "Returning %s caps %" GST_PTR_FORMAT,
           GST_PAD_NAME (pad), result);
