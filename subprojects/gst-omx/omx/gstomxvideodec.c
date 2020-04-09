@@ -2032,6 +2032,15 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
       if (gst_omx_port_is_enabled (port))
         disable_port = TRUE;
     }
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    if (reconfigure_port && disable_port
+        && zynq_seamless_output_transition (self, port)) {
+      disable_port = FALSE;
+      reconfigure_port = FALSE;
+
+      gst_omx_port_mark_reconfigured (port);
+    }
+#endif
 
     /* Reallocate all buffers */
     if (disable_port) {
