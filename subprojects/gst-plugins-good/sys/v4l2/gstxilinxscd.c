@@ -520,21 +520,21 @@ gst_xilinx_scd_set_subdev_format (GstBaseTransform * trans, GstCaps * incaps)
   }
 
   /* Convert from GST field to V4L2 field */
-  if (!GST_VIDEO_INFO_IS_INTERLACED (&info))
+  if (!GST_VIDEO_INFO_IS_INTERLACED (&info)) {
     format.field = V4L2_FIELD_NONE;
-
-  if (GST_VIDEO_INFO_INTERLACE_MODE (&info) ==
-      GST_VIDEO_INTERLACE_MODE_ALTERNATE)
+  } else if (GST_VIDEO_INFO_INTERLACE_MODE (&info) ==
+      GST_VIDEO_INTERLACE_MODE_ALTERNATE) {
     format.field = V4L2_FIELD_ALTERNATE;
-
-  switch (GST_VIDEO_INFO_FIELD_ORDER (&info)) {
-    case GST_VIDEO_FIELD_ORDER_TOP_FIELD_FIRST:
-      format.field = V4L2_FIELD_INTERLACED_TB;
-    case GST_VIDEO_FIELD_ORDER_BOTTOM_FIELD_FIRST:
-      format.field = V4L2_FIELD_INTERLACED_BT;
-    case GST_VIDEO_FIELD_ORDER_UNKNOWN:
-    default:
-      format.field = V4L2_FIELD_INTERLACED;
+  } else {
+    switch (GST_VIDEO_INFO_FIELD_ORDER (&info)) {
+      case GST_VIDEO_FIELD_ORDER_TOP_FIELD_FIRST:
+        format.field = V4L2_FIELD_INTERLACED_TB;
+      case GST_VIDEO_FIELD_ORDER_BOTTOM_FIELD_FIRST:
+        format.field = V4L2_FIELD_INTERLACED_BT;
+      case GST_VIDEO_FIELD_ORDER_UNKNOWN:
+      default:
+        format.field = V4L2_FIELD_INTERLACED;
+    }
   }
 
   format.width = GST_VIDEO_INFO_WIDTH (&info);
