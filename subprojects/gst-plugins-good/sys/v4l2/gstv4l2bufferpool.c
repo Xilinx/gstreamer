@@ -1292,6 +1292,15 @@ gst_v4l2_buffer_pool_qbuf (GstV4l2BufferPool * pool, GstBuffer * buf,
     else
       field = obj->format.fmt.pix.field;
 
+    /* If interlaced alternate, specify if buffer is top or bottom */
+    if (field == V4L2_FIELD_ALTERNATE) {
+      if ((GST_BUFFER_FLAGS (buf) & GST_VIDEO_BUFFER_FLAG_TOP_FIELD) ==
+          GST_VIDEO_BUFFER_FLAG_TOP_FIELD)
+        field = V4L2_FIELD_TOP;
+      else
+        field = V4L2_FIELD_BOTTOM;
+    }
+
     group->buffer.field = field;
   }
 
