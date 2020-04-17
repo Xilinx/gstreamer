@@ -2716,6 +2716,7 @@ static void
 check_alternate_and_append_struct (GstCaps * caps, GstStructure * s)
 {
   const GValue *mode;
+  GstCapsFeatures *features = NULL;
 
   mode = gst_structure_get_value (s, "interlace-mode");
   if (!mode)
@@ -2724,12 +2725,9 @@ check_alternate_and_append_struct (GstCaps * caps, GstStructure * s)
   if (G_VALUE_HOLDS_STRING (mode)) {
     /* Add the INTERLACED feature if the mode is alternate */
     if (!g_strcmp0 (gst_structure_get_string (s, "interlace-mode"),
-            "alternate")) {
-      GstCapsFeatures *feat;
-
-      feat = gst_caps_features_new (GST_CAPS_FEATURE_FORMAT_INTERLACED, NULL);
-      gst_caps_set_features (caps, gst_caps_get_size (caps) - 1, feat);
-    }
+            "alternate"))
+      features =
+          gst_caps_features_new (GST_CAPS_FEATURE_FORMAT_INTERLACED, NULL);
   } else if (GST_VALUE_HOLDS_LIST (mode)) {
     /* If the mode is a list containing alternate, remove it from the list and add a
      * variant with interlace-mode=alternate and the INTERLACED feature. */
@@ -2757,7 +2755,7 @@ check_alternate_and_append_struct (GstCaps * caps, GstStructure * s)
   }
 
 done:
-  gst_caps_append_structure (caps, s);
+  gst_caps_append_structure_full (caps, s, features);
 }
 
 static void
