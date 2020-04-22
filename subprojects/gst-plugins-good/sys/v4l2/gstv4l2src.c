@@ -601,14 +601,6 @@ gst_v4l2src_fixate (GstBaseSrc * basesrc, GstCaps * caps,
    * enumerate the possibilities */
   caps = gst_caps_normalize (caps);
 
-  /* try hard to avoid TRY_FMT since some UVC camera just crash when this
-   * is called at run-time. */
-  if (gst_v4l2_object_caps_is_subset (obj, caps)) {
-    fcaps = gst_v4l2_object_get_current_caps (obj);
-    GST_DEBUG_OBJECT (basesrc, "reuse current caps %" GST_PTR_FORMAT, fcaps);
-    goto out;
-  }
-
   for (i = 0; i < gst_caps_get_size (caps); ++i) {
     gst_v4l2_clear_error (&error);
     if (fcaps)
@@ -616,20 +608,33 @@ gst_v4l2src_fixate (GstBaseSrc * basesrc, GstCaps * caps,
 
     fcaps = gst_caps_copy_nth (caps, i);
 
-    /* Just check if the format is acceptable, once we know
-     * no buffers should be outstanding we try S_FMT.
-     *
-     * Basesrc will do an allocation query that
-     * should indirectly reclaim buffers, after that we can
-     * set the format and then configure our pool */
-    if (gst_v4l2_object_try_format (obj, fcaps, &error)) {
-      /* make sure the caps changed before doing anything */
-      if (gst_v4l2_object_caps_equal (obj, fcaps))
+    if (GST_V4L2_IS_ACTIVE (obj)) {
+      /* try hard to avoid TRY_FMT since some UVC camera just crash when this
+       * is called at run-time. */
+      if (gst_v4l2_object_caps_is_subset (obj, fcaps)) {
+        gst_caps_unref (fcaps);
+        fcaps = gst_v4l2_object_get_current_caps (obj);
         break;
+      }
 
-      v4l2src->renegotiation_adjust = v4l2src->offset + 1;
-      v4l2src->pending_set_fmt = TRUE;
-      break;
+      /* Just check if the format is acceptable, once we know
+       * no buffers should be outstanding we try S_FMT.
+       *
+       * Basesrc will do an allocation query that
+       * should indirectly reclaim buffers, after that we can
+       * set the format and then configure our pool */
+      if (gst_v4l2_object_try_format (obj, fcaps, &error)) {
+        /* make sure the caps changed before doing anything */
+        if (gst_v4l2_object_caps_equal (obj, fcaps))
+          break;
+
+        v4l2src->renegotiation_adjust = v4l2src->offset + 1;
+        v4l2src->pending_set_fmt = TRUE;
+        break;
+      }
+    } else {
+      if (gst_v4l2src_set_format (v4l2src, fcaps, &error))
+        break;
     }
 
     /* Only EIVAL make sense, report any other errors, this way we don't keep
@@ -649,7 +654,6 @@ gst_v4l2src_fixate (GstBaseSrc * basesrc, GstCaps * caps,
     return NULL;
   }
 
-out:
   gst_caps_unref (caps);
 
   GST_DEBUG_OBJECT (basesrc, "fixated caps %" GST_PTR_FORMAT, fcaps);
