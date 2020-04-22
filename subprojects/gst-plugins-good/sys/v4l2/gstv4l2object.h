@@ -47,8 +47,8 @@ typedef struct _GstV4l2ObjectClassHelper GstV4l2ObjectClassHelper;
 #define GST_V4L2_MIN_BUFFERS(obj) \
     ((GST_VIDEO_INFO_INTERLACE_MODE (&obj->info) == \
       GST_VIDEO_INTERLACE_MODE_ALTERNATE) ? \
-      /* 2x buffers needed with each field in its own buffer */ \
-      4 : 2)
+      /* FIXME: increase buffers to 4x, workaround for buffer underrun issue */ \
+      8 : 2)
 
 /* max frame width/height */
 #define GST_V4L2_MAX_SIZE (1<<15) /* 2^15 == 32768 */
