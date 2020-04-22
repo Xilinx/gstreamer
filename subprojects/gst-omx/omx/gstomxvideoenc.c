@@ -3775,6 +3775,30 @@ fraction_to_uint (guint num, guint den, guint scale)
   return (guint32) round (val * scale);
 }
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+static gboolean
+gst_omx_video_enc_interlacing_field_order (GstOMXVideoEnc * self,
+    OMX_U32 * order)
+{
+  OMX_ERRORTYPE err;
+  OMX_INTERLACEFORMATTYPE interlace_format_param;
+
+  GST_OMX_INIT_STRUCT (&interlace_format_param);
+  interlace_format_param.nPortIndex = self->enc_in_port->index;
+
+  err = gst_omx_component_get_parameter (self->enc,
+      (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoInterlaceFormatCurrent,
+      &interlace_format_param);
+
+  if (err == OMX_ErrorNone) {
+    *order = interlace_format_param.nFormat;
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+#endif
+
 static GstFlowReturn
 gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
     GstVideoCodecFrame * frame)
@@ -3970,8 +3994,24 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
     }
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
     handle_roi_metadata (self, frame->input_buffer);
-#endif
+    if (starting) {
+      OMX_U32 order;
 
+      if (gst_omx_video_enc_interlacing_field_order (self, &order)) {
+        if ((GST_VIDEO_BUFFER_IS_TOP_FIELD (frame->input_buffer)
+                && order == OMX_ALG_InterlaceAlternateBottomFieldFirst)
+            || (GST_VIDEO_BUFFER_IS_BOTTOM_FIELD (frame->input_buffer)
+                && order == OMX_ALG_InterlaceAlternateTopFieldFirst)) {
+          self->started = TRUE;
+          gst_omx_port_release_buffer (port, buf);
+          gst_video_codec_frame_unref (frame);
+          GST_DEBUG_OBJECT (self,
+              "Drop the field not matching the encoder setting");
+          return GST_FLOW_OK;
+        }
+      }
+    }
+#endif
     if ((self->has_mcdv_sei || self->has_cll_sei) && starting) {
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
       /*
