@@ -42,6 +42,27 @@
   (m)->min_display_mastering_luminance
 
 /**
+ * gst_video_hdr_format_to_string:
+ * @format: a #GstVideoHDRFormat
+ *
+ * Gets a string representing the given hdr format.
+ *
+ * Since: 1.18
+ */
+const gchar *
+gst_video_hdr_format_to_string (GstVideoHDRFormat format)
+{
+  switch (format) {
+    case GST_VIDEO_HDR_FORMAT_HDR10:
+      return "hdr10";
+    case GST_VIDEO_HDR_FORMAT_HDR10_PLUS:
+      return "hdr10+";
+    default:
+      return "";
+  }
+}
+
+/**
  * gst_video_mastering_display_info_init:
  * @minfo: a #GstVideoMasteringDisplayInfo
  *
