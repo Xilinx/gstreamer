@@ -3760,15 +3760,6 @@ handle_roi_metadata (GstOMXVideoEnc * self, GstBuffer * input)
 }
 #endif
 
-static inline guint32
-fraction_to_uint (guint num, guint den, guint scale)
-{
-  gdouble val;
-  gst_util_fraction_to_double (num, den, &val);
-
-  return (guint32) round (val * scale);
-}
-
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
 static gboolean
 gst_omx_video_enc_interlacing_field_order (GstOMXVideoEnc * self,
@@ -4008,47 +3999,35 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
 #endif
     if ((self->has_mcdv_sei || self->has_cll_sei) && starting) {
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-      /*
-       * Precision defined by spec.
-       * Chromaticity coordinates have a precision of 0.00002
-       * Luminance have a precision of 0.0001
-       * See D.3.28 Mastering display colour volume SEI message semantics
-       *
-       */
-      const guint chroma_den = 50000;
-      const guint luma_den = 10000;
       OMX_ALG_VIDEO_CONFIG_HIGH_DYNAMIC_RANGE_SEI hdr_sei_config;
       OMX_ERRORTYPE err;
+      int i;
 
       GST_OMX_INIT_STRUCT (&hdr_sei_config);
       hdr_sei_config.nPortIndex = self->enc_out_port->index;
 
       if (self->has_mcdv_sei) {
         hdr_sei_config.bHasMDCV = OMX_TRUE;
-        hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[0].nX =
-            fraction_to_uint (self->minfo.Gx_n, self->minfo.Gx_d, chroma_den);
-        hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[0].nY =
-            fraction_to_uint (self->minfo.Gy_n, self->minfo.Gy_d, chroma_den);
-        hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[1].nX =
-            fraction_to_uint (self->minfo.Bx_n, self->minfo.Bx_d, chroma_den);
-        hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[1].nY =
-            fraction_to_uint (self->minfo.By_n, self->minfo.By_d, chroma_den);
-        hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[2].nX =
-            fraction_to_uint (self->minfo.Rx_n, self->minfo.Rx_d, chroma_den);
-        hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[2].nY =
-            fraction_to_uint (self->minfo.Ry_n, self->minfo.Ry_d, chroma_den);
+        /* GstVideoMasteringDisplayInfo::display_primaries is rgb order but
+         * AVC and HEVC uses gbr order
+         * See spec D.3.28 display_primaries_x and display_primaries_y
+         */
+        for (i = 0; i < 3; i++) {
+          hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[i].nX =
+              self->minfo.display_primaries[(i + 1) % 3].x;
+          hdr_sei_config.masteringDisplayColourVolume.displayPrimaries[i].nY =
+              self->minfo.display_primaries[(i + 1) % 3].y;
+        }
         hdr_sei_config.masteringDisplayColourVolume.whitePoint.nX =
-            fraction_to_uint (self->minfo.Wx_n, self->minfo.Wx_d, chroma_den);
+            self->minfo.white_point.x;
         hdr_sei_config.masteringDisplayColourVolume.whitePoint.nY =
-            fraction_to_uint (self->minfo.Wy_n, self->minfo.Wy_d, chroma_den);
+            self->minfo.white_point.y;
         hdr_sei_config.masteringDisplayColourVolume.
             nMaxDisplayMasteringLuminance =
-            fraction_to_uint (self->minfo.max_luma_n, self->minfo.max_luma_d,
-            luma_den);
+            self->minfo.max_display_mastering_luminance;
         hdr_sei_config.masteringDisplayColourVolume.
             nMinDisplayMasteringLuminance =
-            fraction_to_uint (self->minfo.min_luma_n, self->minfo.min_luma_d,
-            luma_den);
+            self->minfo.min_display_mastering_luminance;
       } else {
         hdr_sei_config.bHasMDCV = OMX_FALSE;
       }
@@ -4056,9 +4035,9 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
       if (self->has_cll_sei) {
         hdr_sei_config.bHasCLL = OMX_TRUE;
         hdr_sei_config.contentLightLevel.nMaxContentLightLevel =
-            fraction_to_uint (self->linfo.maxCLL_n, self->linfo.maxCLL_d, 1);
+            self->linfo.max_content_light_level;
         hdr_sei_config.contentLightLevel.nMaxPicAverageLightLevel =
-            fraction_to_uint (self->linfo.maxFALL_n, self->linfo.maxFALL_d, 1);
+            self->linfo.max_frame_average_light_level;
       } else {
         hdr_sei_config.bHasCLL = OMX_FALSE;
       }
