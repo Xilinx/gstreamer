@@ -2524,11 +2524,21 @@ gst_omx_video_dec_negotiate (GstOMXVideoDec * self)
   comp_supported_caps = gst_omx_video_get_caps_for_map (negotiation_map);
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-  {
+  /* Do not activate the specific Xilinx Low Latency mode if subframes
+   * are not enabled and activate it only when the downstream element advertises
+   * the feature explicitely (Peer caps ANY is not supported). */
+  if (gst_video_decoder_get_subframe_mode (GST_VIDEO_DECODER (self))) {
     GstCapsFeatures *features;
+    gboolean is_peer_any;
+    GstCaps *peer_caps;
+
+    peer_caps =
+        gst_pad_peer_query_caps (GST_VIDEO_DECODER_SRC_PAD (self), NULL);
+    is_peer_any = gst_caps_is_any (peer_caps);
+    gst_caps_unref (peer_caps);
 
     features = gst_caps_get_features (intersection, 0);
-    if (features
+    if (!is_peer_any && features
         && gst_caps_features_contains (features,
             GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
       OMX_ALG_PORT_PARAM_EARLY_CALLBACK param;
@@ -2601,6 +2611,7 @@ gst_omx_video_dec_negotiate (GstOMXVideoDec * self)
   err = gst_omx_component_get_parameter (self->dec,
       OMX_IndexParamVideoPortFormat, &param);
   if (err != OMX_ErrorNone) {
+    gst_caps_unref (intersection);
     GST_ERROR_OBJECT (self, "Failed to get video port format: %s (0x%08x)",
         gst_omx_error_to_string (err), err);
     return FALSE;
