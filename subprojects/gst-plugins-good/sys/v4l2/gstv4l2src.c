@@ -334,6 +334,9 @@ gst_v4l2src_init (GstV4l2Src * v4l2src)
 
   gst_base_src_set_format (GST_BASE_SRC (v4l2src), GST_FORMAT_TIME);
   gst_base_src_set_live (GST_BASE_SRC (v4l2src), TRUE);
+
+  gst_video_mastering_display_info_init (&v4l2src->minfo);
+  gst_video_content_light_level_init (&v4l2src->cinfo);
 }
 
 
@@ -1357,6 +1360,170 @@ again:
   }
 
   return GST_FLOW_OK;
+}
+
+static gboolean
+gst_v4l2src_get_controls (GstV4l2Src * self,
+    struct v4l2_ext_control *control, guint count)
+{
+  gint ret;
+  struct v4l2_ext_controls controls = {
+    .controls = control,
+    .count = count,
+  };
+
+  ret =
+      self->v4l2object->ioctl (self->v4l2object->video_fd, VIDIOC_G_EXT_CTRLS,
+      &controls);
+  if (ret < 0) {
+    GST_ERROR_OBJECT (self, "VIDIOC_G_EXT_CTRLS failed: %s",
+        g_strerror (errno));
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+/* Display primary order as per CTA 861.G 6.9.1 */
+static void
+gst_v4l2src_set_display_primaries (GstV4l2Src * self,
+    GstVideoMasteringDisplayInfo * minfo, struct v4l2_hdr10_payload *payload)
+{
+  gint i, largest_x = 0, largest_y = 0;
+  /* Payload indices of RGB primaries */
+  gint rgb_indices[3] = { -1, -1, -1 };
+
+  for (i = 0; i < 3; i++) {
+    /* Red has largest x display primary */
+    if (payload->display_primaries[i].x > largest_x) {
+      largest_x = payload->display_primaries[i].x;
+      if (rgb_indices[0] != -1 && rgb_indices[2] == -1)
+        rgb_indices[2] = rgb_indices[0];
+
+      rgb_indices[0] = i;
+    }
+
+    /* Green has largest y display primary */
+    if (payload->display_primaries[i].y > largest_y) {
+      largest_y = payload->display_primaries[i].y;
+      if (rgb_indices[1] != -1 && rgb_indices[2] == -1)
+        rgb_indices[2] = rgb_indices[1];
+
+      rgb_indices[1] = i;
+    }
+
+    /* Blue has neither */
+    if (payload->display_primaries[i].y < largest_y
+        && payload->display_primaries[i].x < largest_x)
+      rgb_indices[2] = i;
+  }
+
+  /* Not compliant with CTA 861.G so stop parsing display primaries */
+  if (rgb_indices[0] == rgb_indices[1] || rgb_indices[0] == rgb_indices[2]
+      || rgb_indices[1] == rgb_indices[2]) {
+    GST_WARNING_OBJECT (self,
+        "Display primaries not compliant with CTA 861.G. Ignoring display primaries");
+  } else {
+    for (i = 0; i < 3; i++) {
+      minfo->display_primaries[i].x =
+          payload->display_primaries[rgb_indices[i]].x;
+      minfo->display_primaries[i].y =
+          payload->display_primaries[rgb_indices[i]].y;
+    }
+  }
+}
+
+static void
+gst_v4l2src_hdr_get_metadata (GstV4l2Src * self)
+{
+  struct v4l2_metadata_hdr ctrl_payload;
+  struct v4l2_hdr10_payload *payload;
+  struct v4l2_ext_control control[] = {
+    {
+          .id = V4L2_CID_METADATA_HDR,
+          .ptr = &ctrl_payload,
+          .size = sizeof (struct v4l2_metadata_hdr),
+        },
+  };
+  GstVideoMasteringDisplayInfo minfo;
+  GstVideoContentLightLevel cinfo;
+  GstCaps *cur_caps = NULL, *new_caps = NULL;
+  gboolean update_caps = FALSE;
+
+  gst_video_mastering_display_info_init (&minfo);
+  gst_video_content_light_level_init (&cinfo);
+
+  if (!gst_v4l2src_get_controls (self, control, 1)) {
+    GST_ERROR_OBJECT (self, "Failed to get HDR metadata: %s",
+        g_strerror (errno));
+  } else {
+    if (ctrl_payload.metadata_type == V4L2_HDR_TYPE_HDR10) {
+      payload = (struct v4l2_hdr10_payload *) ctrl_payload.payload;
+
+      gst_v4l2src_set_display_primaries (self, &minfo, payload);
+      minfo.white_point.x = payload->white_point.x;
+      minfo.white_point.y = payload->white_point.y;
+      minfo.max_display_mastering_luminance = payload->max_mdl;
+      minfo.min_display_mastering_luminance = payload->min_mdl;
+      GST_LOG_OBJECT (self, "Received mastering display info: "
+          "Red(%u, %u) "
+          "Green(%u, %u) "
+          "Blue(%u, %u) "
+          "White(%u, %u) "
+          "max_luminance(%u) "
+          "min_luminance(%u) ",
+          minfo.display_primaries[0].x, minfo.display_primaries[0].y,
+          minfo.display_primaries[1].x, minfo.display_primaries[1].y,
+          minfo.display_primaries[2].x, minfo.display_primaries[2].y,
+          minfo.white_point.x, minfo.white_point.y,
+          minfo.max_display_mastering_luminance,
+          minfo.min_display_mastering_luminance);
+
+      cinfo.max_content_light_level = payload->max_cll;
+      cinfo.max_frame_average_light_level = payload->max_fall;
+      GST_LOG_OBJECT (self, "Received content light level: "
+          "maxCLL:(%u), maxFALL:(%u)",
+          cinfo.max_content_light_level, cinfo.max_frame_average_light_level);
+
+      cur_caps = gst_pad_get_current_caps (GST_BASE_SRC_PAD (self));
+      if (cur_caps && (new_caps = gst_caps_copy (cur_caps))) {
+        if (payload->eotf == V4L2_EOTF_SMPTE_ST2084
+            &&
+            g_strcmp0 (gst_structure_get_string (gst_caps_get_structure
+                    (cur_caps, 0), "colorimetry"),
+                GST_VIDEO_COLORIMETRY_BT2100_PQ)) {
+          update_caps = TRUE;
+          gst_caps_set_simple (new_caps, "colorimetry", G_TYPE_STRING,
+              GST_VIDEO_COLORIMETRY_BT2100_PQ, NULL);
+        }
+
+        if (!gst_video_mastering_display_info_is_equal (&self->minfo, &minfo)) {
+          update_caps = TRUE;
+          self->minfo = minfo;
+          gst_video_mastering_display_info_add_to_caps (&self->minfo, new_caps);
+        }
+
+        if (cinfo.max_content_light_level !=
+            self->cinfo.max_content_light_level
+            || cinfo.max_frame_average_light_level !=
+            self->cinfo.max_frame_average_light_level) {
+          update_caps = TRUE;
+          self->cinfo = cinfo;
+          gst_video_content_light_level_add_to_caps (&self->cinfo, new_caps);
+        }
+
+        if (update_caps)
+          gst_pad_set_caps (GST_BASE_SRC_PAD (self), new_caps);
+
+        gst_caps_unref (cur_caps);
+        gst_caps_unref (new_caps);
+      }
+    } else {
+      GST_WARNING_OBJECT (self,
+          "VIDIOC_G_EXT_CTRLS returned invalid HDR metadata type: %u",
+          ctrl_payload.metadata_type);
+    }
+  }
 }
 
 static gboolean
