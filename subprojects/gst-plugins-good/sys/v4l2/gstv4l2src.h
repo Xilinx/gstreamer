@@ -26,6 +26,7 @@
 
 #include <gstv4l2object.h>
 #include <gstv4l2bufferpool.h>
+#include <gst/video/video.h>
 
 G_BEGIN_DECLS
 
@@ -77,6 +78,10 @@ struct _GstV4l2Src
 
   /* TRUE if using Xilinx low latency capture */
   gboolean xlnx_ll;
+
+  /* For HDR10 support */
+  GstVideoMasteringDisplayInfo minfo;
+  GstVideoContentLightLevel cinfo;
 };
 
 struct _GstV4l2SrcClass
