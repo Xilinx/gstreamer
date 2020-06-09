@@ -201,6 +201,7 @@ struct _GstV4l2Object {
   gulong frequency;
   GstStructure *extra_controls;
   gboolean keep_aspect;
+  gboolean force_ntsc_tv;
   GValue *par;
 
   /* funcs */
@@ -258,7 +259,8 @@ GType gst_v4l2_object_get_type (void);
     PROP_CAPTURE_IO_MODE,     \
     PROP_EXTRA_CONTROLS,      \
     PROP_PIXEL_ASPECT_RATIO,  \
-    PROP_FORCE_ASPECT_RATIO
+    PROP_FORCE_ASPECT_RATIO,  \
+    PROP_FORCE_NTSC_TV
 
 /* create/destroy */
 GstV4l2Object*  gst_v4l2_object_new       (GstElement * element,
