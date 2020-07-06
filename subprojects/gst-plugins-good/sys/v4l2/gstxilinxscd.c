@@ -113,6 +113,36 @@ gst_xilinx_scd_get_property (GObject * object,
   }
 }
 
+static void
+gst_xilinx_scd_append_supported_caps (GstXilinxScd * self, GstCaps * caps)
+{
+  gint xscd_supported_formats[] =
+      { GST_VIDEO_FORMAT_YUY2, GST_VIDEO_FORMAT_UYVY, GST_VIDEO_FORMAT_NV12,
+    GST_VIDEO_FORMAT_NV12_10LE32, GST_VIDEO_FORMAT_NV16_10LE32,
+    GST_VIDEO_FORMAT_NV16, GST_VIDEO_FORMAT_RGB, GST_VIDEO_FORMAT_BGR,
+    GST_VIDEO_FORMAT_BGRx
+  };
+  GValue xscd_formats = G_VALUE_INIT;
+  gint i;
+
+  g_value_init (&xscd_formats, GST_TYPE_LIST);
+  for (i = 0; i < G_N_ELEMENTS (xscd_supported_formats); i++) {
+    GValue value = G_VALUE_INIT;
+
+    g_value_init (&value, G_TYPE_STRING);
+    g_value_set_string (&value,
+        gst_video_format_to_string (xscd_supported_formats[i]));
+    gst_value_list_append_and_take_value (&xscd_formats, &value);
+  }
+
+  gst_caps_set_value (caps, "format", &xscd_formats);
+  g_value_unset (&xscd_formats);
+
+  GST_LOG_OBJECT (self,
+      "Appending Xilinx supported color formats to caps %" GST_PTR_FORMAT,
+      caps);
+}
+
 static gboolean
 find_scd_video (GstV4l2Media * media, GstV4l2MediaEntity * scd_entity,
     GstV4l2MediaEntity ** video_entity, GstV4l2MediaInterface ** video)
@@ -366,6 +396,8 @@ gst_xilinx_scd_open (GstXilinxScd * self)
 
   self->probed_sinkcaps = gst_v4l2_object_get_caps (self->v4l2output,
       gst_v4l2_object_get_raw_caps ());
+  /* HACK: SCD IP operates on luma buffers so it can support all formats */
+  gst_xilinx_scd_append_supported_caps (self, self->probed_sinkcaps);
 
   if (gst_caps_is_empty (self->probed_sinkcaps))
     goto no_input_format;
@@ -567,14 +599,6 @@ gst_xilinx_scd_query (GstBaseTransform * trans, GstPadDirection direction,
 {
   GstXilinxScd *self = GST_XILINX_SCD (trans);
   gboolean ret = TRUE;
-  gint xscd_supported_formats[] =
-      { GST_VIDEO_FORMAT_YUY2, GST_VIDEO_FORMAT_UYVY, GST_VIDEO_FORMAT_NV12,
-    GST_VIDEO_FORMAT_NV12_10LE32, GST_VIDEO_FORMAT_NV16_10LE32,
-    GST_VIDEO_FORMAT_NV16, GST_VIDEO_FORMAT_RGB, GST_VIDEO_FORMAT_BGR,
-    GST_VIDEO_FORMAT_BGRx
-  };
-  GValue xscd_formats = G_VALUE_INIT;
-  gint i;
 
   switch (GST_QUERY_TYPE (query)) {
     case GST_QUERY_CAPS:{
@@ -609,21 +633,7 @@ gst_xilinx_scd_query (GstBaseTransform * trans, GstPadDirection direction,
       gst_caps_append (result, caps);
 
       /* HACK: Advertise all formats because we automatically set media graph */
-      g_value_init (&xscd_formats, GST_TYPE_LIST);
-      for (i = 0;
-          i <
-          sizeof (xscd_supported_formats) / sizeof (*xscd_supported_formats);
-          i++) {
-        GValue value = G_VALUE_INIT;
-
-        g_value_init (&value, G_TYPE_STRING);
-        g_value_set_string (&value,
-            gst_video_format_to_string (xscd_supported_formats[i]));
-        gst_value_list_append_and_take_value (&xscd_formats, &value);
-      }
-
-      gst_caps_set_value (result, "format", &xscd_formats);
-      g_value_unset (&xscd_formats);
+      gst_xilinx_scd_append_supported_caps (self, result);
 
       GST_DEBUG_OBJECT (self, "Returning %s caps %" GST_PTR_FORMAT,
           GST_PAD_NAME (pad), result);
