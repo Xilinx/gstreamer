@@ -123,6 +123,8 @@ gst_xilinx_scd_append_supported_caps (GstXilinxScd * self, GstCaps * caps)
     GST_VIDEO_FORMAT_BGRx
   };
   GValue xscd_formats = G_VALUE_INIT;
+  GstCapsFeatures *features = NULL;
+  GstCaps *caps_variant = NULL;
   gint i;
 
   g_value_init (&xscd_formats, GST_TYPE_LIST);
@@ -137,6 +139,36 @@ gst_xilinx_scd_append_supported_caps (GstXilinxScd * self, GstCaps * caps)
 
   gst_caps_set_value (caps, "format", &xscd_formats);
   g_value_unset (&xscd_formats);
+
+  features = gst_caps_get_features (caps, 0);
+  caps_variant = gst_caps_copy (caps);
+
+  for (i = 0; i < gst_caps_get_size (caps_variant); i++) {
+    GstStructure *struct_variant;
+
+    struct_variant = gst_caps_get_structure (caps_variant, i);
+
+    if (features
+        && gst_caps_features_contains (features,
+            GST_CAPS_FEATURE_FORMAT_INTERLACED)) {
+      GstCapsFeatures *features_progressive;
+
+      features_progressive = gst_caps_features_copy (features);
+      gst_caps_features_remove (features_progressive,
+          GST_CAPS_FEATURE_FORMAT_INTERLACED);
+      gst_caps_set_features (caps_variant, i, features_progressive);
+
+      gst_structure_set (struct_variant, "interlace-mode", G_TYPE_STRING,
+          "progressive", NULL);
+    } else {
+      gst_caps_set_features (caps_variant, i,
+          gst_caps_features_new (GST_CAPS_FEATURE_FORMAT_INTERLACED, NULL));
+
+      gst_structure_set (struct_variant, "interlace-mode", G_TYPE_STRING,
+          "alternate", NULL);
+    }
+  }
+  caps = gst_caps_merge (caps, caps_variant);
 
   GST_LOG_OBJECT (self,
       "Appending Xilinx supported color formats to caps %" GST_PTR_FORMAT,
@@ -632,7 +664,8 @@ gst_xilinx_scd_query (GstBaseTransform * trans, GstPadDirection direction,
       result = gst_caps_make_writable (result);
       gst_caps_append (result, caps);
 
-      /* HACK: Advertise all formats because we automatically set media graph */
+      /* HACK: SCD IP operates on luma buffers so it can support all color
+       * formats and both alternate and progressive mode */
       gst_xilinx_scd_append_supported_caps (self, result);
 
       GST_DEBUG_OBJECT (self, "Returning %s caps %" GST_PTR_FORMAT,
