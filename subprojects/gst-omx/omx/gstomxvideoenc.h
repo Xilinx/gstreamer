@@ -103,6 +103,7 @@ struct _GstOMXVideoEnc
   guint32 max_picture_size_i;
   guint32 max_picture_size_p;
   guint32 max_picture_size_b;
+  guint32 max_consecutive_skip;
 #endif
 
   /* for HDR10 support */
