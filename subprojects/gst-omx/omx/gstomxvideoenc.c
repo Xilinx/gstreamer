@@ -333,6 +333,7 @@ enum
   PROP_SKIP_FRAME,
   PROP_MAX_PICTURE_SIZE,
   PROP_MAX_PICTURE_SIZES,
+  PROP_MAX_CONSECUTIVE_SKIP,
 };
 
 /* FIXME: Better defaults */
@@ -368,6 +369,7 @@ enum
 #define GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_I_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_P_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_B_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_MAX_CONSECUTIVE_SKIP_DEFAULT (0xffffffff)
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
 #define OMX_ALG_GST_EVENT_INSERT_LONGTERM "omx-alg/insert-longterm"
@@ -631,6 +633,13 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
               "One of I, P, or B frame's max picture size value", 0, G_MAXINT,
               0, G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS),
           G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_MAX_CONSECUTIVE_SKIP,
+      g_param_spec_uint ("max-consecutive-skip", "Max consecutive frame skip",
+          "Max number of consecutive frames to be skipped. Only applicable if skip-frame is enabled",
+          0, G_MAXUINT, GST_OMX_VIDEO_ENC_MAX_CONSECUTIVE_SKIP_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
 #endif
 
   element_class->change_state =
@@ -698,6 +707,7 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->max_picture_size_i = GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_I_DEFAULT;
   self->max_picture_size_p = GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_P_DEFAULT;
   self->max_picture_size_b = GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_B_DEFAULT;
+  self->max_consecutive_skip = GST_OMX_VIDEO_ENC_MAX_CONSECUTIVE_SKIP_DEFAULT;
 #endif
 
   gst_video_mastering_display_info_init (&self->minfo);
@@ -1244,9 +1254,11 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
     GST_OMX_INIT_STRUCT (&skip_frame);
     skip_frame.nPortIndex = self->enc_out_port->index;
     skip_frame.bEnableSkipFrame = self->skip_frame;
+    skip_frame.nMaxConsecutiveSkipFrame = self->max_consecutive_skip;
 
-    GST_DEBUG_OBJECT (self, "%s skip frame",
-        self->skip_frame ? "Enable" : "Disable");
+    GST_DEBUG_OBJECT (self,
+        "%s skip frame with %u maximum consecutive skip frames",
+        self->skip_frame ? "Enable" : "Disable", self->max_consecutive_skip);
 
     err =
         gst_omx_component_set_parameter (self->enc,
@@ -1684,6 +1696,9 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
 
       break;
     }
+    case PROP_MAX_CONSECUTIVE_SKIP:
+      self->max_consecutive_skip = g_value_get_uint (value);
+      break;
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -1787,6 +1802,9 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
       break;
     case PROP_MAX_PICTURE_SIZE:
       g_value_set_uint (value, self->max_picture_size);
+      break;
+    case PROP_MAX_CONSECUTIVE_SKIP:
+      g_value_set_uint (value, self->max_consecutive_skip);
       break;
 #endif
     default:
