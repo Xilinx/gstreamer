@@ -336,6 +336,7 @@ enum
   PROP_MAX_PICTURE_SIZE,
   PROP_MAX_PICTURE_SIZES,
   PROP_MAX_CONSECUTIVE_SKIP,
+  PROP_OUTPUT_CROP,
 };
 
 /* FIXME: Better defaults */
@@ -372,6 +373,10 @@ enum
 #define GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_P_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_B_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_MAX_CONSECUTIVE_SKIP_DEFAULT (0xffffffff)
+#define GST_OMX_VIDEO_ENC_OUTPUT_CROP_LEFT_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_OUTPUT_CROP_TOP_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_OUTPUT_CROP_WIDTH_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_OUTPUT_CROP_HEIGHT_DEFAULT (0)
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
 #define OMX_ALG_GST_EVENT_INSERT_LONGTERM "omx-alg/insert-longterm"
@@ -646,6 +651,15 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
           0, G_MAXUINT, GST_OMX_VIDEO_ENC_MAX_CONSECUTIVE_SKIP_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_OUTPUT_CROP,
+      gst_param_spec_array ("output-crop",
+          "Cropping parameters for output bitstream",
+          "Cropping parameters for output bitstream ('<left, top, width, height>')",
+          g_param_spec_int ("crop-x", "crop value",
+              "Beginning coordinates, width, or height for output crop value",
+              0, G_MAXINT, 0, G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS),
+          G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
 #endif
 
   element_class->change_state =
@@ -714,6 +728,10 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->max_picture_size_p = GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_P_DEFAULT;
   self->max_picture_size_b = GST_OMX_VIDEO_ENC_MAX_PICTURE_SIZE_B_DEFAULT;
   self->max_consecutive_skip = GST_OMX_VIDEO_ENC_MAX_CONSECUTIVE_SKIP_DEFAULT;
+  self->output_crop_left = GST_OMX_VIDEO_ENC_OUTPUT_CROP_LEFT_DEFAULT;
+  self->output_crop_top = GST_OMX_VIDEO_ENC_OUTPUT_CROP_TOP_DEFAULT;
+  self->output_crop_width = GST_OMX_VIDEO_ENC_OUTPUT_CROP_WIDTH_DEFAULT;
+  self->output_crop_height = GST_OMX_VIDEO_ENC_OUTPUT_CROP_HEIGHT_DEFAULT;
 #endif
 
   gst_video_mastering_display_info_init (&self->minfo);
@@ -1705,6 +1723,46 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
     case PROP_MAX_CONSECUTIVE_SKIP:
       self->max_consecutive_skip = g_value_get_uint (value);
       break;
+    case PROP_OUTPUT_CROP:
+    {
+      const GValue *v;
+
+      if (gst_value_array_get_size (value) != 4) {
+        GST_ERROR_OBJECT (self,
+            "Badly formated output-crop, must contains 4 gint");
+        break;
+      }
+
+      v = gst_value_array_get_value (value, 0);
+      if (!G_VALUE_HOLDS_INT (v)) {
+        GST_ERROR_OBJECT (self, "output-crop left is not int");
+        break;
+      }
+      self->output_crop_left = g_value_get_int (v);
+
+      v = gst_value_array_get_value (value, 1);
+      if (!G_VALUE_HOLDS_INT (v)) {
+        GST_ERROR_OBJECT (self, "output-crop top is not int");
+        break;
+      }
+      self->output_crop_top = g_value_get_int (v);
+
+      v = gst_value_array_get_value (value, 2);
+      if (!G_VALUE_HOLDS_INT (v)) {
+        GST_ERROR_OBJECT (self, "output-crop width is not int");
+        break;
+      }
+      self->output_crop_width = g_value_get_int (v);
+
+      v = gst_value_array_get_value (value, 3);
+      if (!G_VALUE_HOLDS_INT (v)) {
+        GST_ERROR_OBJECT (self, "output-crop height is not int");
+        break;
+      }
+      self->output_crop_height = g_value_get_int (v);
+
+      break;
+    }
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -3123,6 +3181,48 @@ gst_omx_video_enc_set_interlacing_parameters (GstOMXVideoEnc * self,
 
   return TRUE;
 }
+
+static gboolean
+gst_omx_video_enc_set_output_crop (GstOMXVideoEnc * self, GstVideoInfo * info)
+{
+  if (self->output_crop_left != GST_OMX_VIDEO_ENC_OUTPUT_CROP_LEFT_DEFAULT
+      || self->output_crop_top !=
+      GST_OMX_VIDEO_ENC_OUTPUT_CROP_TOP_DEFAULT
+      || self->output_crop_width !=
+      GST_OMX_VIDEO_ENC_OUTPUT_CROP_WIDTH_DEFAULT
+      || self->output_crop_height !=
+      GST_OMX_VIDEO_ENC_OUTPUT_CROP_HEIGHT_DEFAULT) {
+    OMX_ERRORTYPE err;
+    OMX_CONFIG_RECTTYPE rect;
+
+    GST_OMX_INIT_STRUCT (&rect);
+    rect.nPortIndex = self->enc_out_port->index;
+    rect.nLeft = self->output_crop_left;
+    rect.nTop = self->output_crop_top;
+    rect.nWidth = self->output_crop_width;
+    rect.nHeight = self->output_crop_height;
+
+    /* For split-field interlace mode, the caps (and also crop height) will
+     * contain the actual video frame height but OMX API expects height to be
+     * the field height so we divide by 2.
+     */
+    if (GST_VIDEO_INFO_INTERLACE_MODE (info) ==
+        GST_VIDEO_INTERLACE_MODE_ALTERNATE)
+      rect.nHeight /= 2;
+
+    GST_DEBUG_OBJECT (self,
+        "setting output crop rectangle: left=%d, top=%d, width=%d, height=%d",
+        self->output_crop_left, self->output_crop_top,
+        self->output_crop_width, self->output_crop_height);
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoCrop, &rect);
+    CHECK_ERR ("output-crop");
+  }
+
+  return TRUE;
+}
 #endif // USE_OMX_TARGET_ZYNQ_USCALE_PLUS
 
 static gboolean
@@ -3218,6 +3318,8 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   if (!gst_omx_video_enc_set_interlacing_parameters (self, info))
+    return FALSE;
+  if (!gst_omx_video_enc_set_output_crop (self, info))
     return FALSE;
 #endif
 
