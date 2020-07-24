@@ -1463,7 +1463,9 @@ gst_v4l2src_hdr_get_metadata (GstV4l2Src * self)
       gst_v4l2src_set_display_primaries (self, &minfo, payload);
       minfo.white_point.x = payload->white_point.x;
       minfo.white_point.y = payload->white_point.y;
-      minfo.max_display_mastering_luminance = payload->max_mdl;
+      /* CTA 861.G is 1 candelas per square metre (cd/m^2) while
+       * GstVideoMasteringDisplayInfo is 0.0001 cd/m^2 */
+      minfo.max_display_mastering_luminance = payload->max_mdl * 10000;
       minfo.min_display_mastering_luminance = payload->min_mdl;
       GST_LOG_OBJECT (self, "Received mastering display info: "
           "Red(%u, %u) "
