@@ -1707,8 +1707,10 @@ gst_kms_sink_hdr_set_metadata (GstKMSSink * self, GstCaps * caps)
 
       hdr_infoframe->white_point.x = minfo.white_point.x;
       hdr_infoframe->white_point.y = minfo.white_point.y;
+      /* CTA 861.G is 1 candelas per square metre (cd/m^2) while
+       * GstVideoMasteringDisplayInfo is 0.0001 cd/m^2 */
       hdr_infoframe->max_display_mastering_luminance =
-          minfo.max_display_mastering_luminance;
+          minfo.max_display_mastering_luminance / 10000;
       hdr_infoframe->min_display_mastering_luminance =
           minfo.min_display_mastering_luminance;
       GST_LOG_OBJECT (self, "Setting mastering display info: "
