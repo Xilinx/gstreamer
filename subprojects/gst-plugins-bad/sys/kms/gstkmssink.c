@@ -1675,27 +1675,28 @@ gst_kms_sink_hdr_set_metadata (GstKMSSink * self, GstCaps * caps)
   gint ret;
   GstVideoMasteringDisplayInfo minfo;
   GstVideoContentLightLevel cinfo;
+  struct hdr_metadata_infoframe *hdr_infoframe;
+#ifdef HAVE_GEN_HDR_OUTPUT_METADATA
+  struct gen_hdr_output_metadata hdr_metadata = { 0 };
+  const char prop_name[] = "GEN_HDR_OUTPUT_METADATA";
+  hdr_infoframe = (struct hdr_metadata_infoframe *) hdr_metadata.payload;
+#else
+  const char prop_name[] = "HDR_OUTPUT_METADATA";
+  hdr_infoframe = g_new (struct hdr_metadata_infoframe, 1);
+#endif
 
   gst_video_mastering_display_info_init (&minfo);
   gst_video_content_light_level_init (&cinfo);
 
   if (gst_video_colorimetry_matches (&self->vinfo.colorimetry,
           GST_VIDEO_COLORIMETRY_BT2100_PQ)) {
-    struct hdr_metadata_infoframe *hdr_infoframe;
     int i;
+
 #ifdef HAVE_GEN_HDR_OUTPUT_METADATA
-    struct gen_hdr_output_metadata hdr_metadata = { 0 };
-    const char prop_name[] = "GEN_HDR_OUTPUT_METADATA";
-    hdr_infoframe = (struct hdr_metadata_infoframe *) hdr_metadata.payload;
     hdr_metadata.metadata_type = DRM_HDR_TYPE_HDR10;
     hdr_metadata.size = sizeof (struct hdr_metadata_infoframe);
-#else
-    const char prop_name[] = "HDR_OUTPUT_METADATA";
-    hdr_infoframe = g_new (struct hdr_metadata_infoframe, 1);
 #endif
-
     hdr_infoframe->metadata_type = DRM_STATIC_METADATA_TYPE1;
-
     hdr_infoframe->eotf = DRM_EOTF_SMPTE_ST2084;
     GST_LOG_OBJECT (self, "Setting EOTF to: %u", DRM_EOTF_SMPTE_ST2084);
 
@@ -1738,36 +1739,37 @@ gst_kms_sink_hdr_set_metadata (GstKMSSink * self, GstCaps * caps)
           "maxCLL:(%u), maxFALL:(%u)",
           cinfo.max_content_light_level, cinfo.max_frame_average_light_level);
     }
-#ifdef HAVE_GEN_HDR_OUTPUT_METADATA
-    ret =
-        drmModeCreatePropertyBlob (self->fd, &hdr_metadata,
-        sizeof (struct gen_hdr_output_metadata), &id);
-#else
-    ret =
-        drmModeCreatePropertyBlob (self->fd, hdr_infoframe,
-        sizeof (struct hdr_metadata_infoframe), &id);
-#endif
-    if (ret)
-      GST_WARNING_OBJECT (self, "drmModeCreatePropertyBlob failed: %s (%d)",
-          strerror (-ret), ret);
-
-    if (!self->connector_props)
-      self->connector_props =
-          gst_structure_new ("connector-props", prop_name,
-          G_TYPE_INT64, id, NULL);
-    else
-      gst_structure_set (self->connector_props, prop_name,
-          G_TYPE_INT64, id, NULL);
-
-    gst_kms_sink_update_connector_properties (self);
-    ret = drmModeDestroyPropertyBlob (self->fd, id);
-    if (ret)
-      GST_WARNING_OBJECT (self, "drmModeDestroyPropertyBlob failed: %s (%d)",
-          strerror (-ret), ret);
-#ifndef HAVE_GEN_HDR_OUTPUT_METADATA
-    g_free (hdr_infoframe);
-#endif
   }
+#ifdef HAVE_GEN_HDR_OUTPUT_METADATA
+  ret =
+      drmModeCreatePropertyBlob (self->fd, &hdr_metadata,
+      sizeof (struct gen_hdr_output_metadata), &id);
+#else
+  ret =
+      drmModeCreatePropertyBlob (self->fd, hdr_infoframe,
+      sizeof (struct hdr_metadata_infoframe), &id);
+#endif
+  if (ret)
+    GST_WARNING_OBJECT (self, "drmModeCreatePropertyBlob failed: %s (%d)",
+        strerror (-ret), ret);
+
+  if (!self->connector_props)
+    self->connector_props =
+        gst_structure_new ("connector-props", prop_name,
+        G_TYPE_INT64, id, NULL);
+  else
+    gst_structure_set (self->connector_props, prop_name,
+        G_TYPE_INT64, id, NULL);
+
+  gst_kms_sink_update_connector_properties (self);
+  ret = drmModeDestroyPropertyBlob (self->fd, id);
+  if (ret)
+    GST_WARNING_OBJECT (self, "drmModeDestroyPropertyBlob failed: %s (%d)",
+        strerror (-ret), ret);
+#ifndef HAVE_GEN_HDR_OUTPUT_METADATA
+  g_free (hdr_infoframe);
+#endif
+
 #endif /* HAVE_HDR_OUTPUT_METADATA */
 }
 
