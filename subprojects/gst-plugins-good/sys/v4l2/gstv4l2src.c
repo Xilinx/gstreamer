@@ -1489,36 +1489,41 @@ gst_v4l2src_hdr_get_metadata (GstV4l2Src * self)
 
       cur_caps = gst_pad_get_current_caps (GST_BASE_SRC_PAD (self));
       if (cur_caps && (new_caps = gst_caps_copy (cur_caps))) {
-        if (payload->eotf == V4L2_EOTF_SMPTE_ST2084
-            &&
-            g_strcmp0 (gst_structure_get_string (gst_caps_get_structure
-                    (cur_caps, 0), "colorimetry"),
-                GST_VIDEO_COLORIMETRY_BT2100_PQ)) {
-          update_caps = TRUE;
-          gst_caps_set_simple (new_caps, "colorimetry", G_TYPE_STRING,
-              GST_VIDEO_COLORIMETRY_BT2100_PQ, NULL);
+        if (payload->eotf == V4L2_EOTF_SMPTE_ST2084) {
+          if (g_strcmp0 (gst_structure_get_string (gst_caps_get_structure
+                      (cur_caps, 0), "colorimetry"),
+                  GST_VIDEO_COLORIMETRY_BT2100_PQ)) {
+            update_caps = TRUE;
+            gst_caps_set_simple (new_caps, "colorimetry", G_TYPE_STRING,
+                GST_VIDEO_COLORIMETRY_BT2100_PQ, NULL);
+          }
+
+          if (!gst_video_mastering_display_info_is_equal (&self->minfo, &minfo)) {
+            update_caps = TRUE;
+            self->minfo = minfo;
+            gst_video_mastering_display_info_add_to_caps (&self->minfo,
+                new_caps);
+          }
+
+          if (cinfo.max_content_light_level !=
+              self->cinfo.max_content_light_level
+              || cinfo.max_frame_average_light_level !=
+              self->cinfo.max_frame_average_light_level) {
+            update_caps = TRUE;
+            self->cinfo = cinfo;
+            gst_video_content_light_level_add_to_caps (&self->cinfo, new_caps);
+          }
+
+          if (update_caps)
+            gst_pad_set_caps (GST_BASE_SRC_PAD (self), new_caps);
+
+          gst_caps_unref (cur_caps);
+          gst_caps_unref (new_caps);
+        } else {
+          GST_WARNING_OBJECT (self,
+              "Invalid EOTF was received: %u. HDR10 requires ST2086 EOTF.",
+              payload->eotf);
         }
-
-        if (!gst_video_mastering_display_info_is_equal (&self->minfo, &minfo)) {
-          update_caps = TRUE;
-          self->minfo = minfo;
-          gst_video_mastering_display_info_add_to_caps (&self->minfo, new_caps);
-        }
-
-        if (cinfo.max_content_light_level !=
-            self->cinfo.max_content_light_level
-            || cinfo.max_frame_average_light_level !=
-            self->cinfo.max_frame_average_light_level) {
-          update_caps = TRUE;
-          self->cinfo = cinfo;
-          gst_video_content_light_level_add_to_caps (&self->cinfo, new_caps);
-        }
-
-        if (update_caps)
-          gst_pad_set_caps (GST_BASE_SRC_PAD (self), new_caps);
-
-        gst_caps_unref (cur_caps);
-        gst_caps_unref (new_caps);
       }
     } else {
       GST_WARNING_OBJECT (self,
