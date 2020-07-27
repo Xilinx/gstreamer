@@ -1241,23 +1241,16 @@ gst_v4l2src_set_display_primaries (GstV4l2Src * self,
     }
 
     /* Blue has neither */
-    if (payload->display_primaries[i].y < largest_y
-        && payload->display_primaries[i].x < largest_x)
+    if (payload->display_primaries[i].y <= largest_y
+        && payload->display_primaries[i].x <= largest_x)
       rgb_indices[2] = i;
   }
 
-  /* Not compliant with CTA 861.G so stop parsing display primaries */
-  if (rgb_indices[0] == rgb_indices[1] || rgb_indices[0] == rgb_indices[2]
-      || rgb_indices[1] == rgb_indices[2]) {
-    GST_WARNING_OBJECT (self,
-        "Display primaries not compliant with CTA 861.G. Ignoring display primaries");
-  } else {
-    for (i = 0; i < 3; i++) {
-      minfo->display_primaries[i].x =
-          payload->display_primaries[rgb_indices[i]].x;
-      minfo->display_primaries[i].y =
-          payload->display_primaries[rgb_indices[i]].y;
-    }
+  for (i = 0; i < 3; i++) {
+    minfo->display_primaries[i].x =
+        payload->display_primaries[rgb_indices[i]].x;
+    minfo->display_primaries[i].y =
+        payload->display_primaries[rgb_indices[i]].y;
   }
 }
 
