@@ -107,6 +107,7 @@ enum
   PROP_CONNECTOR_PROPS,
   PROP_PLANE_PROPS,
   PROP_FULLSCREEN_OVERLAY,
+  PROP_FORCE_NTSC_TV,
   PROP_N,
 };
 
@@ -541,6 +542,12 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
     goto connector_failed;
 
   fps = GST_VIDEO_INFO_FPS_N (vinfo) / GST_VIDEO_INFO_FPS_D (vinfo);
+
+  if (self->force_ntsc_tv && vinfo->height == 480) {
+    vinfo->height = 486;
+    vinfo->width = 720;
+    GST_LOG_OBJECT (self, "Forcing mode setting to NTSC TV D1(720x486i)");
+  }
 
   for (i = 0; i < conn->count_modes; i++) {
     if (conn->modes[i].vdisplay == GST_VIDEO_INFO_FIELD_HEIGHT (vinfo) &&
@@ -2202,6 +2209,9 @@ gst_kms_sink_set_property (GObject * object, guint prop_id,
     case PROP_FULLSCREEN_OVERLAY:
       sink->fullscreen_enabled = g_value_get_boolean (value);
       break;
+    case PROP_FORCE_NTSC_TV:
+      sink->force_ntsc_tv = g_value_get_boolean (value);
+      break;
     default:
       if (!gst_video_overlay_set_property (object, PROP_N, prop_id, value))
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -2256,6 +2266,9 @@ gst_kms_sink_get_property (GObject * object, guint prop_id,
       gst_value_set_structure (value, sink->plane_props);
     case PROP_FULLSCREEN_OVERLAY:
       g_value_set_boolean (value, sink->fullscreen_enabled);
+      break;
+    case PROP_FORCE_NTSC_TV:
+      g_value_set_boolean (value, sink->force_ntsc_tv);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -2466,6 +2479,17 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
       "Fullscreen mode",
       "When enabled, the sink sets CRTC size same as input video size", FALSE,
       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
+
+  /**
+   * kmssink: force-ntsc-tv:
+   *
+   * Convert NTSC DV (720x480i) content to NTSC TV D1 (720x486i) display.
+   */
+  g_properties[PROP_FORCE_NTSC_TV] =
+      g_param_spec_boolean ("force-ntsc-tv",
+      "Convert NTSC DV content to NTSC TV D1 display",
+      "When enabled, NTSC DV (720x480i) content is displayed at NTSC TV D1 (720x486i) resolution",
+      FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
 
   g_object_class_install_properties (gobject_class, PROP_N, g_properties);
 
