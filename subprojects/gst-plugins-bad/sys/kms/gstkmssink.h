@@ -101,6 +101,8 @@ struct _GstKMSSink {
   gboolean is_internal_fd;
   gboolean skip_vsync;
 
+  gboolean force_ntsc_tv;
+
 #ifdef HAVE_DRM_HDR
   /* HDR mastering related structure */
   gboolean no_infoframe;
