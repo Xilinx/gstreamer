@@ -64,8 +64,10 @@ typedef struct
  * struct ChannelStatus - Channel Status from SyncIp driver
  * @fb_avail: True if framebuffer free to be pushed to
  * @enable: True if channel is enabled
- * @sync_error: True if have synchronization error
- * @watchdog_error: True if have watchdog error
+ * @prod_sync_error: True if producer have synchronization error
+ * @prod_watchdog_error: True if producer have watchdog error
+ * @cons_sync_error: True if consumer have synchronization error
+ * @cons_watchdog_error: True if consumer have watchdog error
  * @luma_diff_error: True if luma difference > 1
  * @chroma_diff_error: True if chroma difference > 1
  */
@@ -73,8 +75,10 @@ typedef struct
 {
   bool fb_avail[XVFBSYNC_MAX_FB_NUMBER][XVFBSYNC_MAX_USER];
   bool enable;
-  bool sync_error;
-  bool watchdog_error;
+  bool prod_sync_error;
+  bool prod_watchdog_error;
+  bool cons_sync_error;
+  bool cons_watchdog_error;
   bool luma_diff_error;
   bool chroma_diff_error;
 } ChannelStatus;
