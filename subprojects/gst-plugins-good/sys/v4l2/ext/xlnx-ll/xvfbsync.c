@@ -231,13 +231,17 @@ xvfbsync_syncip_parse_chan_status (struct xlnxsync_stat *status,
       channel_status->fb_avail[buffer][user] = status->fbdone[buffer][user];
   }
   channel_status->enable = status->enable;
-  channel_status->sync_error = status->sync_err;
-  channel_status->watchdog_error = status->wdg_err;
+  channel_status->prod_sync_error = status->prod_sync_err;
+  channel_status->prod_watchdog_error = status->prod_wdg_err;
+  channel_status->cons_sync_error = status->cons_sync_err;
+  channel_status->cons_watchdog_error = status->cons_wdg_err;
   channel_status->luma_diff_error = status->ldiff_err;
   channel_status->chroma_diff_error = status->cdiff_err;
 
-  GST_INFO ("watchdog: %d, sync: %d, ldiff: %d, cdiff: %d",
-      channel_status->watchdog_error, channel_status->sync_error,
+  GST_INFO
+      ("prod_wdog: %d, prod_sync: %d, cons_wdog: %d, cons_sync: %d, ldiff: %d, cdiff: %d",
+      channel_status->prod_watchdog_error, channel_status->prod_sync_error,
+      channel_status->cons_watchdog_error, channel_status->cons_sync_error,
       channel_status->luma_diff_error, channel_status->chroma_diff_error);
 
 }
@@ -267,8 +271,10 @@ xvfbsync_syncip_reset_status (SyncIp * syncip)
   int ret = 0;
 
   clr.hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
-  clr.sync_err = 1;
-  clr.wdg_err = 1;
+  clr.prod_sync_err = 1;
+  clr.prod_wdg_err = 1;
+  clr.cons_sync_err = 1;
+  clr.cons_wdg_err = 1;
   clr.ldiff_err = 1;
   clr.cdiff_err = 1;
 
@@ -331,11 +337,14 @@ xvfbsync_syncip_poll_errors (SyncChannel * sync_channel, int timeout)
   xvfbsync_syncip_get_latest_chan_status (sync_channel);
   status = sync_channel->channel_status;
 
-  if (status->sync_error || status->watchdog_error || status->luma_diff_error
-      || status->chroma_diff_error) {
-    GST_ERROR ("watchdog: %d, sync: %d, ldiff: %d, cdiff: %d",
-        status->watchdog_error, status->sync_error, status->luma_diff_error,
-        status->chroma_diff_error);
+  if (status->prod_sync_error || status->prod_watchdog_error
+      || status->cons_sync_error || status->cons_watchdog_error
+      || status->luma_diff_error || status->chroma_diff_error) {
+    GST_ERROR
+        ("prod_wdog: %d, prod_sync: %d, cons_wdog: %d, cons_sync: %d, ldiff: %d, cdiff: %d",
+        status->prod_watchdog_error, status->prod_sync_error,
+        status->cons_watchdog_error, status->cons_sync_error,
+        status->luma_diff_error, status->chroma_diff_error);
     ret = xvfbsync_syncip_reset_status (sync_channel->sync);
     if (ret)
       GST_ERROR ("SyncIp: Couldnt reset status of channel %d",
