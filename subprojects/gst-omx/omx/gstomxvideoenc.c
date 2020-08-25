@@ -201,6 +201,7 @@ gst_omx_video_enc_aspect_ratio_get_type (void)
       {OMX_ALG_ASPECT_RATIO_AUTO,
             "4:3 for SD video,16:9 for HD video,unspecified for unknown format",
           "auto"},
+      {OMX_ALG_ASPECT_RATIO_1_1, "1:1 aspect ratio", "1-1"},
       {OMX_ALG_ASPECT_RATIO_4_3, "4:3 aspect ratio", "4-3"},
       {OMX_ALG_ASPECT_RATIO_16_9, "16:9 aspect ratio", "16-9"},
       {OMX_ALG_ASPECT_RATIO_NONE,
