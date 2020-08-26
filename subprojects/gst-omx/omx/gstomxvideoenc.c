@@ -336,6 +336,7 @@ enum
   PROP_MAX_PICTURE_SIZES,
   PROP_MAX_CONSECUTIVE_SKIP,
   PROP_OUTPUT_CROP,
+  PROP_XAVC_MAX_PICTURE_SIZES_IN_BITS,
 };
 
 /* FIXME: Better defaults */
@@ -376,6 +377,9 @@ enum
 #define GST_OMX_VIDEO_ENC_OUTPUT_CROP_TOP_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_OUTPUT_CROP_WIDTH_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_OUTPUT_CROP_HEIGHT_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_I_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_P_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_B_DEFAULT (0)
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
 #define OMX_ALG_GST_EVENT_INSERT_LONGTERM "omx-alg/insert-longterm"
@@ -654,6 +658,17 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
           g_param_spec_int ("crop-x", "crop value",
               "Beginning coordinates, width, or height for output crop value",
               0, G_MAXINT, 0, G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS),
+          G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_XAVC_MAX_PICTURE_SIZES_IN_BITS,
+      gst_param_spec_array ("xavc-max-picture-sizes-in-bits",
+          "Max picture size for I,P and B frames in bits for XAVC",
+          "Max picture sizes based on frame types ('<I, P, B>') in bits for XAVC"
+          "Maximum picture size of I,P and B frames in bits for XAVC, encoded picture size will be limited to max-picture-size-x value. "
+          "If set it to 0 then max-picture-size-x will not have any effect",
+          g_param_spec_int ("max-picture-size-x", "max picture size value",
+              "One of I, P, or B frame's max picture size value", 0, G_MAXINT,
+              0, G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS),
           G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
 #endif
 
@@ -1327,6 +1342,31 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
     CHECK_ERR ("max-picture-sizes");
   }
 
+  if (self->xavc_max_picture_size_in_bits_i != GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_I_DEFAULT
+      || self->xavc_max_picture_size_in_bits_p !=
+      GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_P_DEFAULT
+      || self->xavc_max_picture_size_in_bits_b !=
+      GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_B_DEFAULT) {
+    OMX_ALG_VIDEO_PARAM_MAX_PICTURE_SIZES_IN_BITS max_picture_sizes_in_bits;
+
+    GST_OMX_INIT_STRUCT (&max_picture_sizes_in_bits);
+    max_picture_sizes_in_bits.nPortIndex = self->enc_out_port->index;
+    max_picture_sizes_in_bits.nMaxPictureSizeI = self->xavc_max_picture_size_in_bits_i;
+    max_picture_sizes_in_bits.nMaxPictureSizeP = self->xavc_max_picture_size_in_bits_p;
+    max_picture_sizes_in_bits.nMaxPictureSizeB = self->xavc_max_picture_size_in_bits_b;
+
+    GST_DEBUG_OBJECT (self,
+        "setting max_picture_size_in_bits_i=%d, max_picture_size_in_bits_p=%d, max_picture_size_in_bits_b=%d",
+        self->xavc_max_picture_size_in_bits_i, self->xavc_max_picture_size_in_bits_p,
+        self->xavc_max_picture_size_in_bits_b);
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoMaxPictureSizesInBits,
+        &max_picture_sizes_in_bits);
+    CHECK_ERR ("xavc-max-picture-sizes-in-bits");
+  }
+
   return TRUE;
 }
 #endif
@@ -1758,6 +1798,40 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
 
       break;
     }
+    case PROP_XAVC_MAX_PICTURE_SIZES_IN_BITS:
+    {
+      const GValue *v;
+
+      if (gst_value_array_get_size (value) != 3) {
+        GST_ERROR_OBJECT (self,
+            "Badly formated xavc-max-picture-sizes-in-bits, must contains 3 gint");
+        break;
+      }
+
+      v = gst_value_array_get_value (value, 0);
+      if (!G_VALUE_HOLDS_INT (v)) {
+        GST_ERROR_OBJECT (self, "xavc-max-picture-sizes-in-bits for I frame is not int");
+        break;
+      }
+      self->xavc_max_picture_size_in_bits_i = g_value_get_int (v);
+
+      v = gst_value_array_get_value (value, 1);
+      if (!G_VALUE_HOLDS_INT (v)) {
+        GST_ERROR_OBJECT (self, "xavc-max-picture-sizes-in-bits for P frame is not int");
+        break;
+      }
+      self->xavc_max_picture_size_in_bits_p = g_value_get_int (v);
+
+      v = gst_value_array_get_value (value, 2);
+      if (!G_VALUE_HOLDS_INT (v)) {
+        GST_ERROR_OBJECT (self, "xavc-max-picture-sizes-in-bits for B frame is not int");
+        break;
+      }
+      self->xavc_max_picture_size_in_bits_b = g_value_get_int (v);
+
+      break;
+    }
+
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
