@@ -2459,6 +2459,19 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
     GstVideoCodecFrame *frame;
     gboolean was_keyframe = FALSE;
 
+    /* In subframe mode, If we are still using same frame and receive new PTS
+     * buffer mode before all subframes of previous frame are received then it
+     * means we have lost packets corresponding to previous frame so release
+     * previous frame reference and start with a new frame */
+    if (priv->current_frame != NULL && decoder->priv->subframe_mode) {
+      if ((GST_BUFFER_PTS_IS_VALID (buf) &&
+              GST_BUFFER_PTS (buf) > priv->current_frame->pts)) {
+        GST_INFO_OBJECT (decoder,
+            "Create new frame as buf with new PTS received");
+        gst_video_codec_frame_unref (priv->current_frame);
+        priv->current_frame = gst_video_decoder_new_frame (decoder);
+      }
+    }
     frame = priv->current_frame;
 
     frame->abidata.ABI.num_subframes++;
