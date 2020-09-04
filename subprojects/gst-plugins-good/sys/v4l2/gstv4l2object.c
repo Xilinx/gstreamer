@@ -544,6 +544,9 @@ gst_v4l2_object_new (GstElement * element,
   v4l2object->can_poll_device = TRUE;
 
   v4l2object->sync_chan.enabled = FALSE;
+  v4l2object->xlnx_ll = FALSE;
+  v4l2object->xlnx_ll_dma_started = FALSE;
+
   /* We now disable libv4l2 by default, but have an env to enable it. */
 #ifdef HAVE_LIBV4L2
   if (g_getenv ("GST_V4L2_USE_LIBV4L2")) {

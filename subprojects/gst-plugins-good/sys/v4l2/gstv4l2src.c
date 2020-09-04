@@ -1123,6 +1123,7 @@ gst_v4l2src_start (GstBaseSrc * src)
   v4l2src->last_timestamp = 0;
 
   v4l2src->v4l2object->xlnx_ll = FALSE;
+  v4l2src->v4l2object->xlnx_ll_dma_started = FALSE;
 
   return TRUE;
 }
@@ -1865,15 +1866,16 @@ static void
 start_xilinx_dma (GstV4l2Src * self)
 {
   struct v4l2_control control = { 0, };
-
   control.id = V4L2_CID_XILINX_LOW_LATENCY;
   control.value = XVIP_START_DMA;
 
   if (self->v4l2object->ioctl (self->v4l2object->video_fd, VIDIOC_S_CTRL,
-          &control))
+          &control)) {
     GST_ERROR_OBJECT (self, "Failed to start DMA: %s", g_strerror (errno));
-  else
-    GST_DEBUG_OBJECT (self, "DMA started");
+  } else {
+    self->v4l2object->xlnx_ll_dma_started = true;
+    GST_INFO_OBJECT (self, "XLNXLL: DMA started:");
+  }
 }
 
 static gboolean
