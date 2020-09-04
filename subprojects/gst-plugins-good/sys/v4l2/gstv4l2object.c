@@ -5327,6 +5327,12 @@ gst_v4l2_object_decide_allocation (GstV4l2Object * obj, GstQuery * query)
     /* To import we need the other pool to hold at least own_min */
     if (obj_pool == pool)
       min += own_min;
+
+    /* For Xilinx Low Latency mode need to have same buffers in own pool as
+       downstream buffers so that no buffer get queued and no buffer slot get
+       programmed until downstream has completed previous buffer */
+    if (obj->xlnx_ll)
+      own_min = min;
   }
 
   /* Request a bigger max, if one was suggested but it's too small */
