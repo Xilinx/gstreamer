@@ -2156,6 +2156,44 @@ gst_omx_video_enc_handle_output_frame (GstOMXVideoEnc * self, GstOMXPort * port,
     GST_BUFFER_TIMESTAMP (outbuf) =
         gst_util_uint64_scale (GST_OMX_GET_TICKS (buf->omx_buf->nTimeStamp),
         GST_SECOND, OMX_TICKS_PER_SECOND);
+
+    if (frame->system_frame_number == 0 && self->xlnx_ll) {
+      GstClockTime latency = GST_CLOCK_TIME_NONE;
+
+      if (!GST_CLOCK_TIME_IS_VALID (self->xlnx_ll_start))
+        self->xlnx_ll_start =
+            GST_ELEMENT (self)->base_time +
+            gst_segment_to_running_time (&GST_VIDEO_ENCODER_INPUT_SEGMENT
+            (self), GST_FORMAT_TIME, frame->pts);
+
+      if (!GST_CLOCK_TIME_IS_VALID (self->xlnx_ll_end)) {
+        GstClock *clock = NULL;
+        clock = gst_element_get_clock (GST_ELEMENT_CAST (self));
+        if (G_UNLIKELY (!clock)) {
+          GST_ERROR_OBJECT (self,
+              "no clock set, can't predict xlnx-ll first frame ts");
+        } else {
+          self->xlnx_ll_end = gst_clock_get_time (clock);
+          gst_video_encoder_get_latency (GST_VIDEO_ENCODER (self), &latency,
+              NULL);
+          frame->pts =
+              gst_segment_position_from_running_time
+              (&GST_VIDEO_ENCODER_INPUT_SEGMENT (self), GST_FORMAT_TIME,
+              gst_segment_to_running_time (&GST_VIDEO_ENCODER_INPUT_SEGMENT
+                  (self), GST_FORMAT_TIME,
+                  frame->pts) + (GST_CLOCK_DIFF (self->xlnx_ll_start,
+                      self->xlnx_ll_end) - latency));
+          GST_DEBUG_OBJECT (self,
+              "xlnx_ll_start: %" GST_TIME_FORMAT " xlnx_ll_end: %"
+              GST_TIME_FORMAT " latency: %" GST_TIME_FORMAT
+              " updated frame->pts : %" GST_TIME_FORMAT,
+              GST_TIME_ARGS (self->xlnx_ll_start),
+              GST_TIME_ARGS (self->xlnx_ll_end), GST_TIME_ARGS (latency),
+              GST_TIME_ARGS (frame->pts));
+        }
+      }
+    }
+
     if (buf->omx_buf->nTickCount != 0)
       GST_BUFFER_DURATION (outbuf) =
           gst_util_uint64_scale (buf->omx_buf->nTickCount, GST_SECOND,
@@ -2556,6 +2594,8 @@ gst_omx_video_enc_start (GstVideoEncoder * encoder)
   self->nb_downstream_buffers = 0;
   self->in_pool_used = FALSE;
   self->xlnx_ll = FALSE;
+  self->xlnx_ll_start = GST_CLOCK_TIME_NONE;
+  self->xlnx_ll_end = GST_CLOCK_TIME_NONE;
 
   return TRUE;
 }

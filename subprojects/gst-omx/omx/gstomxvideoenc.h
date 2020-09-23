@@ -62,6 +62,8 @@ struct _GstOMXVideoEnc
   gboolean disabled;
 
   GstClockTime last_upstream_ts;
+  GstClockTime xlnx_ll_start;
+  GstClockTime xlnx_ll_end;
 
   /* Draining state */
   GMutex drain_lock;
