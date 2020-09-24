@@ -1274,8 +1274,24 @@ gst_v4l2src_change_state (GstElement * element, GstStateChange transition)
   GstV4l2Src *v4l2src = GST_V4L2SRC (element);
   GstV4l2Object *obj = v4l2src->v4l2object;
   GstV4l2Error error = GST_V4L2_ERROR_INIT;
+  GstClock *clk = NULL;
 
   switch (transition) {
+    case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
+      v4l2src->has_monotonic_clock = FALSE;
+      clk = gst_element_get_clock (element);
+      if (clk) {
+        if (GST_IS_SYSTEM_CLOCK (clk)) {
+          GstClockType clocktype;
+          g_object_get (clk, "clock-type", &clocktype, NULL);
+          if (clocktype == GST_CLOCK_TYPE_MONOTONIC) {
+            GST_DEBUG_OBJECT (v4l2src, "clock is monotonic already");
+            v4l2src->has_monotonic_clock = TRUE;
+          }
+        }
+        gst_object_unref (clk);
+      }
+      break;
     case GST_STATE_CHANGE_NULL_TO_READY:
       /* open the device */
       if (!gst_v4l2_object_open (obj, &error)) {
@@ -1649,13 +1665,20 @@ gst_v4l2src_create (GstPushSrc * src, GstBuffer ** buf)
 retry:
   if (!v4l2src->has_bad_timestamp && timestamp != GST_CLOCK_TIME_NONE) {
     struct timespec now;
-    GstClockTime gstnow;
+    GstClockTime gstnow = GST_CLOCK_TIME_NONE;
 
     /* v4l2 specs say to use the system time although many drivers switched to
      * the more desirable monotonic time. We first try to use the monotonic time
      * and see how that goes */
-    clock_gettime (CLOCK_MONOTONIC, &now);
-    gstnow = GST_TIMESPEC_TO_TIME (now);
+    if (v4l2src->has_monotonic_clock)
+      gstnow = abs_time;
+
+    if (!GST_CLOCK_TIME_IS_VALID (gstnow)) {
+      clock_gettime (CLOCK_MONOTONIC, &now);
+      gstnow = GST_TIMESPEC_TO_TIME (now);
+      GST_DEBUG_OBJECT (v4l2src,
+          "Element clock is non-monotonic, using system monotonic clock");
+    }
 
     if (timestamp > gstnow || (gstnow - timestamp) > (10 * GST_SECOND)) {
       /* very large diff, fall back to system time */

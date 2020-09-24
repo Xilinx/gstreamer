@@ -82,6 +82,7 @@ struct _GstV4l2Src
   /* Timestamp sanity check */
   GstClockTime last_timestamp;
   gboolean has_bad_timestamp;
+  gboolean has_monotonic_clock;
 
   /* maintain signal status, updated during negotiation */
   gboolean no_signal;
