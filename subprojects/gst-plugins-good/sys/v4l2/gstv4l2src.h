@@ -92,6 +92,7 @@ struct _GstV4l2Src
   /* For HDR10 support */
   GstVideoMasteringDisplayInfo minfo;
   GstVideoContentLightLevel cinfo;
+  gboolean is_hdr_supported;
 };
 
 struct _GstV4l2SrcClass
