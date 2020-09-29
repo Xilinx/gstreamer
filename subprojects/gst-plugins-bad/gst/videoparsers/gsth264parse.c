@@ -1510,14 +1510,17 @@ gst_h264_parse_handle_frame (GstBaseParse * parse,
        * if there is data remaining (current_off > 0) and no prefix
        *   (prefix_off == -1) -> flush this data up to nalu.sc_offset
        * if there is data remaining and a prefix not starting from the
-       *   beginning of the buffer (prefix_off > 0) -> flush up to the
-       *   beginning of the prefix
+       *   beginning of the buffer (prefix_off > 0 or prefix_off > 1) -> flush
+       *   up to the beginning of the prefix
+       *   prefix_off may be 0 or 1 depending on whether or not prefix is the
+       *   first NAL unit of the AU as per H.264 Annex B.1.2
        * if all remaining data is part of the prefix -> do nothing
        */
-    if (current_off > 0 && h264parse->prefix_off != 0) {
+      if (current_off > 0 && (h264parse->prefix_off != 0
+              && h264parse->prefix_off != 1)) {
       nalu.size = 0;
       nalu.offset =
-	      h264parse->prefix_off > 0 ? h264parse->prefix_off : nalu.sc_offset;
+	      h264parse->prefix_off > 1 ? h264parse->prefix_off : nalu.sc_offset;
       h264parse->marker = TRUE;
         break;
       }
