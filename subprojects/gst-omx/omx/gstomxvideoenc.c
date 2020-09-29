@@ -2298,6 +2298,13 @@ zynq_seamless_output_transition (GstOMXVideoEnc * self, GstOMXPort * port)
       "only the output resolution changed; use seamless transition");
   return TRUE;
 }
+
+static void
+xlnx_ll_vcu_init_delay (void)
+{
+  /* Delay to compensate the VCU encoder init time */
+  g_usleep (2000);
+}
 #endif
 static void
 gst_omx_video_enc_loop (GstOMXVideoEnc * self)
@@ -2385,8 +2392,8 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
       if (self->xlnx_ll && self->started && self->in_pool_used) {
         GstEvent *event;
 
+        xlnx_ll_vcu_init_delay ();
         GST_DEBUG_OBJECT (self, "Tell XLNX-LL producer it can start streaming");
-
         event = gst_event_new_custom (GST_EVENT_CUSTOM_UPSTREAM,
             gst_structure_new ("xlnx-ll-consumer-ready", NULL, NULL));
 
@@ -4312,8 +4319,8 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
   if (self->xlnx_ll && starting && !self->in_pool_used) {
     GstEvent *event;
 
+    xlnx_ll_vcu_init_delay ();
     GST_DEBUG_OBJECT (self, "Tell XLNX-LL producer it can start streaming");
-
     event = gst_event_new_custom (GST_EVENT_CUSTOM_UPSTREAM,
         gst_structure_new ("xlnx-ll-consumer-ready", NULL, NULL));
 
