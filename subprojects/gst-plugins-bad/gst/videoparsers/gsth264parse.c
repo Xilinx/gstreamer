@@ -1153,7 +1153,17 @@ gst_h264_parse_process_nal (GstH264Parse * h264parse, GstH264NalUnit * nalu)
     GST_LOG_OBJECT (h264parse, "collecting NAL in AVC frame");
     buf = gst_h264_parse_wrap_nal (h264parse, h264parse->format,
         nalu->data + nalu->offset, nalu->size);
-    gst_adapter_push (h264parse->frame_out, buf);
+
+    /* Don't push prefix NAL into adapter until its corresponding NAL is inserted */
+    if (nalu->type != GST_H264_NAL_PREFIX_UNIT) {
+      if (h264parse->prefix_nal) {
+        gst_adapter_push (h264parse->frame_out, h264parse->prefix_nal);
+        h264parse->prefix_nal = NULL;
+      }
+      gst_adapter_push (h264parse->frame_out, buf);
+    } else {
+      h264parse->prefix_nal = buf;
+    }
   }
   return TRUE;
 }
@@ -1597,6 +1607,13 @@ end:
   framesize = nalu.offset + nalu.size;
 
   gst_buffer_unmap (buffer, &map);
+  /* If we saw a prefix NAL but no corresponding NAL afterwards or we didn't
+   * insert the corresponding NAL, ignore the prefix until we push the
+   * corresponding NAL in upcoming buffers */
+  if (h264parse->prefix_nal) {
+    gst_buffer_unref (h264parse->prefix_nal);
+    h264parse->prefix_nal = NULL;
+  }
 
   gst_h264_parse_parse_frame (parse, frame);
 
