@@ -105,9 +105,10 @@ struct _GstH264Parse
 
   gboolean first_frame;
 
-  /* collected SPS and PPS NALUs */
+  /* collected NALUs */
   GstBuffer *sps_nals[GST_H264_MAX_SPS_COUNT];
   GstBuffer *pps_nals[GST_H264_MAX_PPS_COUNT];
+  GstBuffer *prefix_nal;
 
   /* collected SEI timestamps */
   guint num_clock_timestamp;
