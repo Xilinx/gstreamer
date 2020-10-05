@@ -61,26 +61,51 @@ typedef struct
 } XLNXLLBuf;
 
 /**
+ * struct ChannelErrIntr - Channel Error Interrupt Status from SyncIp driver
+ * @prod_sync: True if producer have synchronization error
+ * @prod_wdg: True if producer have watchdog error
+ * @cons_sync: True if consumer have synchronization error
+ * @cons_wdg: True if consumer have watchdog error
+ * @ldiff: True if luma difference > 1
+ * @cdiff: True if chroma difference > 1
+ */
+typedef struct
+{
+  bool prod_sync;
+  bool prod_wdg;
+  bool cons_sync;
+  bool cons_wdg;
+  bool ldiff;
+  bool cdiff;
+} ChannelErrIntr;
+
+/**
+ * struct ChannelIntr - Channel Interrupt types
+ * @err: Structure for error interrupts
+ * @prod_lfbdone: Producer luma frame buffer done interrupt
+ * @prod_cfbdone: Producer chroma frame buffer done interrupt
+ * @cons_lfbdone: Consumer luma frame buffer done interrupt
+ * @cons_cfbdone: Consumer chroma frame buffer done interrupt
+ */
+typedef struct {
+  ChannelErrIntr err;
+  bool prod_lfbdone;
+  bool prod_cfbdone;
+  bool cons_lfbdone;
+  bool cons_cfbdone;
+} ChannelIntr;
+
+/**
  * struct ChannelStatus - Channel Status from SyncIp driver
  * @fb_avail: True if framebuffer free to be pushed to
  * @enable: True if channel is enabled
- * @prod_sync_error: True if producer have synchronization error
- * @prod_watchdog_error: True if producer have watchdog error
- * @cons_sync_error: True if consumer have synchronization error
- * @cons_watchdog_error: True if consumer have watchdog error
- * @luma_diff_error: True if luma difference > 1
- * @chroma_diff_error: True if chroma difference > 1
+ * @err: Channel error interrupt status
  */
 typedef struct
 {
   bool fb_avail[XVFBSYNC_MAX_FB_NUMBER][XVFBSYNC_MAX_USER];
   bool enable;
-  bool prod_sync_error;
-  bool prod_watchdog_error;
-  bool cons_sync_error;
-  bool cons_watchdog_error;
-  bool luma_diff_error;
-  bool chroma_diff_error;
+  ChannelErrIntr err;
 } ChannelStatus;
 
 /**
@@ -234,6 +259,14 @@ int xvfbsync_enc_sync_chan_add_buffer (EncSyncChannel * enc_sync_chan,
  * Returns 0 if no errors, else -1
  */
 int xvfbsync_enc_sync_chan_enable (EncSyncChannel * enc_sync_chan);
+
+/**
+ * xvfbsync_enc_sync_chan_set_intr_mask - Set SyncIp interrupt mask
+ * @enc_sync_chan: Channel to mask interrupt
+ * @intr_mask: Interrupts that should be masked
+ * Returns 0 if no errors, else -1
+ */
+int xvfbsync_enc_sync_chan_set_intr_mask (EncSyncChannel * enc_sync_chan, ChannelIntr * intr_mask);
 
 /**
  * xvfbsync_enc_sync_chan_populate - Initialize Encoder SyncIp channel

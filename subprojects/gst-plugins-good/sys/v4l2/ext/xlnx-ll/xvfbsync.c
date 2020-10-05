@@ -231,18 +231,18 @@ xvfbsync_syncip_parse_chan_status (struct xlnxsync_stat *status,
       channel_status->fb_avail[buffer][user] = status->fbdone[buffer][user];
   }
   channel_status->enable = status->enable;
-  channel_status->prod_sync_error = status->prod_sync_err;
-  channel_status->prod_watchdog_error = status->prod_wdg_err;
-  channel_status->cons_sync_error = status->cons_sync_err;
-  channel_status->cons_watchdog_error = status->cons_wdg_err;
-  channel_status->luma_diff_error = status->ldiff_err;
-  channel_status->chroma_diff_error = status->cdiff_err;
+  channel_status->err.prod_sync = status->prod_sync_err;
+  channel_status->err.prod_wdg = status->prod_wdg_err;
+  channel_status->err.cons_sync = status->cons_sync_err;
+  channel_status->err.cons_wdg = status->cons_wdg_err;
+  channel_status->err.ldiff = status->ldiff_err;
+  channel_status->err.cdiff = status->cdiff_err;
 
   GST_INFO
       ("prod_wdog: %d, prod_sync: %d, cons_wdog: %d, cons_sync: %d, ldiff: %d, cdiff: %d",
-      channel_status->prod_watchdog_error, channel_status->prod_sync_error,
-      channel_status->cons_watchdog_error, channel_status->cons_sync_error,
-      channel_status->luma_diff_error, channel_status->chroma_diff_error);
+      channel_status->err.prod_wdg, channel_status->err.prod_sync,
+      channel_status->err.cons_wdg, channel_status->err.cons_sync,
+      channel_status->err.ldiff, channel_status->err.cdiff);
 
 }
 
@@ -304,6 +304,17 @@ xvfbsync_syncip_disable_channel (SyncIp * syncip)
 }
 
 static int
+xvfbsync_syncip_set_intr_mask (SyncIp * syncip, struct xlnxsync_intr *intr_mask)
+{
+  int ret = 0;
+
+  intr_mask->hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
+  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_SET_INTR_MASK, intr_mask);
+
+  return ret;
+}
+
+static int
 xvfbsync_syncip_add_buffer (SyncIp * syncip,
     struct xlnxsync_chan_config *fb_config)
 {
@@ -337,14 +348,14 @@ xvfbsync_syncip_poll_errors (SyncChannel * sync_channel, int timeout)
   xvfbsync_syncip_get_latest_chan_status (sync_channel);
   status = sync_channel->channel_status;
 
-  if (status->prod_sync_error || status->prod_watchdog_error
-      || status->cons_sync_error || status->cons_watchdog_error
-      || status->luma_diff_error || status->chroma_diff_error) {
+  if (status->err.prod_sync || status->err.prod_wdg
+      || status->err.cons_sync || status->err.cons_wdg
+      || status->err.ldiff || status->err.cdiff) {
     GST_ERROR
         ("prod_wdog: %d, prod_sync: %d, cons_wdog: %d, cons_sync: %d, ldiff: %d, cdiff: %d",
-        status->prod_watchdog_error, status->prod_sync_error,
-        status->cons_watchdog_error, status->cons_sync_error,
-        status->luma_diff_error, status->chroma_diff_error);
+        status->err.prod_wdg, status->err.prod_sync,
+        status->err.cons_wdg, status->err.cons_sync,
+        status->err.ldiff, status->err.cdiff);
     ret = xvfbsync_syncip_reset_status (sync_channel->sync);
     if (ret)
       GST_ERROR ("SyncIp: Couldnt reset status of channel %d",
@@ -994,6 +1005,34 @@ xvfbsync_enc_sync_chan_enable (EncSyncChannel * enc_sync_chan)
       xvfbsync_enc_sync_chan_add_buffer_ (enc_sync_chan, NULL,
       num_fb_to_enable);
 
+  return ret;
+}
+
+
+int
+xvfbsync_enc_sync_chan_set_intr_mask (EncSyncChannel * enc_sync_chan,
+    ChannelIntr * intr)
+{
+  int ret = 0;
+  struct xlnxsync_intr intr_mask = { 0 };
+
+  intr_mask.prod_lfbdone = intr->prod_lfbdone;
+  intr_mask.prod_cfbdone = intr->prod_cfbdone;
+  intr_mask.cons_lfbdone = intr->cons_lfbdone;
+  intr_mask.cons_cfbdone = intr->cons_cfbdone;
+  intr_mask.err.prod_sync = intr->err.prod_sync;
+  intr_mask.err.cons_sync = intr->err.cons_sync;
+  intr_mask.err.prod_wdg = intr->err.prod_wdg;
+  intr_mask.err.cons_wdg = intr->err.cons_wdg;
+  intr_mask.err.ldiff = intr->err.ldiff;
+  intr_mask.err.cdiff = intr->err.cdiff;
+
+  ret =
+      xvfbsync_syncip_set_intr_mask (enc_sync_chan->sync_channel->sync,
+      &intr_mask);
+  if (ret)
+    GST_ERROR ("SyncIp: Couldn't set interrupt mask for channel %d",
+        enc_sync_chan->sync_channel->id);
   return ret;
 }
 

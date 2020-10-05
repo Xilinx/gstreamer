@@ -705,10 +705,24 @@ gst_v4l2_buffer_pool_streamon (GstV4l2BufferPool * pool)
         goto streamon_failed;
 
       if (obj->xlnx_ll) {
+        ChannelIntr intr_mask = { 0 };
+        intr_mask.prod_lfbdone = 1;
+        intr_mask.prod_cfbdone = 1;
+        intr_mask.cons_lfbdone = 1;
+        intr_mask.cons_cfbdone = 1;
+
+
         if (xvfbsync_enc_sync_chan_enable (&obj->enc_sync_chan)) {
           GST_ERROR_OBJECT (pool, "Error with enabling sync ip");
           goto streamon_failed;
         }
+
+        if (xvfbsync_enc_sync_chan_set_intr_mask (&obj->enc_sync_chan,
+                &intr_mask)) {
+          GST_ERROR_OBJECT (pool, "Error with setting interrupt mask");
+          goto streamon_failed;
+        }
+
       }
 
       pool->streaming = TRUE;
