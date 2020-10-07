@@ -356,10 +356,6 @@ xvfbsync_syncip_poll_errors (SyncChannel * sync_channel, int timeout)
         status->err.prod_wdg, status->err.prod_sync,
         status->err.cons_wdg, status->err.cons_sync,
         status->err.ldiff, status->err.cdiff);
-    ret = xvfbsync_syncip_reset_status (sync_channel->sync);
-    if (ret)
-      GST_ERROR ("SyncIp: Couldnt reset status of channel %d",
-          sync_channel->id);
   }
 
 }
