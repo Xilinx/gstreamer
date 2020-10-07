@@ -70,8 +70,9 @@ GST_DEBUG_CATEGORY (v4l2src_debug);
 #define GST_CAT_DEFAULT v4l2src_debug
 
 #define DEFAULT_PROP_DEVICE   "/dev/video0"
-#define SCD_EVENT_TYPE 0x08000301
-#define ENTITY_SCD_PREFIX "xlnx-scdchan"
++/* For Xilinx Specific IPs */
++#define ENTITY_SCD_PREFIX     "xlnx-scdchan"
++#define SCD_EVENT_TYPE        0x08000301
 
 enum
 {
@@ -992,15 +993,19 @@ gst_v4l2src_stop (GstBaseSrc * src)
 }
 
 static GstV4l2MediaInterface *
-find_scd_subdev (GstV4l2Media * media, GstV4l2MediaEntity * scd_entity)
+find_subdev (GstV4l2Media * media, GstV4l2MediaEntity * entity,
+    const gchar * prefix, const gchar * suffix)
 {
   GstV4l2MediaInterface *subdev;
   GList *l;
 
-  if (!g_str_has_prefix (scd_entity->name, ENTITY_SCD_PREFIX))
+  if (prefix && !g_str_has_prefix (entity->name, prefix))
     return NULL;
 
-  l = gst_v4l2_media_find_interfaces_linked_with_entity (media, scd_entity,
+  if (suffix && !g_str_has_suffix (entity->name, suffix))
+    return NULL;
+
+  l = gst_v4l2_media_find_interfaces_linked_with_entity (media, entity,
       MEDIA_INTF_T_V4L_SUBDEV);
 
   if (!l)
@@ -1046,7 +1051,8 @@ gst_v4l2_setup_scd_subdev (GstV4l2Src * self)
 }
 
 static gboolean
-gst_v4l2_find_scd_subdev (GstV4l2Src * self)
+gst_v4l2_find_subdev (GstV4l2Src * self, const gchar * prefix,
+    const gchar * suffix)
 {
   GstV4l2Media *media;
   GList *entities = NULL, *l;
@@ -1057,7 +1063,7 @@ gst_v4l2_find_scd_subdev (GstV4l2Src * self)
           gst_v4l2_media_get_device_file (self->v4l2object->videodev)))
     return FALSE;
 
-  GST_DEBUG_OBJECT (self, "Using media node %s for searching SCD subdev",
+  GST_DEBUG_OBJECT (self, "Using media node %s for searching subdev",
       media_node);
   media = gst_v4l2_media_new (media_node);
 
@@ -1074,14 +1080,13 @@ gst_v4l2_find_scd_subdev (GstV4l2Src * self)
     GstV4l2MediaInterface *subdev;
     gchar *subdev_file;
 
-    subdev = find_scd_subdev (media, entity);
+    subdev = find_subdev (media, entity, prefix, suffix);
     if (!subdev)
       continue;
 
     subdev_file = gst_v4l2_media_get_interface_device_file (media, subdev);
 
-    GST_DEBUG_OBJECT (self,
-        "SCD device subdev '%s' (%s)", entity->name, subdev_file);
+    GST_DEBUG_OBJECT (self, "subdev '%s' (%s)", entity->name, subdev_file);
 
     result = gst_v4l2_try_opening_subdevice (self, subdev_file);
 
@@ -1126,7 +1131,7 @@ gst_v4l2src_change_state (GstElement * element, GstStateChange transition)
         gst_v4l2_error (v4l2src, &error);
         return GST_STATE_CHANGE_FAILURE;
       }
-      if (!gst_v4l2_find_scd_subdev (v4l2src)) {
+      if (!gst_v4l2_find_subdev (v4l2src, ENTITY_SCD_PREFIX, NULL)) {
         GST_DEBUG_OBJECT (v4l2src, "No SCD subdev found");
         gst_v4l2_object_destroy (v4l2src->subdev);
         v4l2src->subdev = NULL;
