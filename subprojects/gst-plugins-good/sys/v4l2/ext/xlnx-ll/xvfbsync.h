@@ -100,12 +100,16 @@ typedef struct {
  * @fb_avail: True if framebuffer free to be pushed to
  * @enable: True if channel is enabled
  * @err: Channel error interrupt status
+ * @err_cond: Channel error interrupt condition
+ * @mutex: Mutex for locking channel status update
  */
 typedef struct
 {
   bool fb_avail[XVFBSYNC_MAX_FB_NUMBER][XVFBSYNC_MAX_USER];
   bool enable;
   ChannelErrIntr err;
+  bool err_cond;
+  pthread_mutex_t mutex;
 } ChannelStatus;
 
 /**
@@ -267,6 +271,15 @@ int xvfbsync_enc_sync_chan_enable (EncSyncChannel * enc_sync_chan);
  * Returns 0 if no errors, else -1
  */
 int xvfbsync_enc_sync_chan_set_intr_mask (EncSyncChannel * enc_sync_chan, ChannelIntr * intr_mask);
+
+/**
+ * xvfbsync_syncip_reset_err_status - Unmask SyncIp interrupt
+ * @enc_sync_chan: Channel to push to
+ * @err_intr: channel error interrupt
+ * Returns 0 if no errors, else -1
+ */
+int
+xvfbsync_syncip_reset_err_status (EncSyncChannel * enc_sync_chan, ChannelErrIntr *err_intr);
 
 /**
  * xvfbsync_enc_sync_chan_populate - Initialize Encoder SyncIp channel

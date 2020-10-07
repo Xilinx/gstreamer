@@ -226,23 +226,27 @@ static void
 xvfbsync_syncip_parse_chan_status (struct xlnxsync_stat *status,
     ChannelStatus * channel_status, u8 max_users, u8 max_buffers)
 {
+  pthread_mutex_lock (&(channel_status->mutex));
+
   for (u8 buffer = 0; buffer < max_buffers; ++buffer) {
     for (u8 user = 0; user < max_users; ++user)
       channel_status->fb_avail[buffer][user] = status->fbdone[buffer][user];
   }
   channel_status->enable = status->enable;
-  channel_status->err.prod_sync = status->prod_sync_err;
-  channel_status->err.prod_wdg = status->prod_wdg_err;
-  channel_status->err.cons_sync = status->cons_sync_err;
-  channel_status->err.cons_wdg = status->cons_wdg_err;
-  channel_status->err.ldiff = status->ldiff_err;
-  channel_status->err.cdiff = status->cdiff_err;
+  channel_status->err.prod_sync |= status->prod_sync_err;
+  channel_status->err.prod_wdg |= status->prod_wdg_err;
+  channel_status->err.cons_sync |= status->cons_sync_err;
+  channel_status->err.cons_wdg |= status->cons_wdg_err;
+  channel_status->err.ldiff |= status->ldiff_err;
+  channel_status->err.cdiff |= status->cdiff_err;
 
   GST_INFO
       ("prod_wdog: %d, prod_sync: %d, cons_wdog: %d, cons_sync: %d, ldiff: %d, cdiff: %d",
       channel_status->err.prod_wdg, channel_status->err.prod_sync,
       channel_status->err.cons_wdg, channel_status->err.cons_sync,
       channel_status->err.ldiff, channel_status->err.cdiff);
+
+  pthread_mutex_unlock (&(channel_status->mutex));
 
 }
 
@@ -265,20 +269,12 @@ xvfbsync_syncip_get_latest_chan_status (SyncChannel * sync_chan)
 }
 
 static int
-xvfbsync_syncip_reset_status (SyncIp * syncip)
+xvfbsync_syncip_clear_chan_err (SyncIp * syncip, struct xlnxsync_clr_err *clr)
 {
-  struct xlnxsync_clr_err clr = { 0 };
   int ret = 0;
+  clr->hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
 
-  clr.hdr_ver = XLNXSYNC_IOCTL_HDR_VER;
-  clr.prod_sync_err = 1;
-  clr.prod_wdg_err = 1;
-  clr.cons_sync_err = 1;
-  clr.cons_wdg_err = 1;
-  clr.ldiff_err = 1;
-  clr.cdiff_err = 1;
-
-  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_CLR_ERR, &clr);
+  ret = ioctl (syncip->fd, XLNXSYNC_CHAN_CLR_ERR, clr);
 
   return ret;
 }
@@ -351,6 +347,7 @@ xvfbsync_syncip_poll_errors (SyncChannel * sync_channel, int timeout)
   if (status->err.prod_sync || status->err.prod_wdg
       || status->err.cons_sync || status->err.cons_wdg
       || status->err.ldiff || status->err.cdiff) {
+    status->err_cond = 1;
     GST_ERROR
         ("prod_wdog: %d, prod_sync: %d, cons_wdog: %d, cons_sync: %d, ldiff: %d, cdiff: %d",
         status->err.prod_wdg, status->err.prod_sync,
@@ -425,6 +422,12 @@ xvfbsync_syncip_chan_populate (SyncIp * syncip, SyncChannel * sync_channel,
   if (!sync_channel->channel_status) {
     GST_ERROR ("SyncIp: Memory allocation for channel status failed");
     return -1;
+  }
+
+  ret = pthread_mutex_init (&(sync_channel->channel_status->mutex), NULL);
+  if (ret) {
+    GST_ERROR ("SyncIp: Couldn't intialize lock for channel status");
+    return ret;
   }
 
   sync_channel->id = config.reserved_id;
@@ -856,8 +859,10 @@ xvfbsync_sync_chan_depopulate (SyncChannel * sync_chan)
     ret = xvfbsync_sync_chan_disable (sync_chan);
 
   pthread_join (sync_chan->polling_thread, NULL);
-  if (sync_chan->channel_status)
+  if (sync_chan->channel_status) {
+    pthread_mutex_destroy (&(sync_chan->channel_status->mutex));
     free (sync_chan->channel_status);
+  }
 
   return ret;
 }
@@ -1029,6 +1034,50 @@ xvfbsync_enc_sync_chan_set_intr_mask (EncSyncChannel * enc_sync_chan,
   if (ret)
     GST_ERROR ("SyncIp: Couldn't set interrupt mask for channel %d",
         enc_sync_chan->sync_channel->id);
+  return ret;
+}
+
+int
+xvfbsync_syncip_reset_err_status (EncSyncChannel * enc_sync_chan,
+    ChannelErrIntr * err_intr)
+{
+  ChannelStatus *chan_status = enc_sync_chan->sync_channel->channel_status;
+  ChannelErrIntr *chan_err_intr = &chan_status->err;
+  struct xlnxsync_clr_err clr = { 0 };
+  int ret = 0;
+
+  pthread_mutex_lock (&(chan_status->mutex));
+  if (err_intr->prod_sync) {
+    clr.prod_sync_err = 1;
+    chan_err_intr->prod_sync = 0;
+  }
+  if (err_intr->prod_wdg) {
+    clr.prod_wdg_err = 1;
+    chan_err_intr->prod_wdg = 0;
+  }
+  if (err_intr->cons_sync) {
+    clr.cons_sync_err = 1;
+    chan_err_intr->cons_sync = 0;
+  }
+  if (err_intr->cons_wdg) {
+    clr.cons_wdg_err = 1;
+    chan_err_intr->cons_wdg = 0;
+  }
+  if (err_intr->ldiff) {
+    clr.ldiff_err = 1;
+    chan_err_intr->ldiff = 0;
+  }
+  if (err_intr->cdiff) {
+    clr.cdiff_err = 1;
+    chan_err_intr->cdiff = 0;
+  }
+  pthread_mutex_unlock (&(chan_status->mutex));
+
+  ret =
+      xvfbsync_syncip_clear_chan_err (enc_sync_chan->sync_channel->sync, &clr);
+  if (!ret)
+    GST_DEBUG ("Encoder: Failed to clear channel error");
+
   return ret;
 }
 
