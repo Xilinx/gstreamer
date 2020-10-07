@@ -233,12 +233,12 @@ xvfbsync_syncip_parse_chan_status (struct xlnxsync_stat *status,
       channel_status->fb_avail[buffer][user] = status->fbdone[buffer][user];
   }
   channel_status->enable = status->enable;
-  channel_status->err.prod_sync |= status->prod_sync_err;
-  channel_status->err.prod_wdg |= status->prod_wdg_err;
-  channel_status->err.cons_sync |= status->cons_sync_err;
-  channel_status->err.cons_wdg |= status->cons_wdg_err;
-  channel_status->err.ldiff |= status->ldiff_err;
-  channel_status->err.cdiff |= status->cdiff_err;
+  channel_status->err.prod_sync |= status->err.prod_sync;
+  channel_status->err.prod_wdg |= status->err.prod_wdg;
+  channel_status->err.cons_sync |= status->err.cons_sync;
+  channel_status->err.cons_wdg |= status->err.cons_wdg;
+  channel_status->err.ldiff |= status->err.ldiff;
+  channel_status->err.cdiff |= status->err.cdiff;
 
   GST_INFO
       ("prod_wdog: %d, prod_sync: %d, cons_wdog: %d, cons_sync: %d, ldiff: %d, cdiff: %d",
@@ -1048,27 +1048,27 @@ xvfbsync_syncip_reset_err_status (EncSyncChannel * enc_sync_chan,
 
   pthread_mutex_lock (&(chan_status->mutex));
   if (err_intr->prod_sync) {
-    clr.prod_sync_err = 1;
+    clr.err.prod_sync = 1;
     chan_err_intr->prod_sync = 0;
   }
   if (err_intr->prod_wdg) {
-    clr.prod_wdg_err = 1;
+    clr.err.prod_wdg = 1;
     chan_err_intr->prod_wdg = 0;
   }
   if (err_intr->cons_sync) {
-    clr.cons_sync_err = 1;
+    clr.err.cons_sync = 1;
     chan_err_intr->cons_sync = 0;
   }
   if (err_intr->cons_wdg) {
-    clr.cons_wdg_err = 1;
+    clr.err.cons_wdg = 1;
     chan_err_intr->cons_wdg = 0;
   }
   if (err_intr->ldiff) {
-    clr.ldiff_err = 1;
+    clr.err.ldiff = 1;
     chan_err_intr->ldiff = 0;
   }
   if (err_intr->cdiff) {
-    clr.cdiff_err = 1;
+    clr.err.cdiff = 1;
     chan_err_intr->cdiff = 0;
   }
   pthread_mutex_unlock (&(chan_status->mutex));
