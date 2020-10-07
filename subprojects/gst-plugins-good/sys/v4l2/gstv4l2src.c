@@ -53,6 +53,7 @@
 
 #include <gst/video/gstvideometa.h>
 #include <gst/video/gstvideopool.h>
+#include "edid-utils.h"
 
 #include "gstv4l2elements.h"
 #include "gstv4l2src.h"
@@ -70,9 +71,10 @@ GST_DEBUG_CATEGORY (v4l2src_debug);
 #define GST_CAT_DEFAULT v4l2src_debug
 
 #define DEFAULT_PROP_DEVICE   "/dev/video0"
-+/* For Xilinx Specific IPs */
-+#define ENTITY_SCD_PREFIX     "xlnx-scdchan"
-+#define SCD_EVENT_TYPE        0x08000301
+/* For Xilinx Specific IPs */
+#define ENTITY_HDMI_SUFFIX    "v_hdmi_rx_ss"
+#define ENTITY_SCD_PREFIX     "xlnx-scdchan"
+#define SCD_EVENT_TYPE        0x08000301
 
 enum
 {
@@ -1303,6 +1305,20 @@ gst_v4l2src_change_state (GstElement * element, GstStateChange transition)
         gst_v4l2_error (v4l2src, &error);
         return GST_STATE_CHANGE_FAILURE;
       }
+
+      if (!gst_v4l2_find_subdev (v4l2src, NULL, ENTITY_HDMI_SUFFIX)) {
+        GST_DEBUG_OBJECT (v4l2src, "No HDMI subdev found");
+        v4l2src->is_hdr_supported = FALSE;
+      } else {
+        GST_DEBUG_OBJECT (v4l2src, "HDMI subdev found");
+        if (!gst_edid_is_hdr10_supported (v4l2src->subdev)) {
+          GST_DEBUG_OBJECT (v4l2src,
+              "EDID does not have HDR10 EOTF support. Disabling HDR");
+          v4l2src->is_hdr_supported = FALSE;
+        }
+        gst_v4l2_object_close (v4l2src->subdev);
+      }
+
       if (!gst_v4l2_find_subdev (v4l2src, ENTITY_SCD_PREFIX, NULL)) {
         GST_DEBUG_OBJECT (v4l2src, "No SCD subdev found");
         gst_v4l2_object_destroy (v4l2src->subdev);
