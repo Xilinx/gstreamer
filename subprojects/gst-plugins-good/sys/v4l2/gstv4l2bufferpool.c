@@ -1272,6 +1272,7 @@ gst_v4l2_buffer_pool_qbuf (GstV4l2BufferPool * pool, GstBuffer * buf,
     const GstVideoInfo *info;
     GstV4l2Object *obj_unlocked = pool->obj;
     XLNXLLBuf *xlnxll_buf = xvfbsync_xlnxll_buf_new ();
+    ChannelStatus *channel_status = obj_unlocked->sync_chan.channel_status;
 
     if (gst_is_v4l2_memory (group->mem[0]))
       /* dma-buf import mode  */
@@ -1294,6 +1295,16 @@ gst_v4l2_buffer_pool_qbuf (GstV4l2BufferPool * pool, GstBuffer * buf,
     xlnxll_buf->t_planes[PLANE_MAP_UV].i_pitch = info->stride[PLANE_MAP_UV];
     xvfbsync_enc_sync_chan_add_buffer (&obj_unlocked->enc_sync_chan,
         xlnxll_buf);
+
+    pthread_mutex_lock (&(channel_status->mutex));
+    if (channel_status->err_cond) {
+      channel_status->err_cond = 0;
+      pthread_mutex_unlock (&(channel_status->mutex));
+      xvfbsync_syncip_reset_err_status (&obj_unlocked->enc_sync_chan,
+          &channel_status->err);
+    } else {
+      pthread_mutex_unlock (&(channel_status->mutex));
+    }
   }
 
   if (!gst_v4l2_allocator_qbuf (pool->vallocator, group))
