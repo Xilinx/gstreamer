@@ -240,14 +240,34 @@ xvfbsync_syncip_parse_chan_status (struct xlnxsync_stat *status,
   channel_status->err.ldiff |= status->err.ldiff;
   channel_status->err.cdiff |= status->err.cdiff;
 
-  GST_INFO
-      ("prod_wdog: %d, prod_sync: %d, cons_wdog: %d, cons_sync: %d, ldiff: %d, cdiff: %d",
+  if (channel_status->err.prod_sync || channel_status->err.prod_wdg
+      || channel_status->err.cons_sync || channel_status->err.cons_wdg
+      || channel_status->err.ldiff || channel_status->err.cdiff) {
+    channel_status->err_cond = 1;
+    GST_ERROR
+        ("Application: prod_wdog: %d, prod_sync: %d, cons_wdog: %d, cons_sync: %d, ldiff: %d, cdiff: %d",
+        channel_status->err.prod_wdg, channel_status->err.prod_sync,
+        channel_status->err.cons_wdg, channel_status->err.cons_sync,
+        channel_status->err.ldiff, channel_status->err.cdiff);
+  }
+
+  if (status->err.prod_sync || status->err.prod_wdg
+      || status->err.cons_sync || status->err.cons_wdg
+      || status->err.ldiff || status->err.cdiff) {
+    GST_ERROR
+        ("Driver: prod_wdog: %d, prod_sync: %d, cons_wdog: %d, cons_sync: %d, ldiff: %d, cdiff: %d",
+        status->err.prod_wdg, status->err.prod_sync,
+        status->err.cons_wdg, status->err.cons_sync,
+        status->err.ldiff, status->err.cdiff);
+  }
+
+  GST_DEBUG
+      ("Application: prod_wdog: %d, prod_sync: %d, cons_wdog: %d, cons_sync: %d, ldiff: %d, cdiff: %d",
       channel_status->err.prod_wdg, channel_status->err.prod_sync,
       channel_status->err.cons_wdg, channel_status->err.cons_sync,
       channel_status->err.ldiff, channel_status->err.cdiff);
 
   pthread_mutex_unlock (&(channel_status->mutex));
-
 }
 
 static int
@@ -330,8 +350,6 @@ xvfbsync_syncip_poll_errors (SyncChannel * sync_channel, int timeout)
 {
   EPollError ret_code;
   struct pollfd poll_data;
-  int ret = 0;
-  ChannelStatus *status;
 
   poll_data.events = POLLPRI;
   poll_data.fd = (int) (intptr_t) sync_channel->sync->fd;
@@ -342,19 +360,6 @@ xvfbsync_syncip_poll_errors (SyncChannel * sync_channel, int timeout)
     return;
 
   xvfbsync_syncip_get_latest_chan_status (sync_channel);
-  status = sync_channel->channel_status;
-
-  if (status->err.prod_sync || status->err.prod_wdg
-      || status->err.cons_sync || status->err.cons_wdg
-      || status->err.ldiff || status->err.cdiff) {
-    status->err_cond = 1;
-    GST_ERROR
-        ("prod_wdog: %d, prod_sync: %d, cons_wdog: %d, cons_sync: %d, ldiff: %d, cdiff: %d",
-        status->err.prod_wdg, status->err.prod_sync,
-        status->err.cons_wdg, status->err.cons_sync,
-        status->err.ldiff, status->err.cdiff);
-  }
-
 }
 
 static void *
