@@ -3551,6 +3551,9 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
       case GST_VIDEO_FORMAT_ARGB:
         port_def.format.video.eColorFormat = OMX_COLOR_Format32bitBGRA8888;
         break;
+      case GST_VIDEO_FORMAT_GRAY8:
+        port_def.format.video.eColorFormat = OMX_COLOR_FormatL8;
+        break;
       default:
         GST_ERROR_OBJECT (self, "Unsupported format %s",
             gst_video_format_to_string (info->finfo->format));
