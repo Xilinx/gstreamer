@@ -817,7 +817,8 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
   drmModeModeInfo *cached_mode = NULL;
   guint32 fb_id;
   GstMemory *mem = 0;
-  guint fps;
+  gfloat fps;
+  gfloat vrefresh;
   ret = FALSE;
   conn = NULL;
   mode = NULL;
@@ -845,7 +846,7 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
   if (!conn)
     goto connector_failed;
 
-  fps = GST_VIDEO_INFO_FPS_N (vinfo) / GST_VIDEO_INFO_FPS_D (vinfo);
+  fps = (gfloat) GST_VIDEO_INFO_FPS_N (vinfo) / GST_VIDEO_INFO_FPS_D (vinfo);
 
   if (self->force_ntsc_tv && vinfo->height == 480) {
     vinfo->height = 486;
@@ -856,15 +857,17 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
   for (i = 0; i < conn->count_modes; i++) {
     if (conn->modes[i].vdisplay == GST_VIDEO_INFO_FIELD_HEIGHT (vinfo) &&
         conn->modes[i].hdisplay == GST_VIDEO_INFO_WIDTH (vinfo)) {
+      vrefresh = conn->modes[i].clock * 1000.00 /
+          (conn->modes[i].htotal * conn->modes[i].vtotal);
       if (GST_VIDEO_INFO_INTERLACE_MODE (vinfo) ==
           GST_VIDEO_INTERLACE_MODE_ALTERNATE) {
 
         if (!(conn->modes[i].flags & DRM_MODE_FLAG_INTERLACE))
           continue;
 
-        if (conn->modes[i].vrefresh != fps * 2)
+        if (ABS (vrefresh - fps) > 0.005)
           continue;
-      } else if (conn->modes[i].vrefresh != fps) {
+      } else if (ABS (vrefresh - fps) > 0.005) {
         cached_mode = &conn->modes[i];
         continue;
       }
