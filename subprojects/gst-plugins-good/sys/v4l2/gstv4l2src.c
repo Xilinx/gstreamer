@@ -1550,13 +1550,13 @@ gst_v4l2src_hdr_get_metadata (GstV4l2Src * self)
           if (update_caps)
             gst_pad_set_caps (GST_BASE_SRC_PAD (self), new_caps);
 
-          gst_caps_unref (cur_caps);
-          gst_caps_unref (new_caps);
         } else {
           GST_WARNING_OBJECT (self,
               "Invalid EOTF was received: %u. HDR10 requires ST2086 EOTF.",
               payload->eotf);
         }
+        gst_caps_unref (cur_caps);
+        gst_caps_unref (new_caps);
       }
     } else {
       GST_WARNING_OBJECT (self,
