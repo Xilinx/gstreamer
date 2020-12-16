@@ -26,12 +26,6 @@
 
 G_BEGIN_DECLS
 
-typedef enum {
-  GST_VIDEO_HDR_FORMAT_NONE,
-  GST_VIDEO_HDR_FORMAT_HDR10,
-  GST_VIDEO_HDR_FORMAT_HDR10_PLUS,
-} GstVideoHDRFormat;
-
 /* defined in CTA-861-G */
 #define GST_VIDEO_HDR10_PLUS_NUM_WINDOWS 1 /* number of windows, shall be 1. */
 #define GST_VIDEO_HDR10_PLUS_MAX_TSD_APL 25 /* targeted_system_display_actual_peak_luminance max value */
@@ -42,9 +36,6 @@ typedef struct _GstVideoMasteringDisplayInfo GstVideoMasteringDisplayInfo;
 typedef struct _GstVideoContentLightLevel GstVideoContentLightLevel;
 typedef struct _GstVideoHDR10Plus GstVideoHDR10Plus;
 typedef struct _GstVideoColorVolumeTransformation GstVideoColorVolumeTransformation;
-
-GST_VIDEO_API
-const gchar* gst_video_hdr_format_to_string (GstVideoHDRFormat format);
 
 /**
  * GstVideoHDR10PlusMeta:
