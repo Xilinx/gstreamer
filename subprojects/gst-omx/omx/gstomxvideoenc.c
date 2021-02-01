@@ -339,6 +339,7 @@ enum
   PROP_MAX_CONSECUTIVE_SKIP,
   PROP_OUTPUT_CROP,
   PROP_XAVC_MAX_PICTURE_SIZES_IN_BITS,
+  PROP_UNIFORM_SLICE_TYPE,
 };
 
 /* FIXME: Better defaults */
@@ -382,6 +383,7 @@ enum
 #define GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_I_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_P_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_B_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_UNIFORM_SLICE_TYPE_DEFAULT (0)
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
 #define OMX_ALG_GST_EVENT_INSERT_LONGTERM "omx-alg/insert-longterm"
@@ -677,6 +679,13 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
               "One of I, P, or B frame's max picture size value", 0, G_MAXINT,
               0, G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS),
           G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_UNIFORM_SLICE_TYPE,
+      g_param_spec_boolean ("uniform-slice-type", "Uniform slice type",
+          "Enable/Disable uniform slice type in slice header",
+          GST_OMX_VIDEO_ENC_UNIFORM_SLICE_TYPE_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
 #endif
 
   element_class->change_state =
@@ -749,6 +758,7 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->output_crop_top = GST_OMX_VIDEO_ENC_OUTPUT_CROP_TOP_DEFAULT;
   self->output_crop_width = GST_OMX_VIDEO_ENC_OUTPUT_CROP_WIDTH_DEFAULT;
   self->output_crop_height = GST_OMX_VIDEO_ENC_OUTPUT_CROP_HEIGHT_DEFAULT;
+  self->uniform_slice_type = GST_OMX_VIDEO_ENC_UNIFORM_SLICE_TYPE_DEFAULT;
 #endif
 
   gst_video_mastering_display_info_init (&self->minfo);
@@ -1379,6 +1389,23 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
     CHECK_ERR ("xavc-max-picture-sizes-in-bits");
   }
 
+  if (self->uniform_slice_type != GST_OMX_VIDEO_ENC_UNIFORM_SLICE_TYPE_DEFAULT) {
+    OMX_ALG_VIDEO_PARAM_UNIFORM_SLICE_TYPE uniform_slice_type;
+
+    GST_OMX_INIT_STRUCT (&uniform_slice_type);
+    uniform_slice_type.nPortIndex = self->enc_out_port->index;
+    uniform_slice_type.bEnableUniformSliceType = self->uniform_slice_type;
+
+    GST_DEBUG_OBJECT (self, "%s uniform_slice_type",
+        self->uniform_slice_type ? "Enable" : "Disable");
+
+    err =
+        gst_omx_component_set_parameter (self->uniform_slice_type,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoUniformSliceType,
+        &uniform_slice_type);
+    CHECK_ERR ("uniform_slice_type");
+  }
+
   return TRUE;
 }
 #endif
@@ -1731,6 +1758,9 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
     case PROP_SKIP_FRAME:
       self->skip_frame = g_value_get_boolean (value);
       break;
+    case PROP_UNIFORM_SLICE_TYPE:
+      self->uniform_slice_type = g_value_get_boolean (value);
+      break;
     case PROP_MAX_PICTURE_SIZE:
       self->max_picture_size = g_value_get_uint (value);
       break;
@@ -1954,6 +1984,8 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
     case PROP_MAX_CONSECUTIVE_SKIP:
       g_value_set_uint (value, self->max_consecutive_skip);
       break;
+    case PROP_UNIFORM_SLICE_TYPE:
+      g_value_set_boolean (value, self->uniform_slice_type);
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
