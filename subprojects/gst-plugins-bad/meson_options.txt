@@ -122,6 +122,7 @@ option('libde265', type : 'feature', value : 'auto', description : 'HEVC/H.265 v
 option('openaptx', type : 'feature', value : 'auto', description : 'Open Source implementation of Audio Processing Technology codec (aptX) plugin')
 option('lv2', type : 'feature', value : 'auto', description : 'LV2 audio plugin bridge')
 option('mediafoundation', type : 'feature', value : 'auto', description : 'Microsoft Media Foundation plugin')
+option('mediasrcbin', type : 'feature', value : 'auto', description : 'Media source bin plugin')
 option('microdns', type : 'feature', value : 'auto', description : 'libmicrodns-based device provider')
 option('modplug', type : 'feature', value : 'auto', description : 'ModPlug audio decoder plugin')
 option('mpeg2enc', type : 'feature', value : 'auto', description : 'mpeg2enc video encoder plugin (GPL - only built if gpl option is also enabled!)')
