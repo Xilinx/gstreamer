@@ -83,6 +83,9 @@ GST_DEBUG_CATEGORY_STATIC (gst_kms_sink_debug);
 GST_DEBUG_CATEGORY_STATIC (CAT_PERFORMANCE);
 #define GST_CAT_DEFAULT gst_kms_sink_debug
 
+/* sink is zynqmp DisplayPort */
+gboolean is_dp = FALSE;
+
 static GstFlowReturn gst_kms_sink_show_frame (GstVideoSink * vsink,
     GstBuffer * buf);
 static void gst_kms_sink_video_overlay_init (GstVideoOverlayInterface * iface);
@@ -1879,6 +1882,9 @@ gst_kms_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
   GstVideoInfo vinfo;
   GstBufferPool *pool;
   gsize size;
+  drmModeConnector *conn;
+  GstVideoAlignment align;
+  guint i;
 
   self = GST_KMS_SINK (bsink);
 
@@ -1889,6 +1895,18 @@ gst_kms_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
     goto no_caps;
   if (!gst_video_info_from_caps (&vinfo, caps))
     goto invalid_caps;
+
+  conn = drmModeGetConnector (self->fd, self->conn_id);
+  if (((self->devname ? !strcmp (self->devname, "xlnx") : 0)
+          && conn->connector_type == DRM_MODE_CONNECTOR_DisplayPort)
+      || (self->bus_id ? strstr (self->bus_id, "zynqmp-display") : 0)) {
+    is_dp = TRUE;
+    gst_video_alignment_reset (&align);
+    for (i = 0; i < GST_VIDEO_INFO_N_PLANES (&vinfo); i++)
+      align.stride_align[i] = 255;    /* 256-byte alignment */
+    gst_video_info_align (&vinfo, &align);
+  }
+  drmModeFreeConnector (conn);
 
   size = GST_VIDEO_INFO_SIZE (&vinfo);
 
