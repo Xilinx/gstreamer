@@ -1567,6 +1567,9 @@ gst_kms_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
   GstVideoInfo vinfo;
   GstBufferPool *pool;
   gsize size;
+  drmModeConnector *conn;
+  GstVideoAlignment align;
+  guint i;
 
   self = GST_KMS_SINK (bsink);
 
@@ -1577,6 +1580,21 @@ gst_kms_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
     goto no_caps;
   if (!gst_video_info_from_caps (&vinfo, caps))
     goto invalid_caps;
+
+  conn = drmModeGetConnector (self->fd, self->conn_id);
+  if (((self->devname ? !strcmp (self->devname, "xlnx") : 0)
+          && conn->connector_type == DRM_MODE_CONNECTOR_DisplayPort)
+      || (self->bus_id ? strstr (self->bus_id, "zynqmp-display") : 0)) {
+    switch (vinfo.finfo->format) {
+      case GST_VIDEO_FORMAT_I420:
+      case GST_VIDEO_FORMAT_YV12:
+        gst_video_alignment_reset (&align);
+        for (i = 0; i < GST_VIDEO_INFO_N_PLANES (&vinfo); i++)
+          align.stride_align[i] = 255;  /* 256-byte alignment */
+        gst_video_info_align (&vinfo, &align);
+        break;
+    }
+  }
 
   size = GST_VIDEO_INFO_SIZE (&vinfo);
 
