@@ -114,6 +114,10 @@ struct _GstOMXVideoEnc
   guint32 xavc_max_picture_size_in_bits_p;
   guint32 xavc_max_picture_size_in_bits_b;
   gboolean uniform_slice_type;
+  guint32 input_crop_left;
+  guint32 input_crop_top;
+  guint32 input_crop_width;
+  guint32 input_crop_height;
 #endif
 
   /* for HDR10 support */
