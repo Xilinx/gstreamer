@@ -338,6 +338,7 @@ enum
   PROP_OUTPUT_CROP,
   PROP_XAVC_MAX_PICTURE_SIZES_IN_BITS,
   PROP_UNIFORM_SLICE_TYPE,
+  PROP_INPUT_CROP,
 };
 
 /* FIXME: Better defaults */
@@ -382,6 +383,10 @@ enum
 #define GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_P_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_B_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_UNIFORM_SLICE_TYPE_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_INPUT_CROP_LEFT_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_INPUT_CROP_TOP_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_INPUT_CROP_WIDTH_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_INPUT_CROP_HEIGHT_DEFAULT (0)
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
 #define OMX_ALG_GST_EVENT_INSERT_LONGTERM "omx-alg/insert-longterm"
@@ -662,6 +667,15 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
               0, G_MAXINT, 0, G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS),
           G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
 
+  g_object_class_install_property (gobject_class, PROP_INPUT_CROP,
+      gst_param_spec_array ("input-crop",
+          "Cropping parameters for input video buffer read",
+          "Cropping parameters for input video buffer ('<left, top, width, height>')",
+          g_param_spec_int ("crop-x", "crop value",
+              "Beginning coordinates, width, or height for output crop value",
+              0, G_MAXINT, 0, G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS),
+          G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+
   g_object_class_install_property (gobject_class,
       PROP_XAVC_MAX_PICTURE_SIZES_IN_BITS,
       gst_param_spec_array ("xavc-max-picture-sizes-in-bits",
@@ -753,6 +767,10 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->output_crop_width = GST_OMX_VIDEO_ENC_OUTPUT_CROP_WIDTH_DEFAULT;
   self->output_crop_height = GST_OMX_VIDEO_ENC_OUTPUT_CROP_HEIGHT_DEFAULT;
   self->uniform_slice_type = GST_OMX_VIDEO_ENC_UNIFORM_SLICE_TYPE_DEFAULT;
+  self->input_crop_left = GST_OMX_VIDEO_ENC_INPUT_CROP_LEFT_DEFAULT;
+  self->input_crop_top = GST_OMX_VIDEO_ENC_INPUT_CROP_TOP_DEFAULT;
+  self->input_crop_width = GST_OMX_VIDEO_ENC_INPUT_CROP_WIDTH_DEFAULT;
+  self->input_crop_height = GST_OMX_VIDEO_ENC_INPUT_CROP_HEIGHT_DEFAULT;
 #endif
 
   gst_video_mastering_display_info_init (&self->minfo);
@@ -1831,6 +1849,46 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
         break;
       }
       self->output_crop_height = g_value_get_int (v);
+
+      break;
+    }
+    case PROP_INPUT_CROP:
+    {
+      const GValue *v;
+
+      if (gst_value_array_get_size (value) != 4) {
+        GST_ERROR_OBJECT (self,
+            "Badly formated input-crop, must contains 4 gint");
+        break;
+      }
+
+      v = gst_value_array_get_value (value, 0);
+      if (!G_VALUE_HOLDS_INT (v)) {
+        GST_ERROR_OBJECT (self, "input-crop left is not int");
+        break;
+      }
+      self->input_crop_left = g_value_get_int (v);
+
+      v = gst_value_array_get_value (value, 1);
+      if (!G_VALUE_HOLDS_INT (v)) {
+        GST_ERROR_OBJECT (self, "input-crop top is not int");
+        break;
+      }
+      self->input_crop_top = g_value_get_int (v);
+
+      v = gst_value_array_get_value (value, 2);
+      if (!G_VALUE_HOLDS_INT (v)) {
+        GST_ERROR_OBJECT (self, "input-crop width is not int");
+        break;
+      }
+      self->input_crop_width = g_value_get_int (v);
+
+      v = gst_value_array_get_value (value, 3);
+      if (!G_VALUE_HOLDS_INT (v)) {
+        GST_ERROR_OBJECT (self, "input-crop height is not int");
+        break;
+      }
+      self->input_crop_height = g_value_get_int (v);
 
       break;
     }
@@ -3380,6 +3438,48 @@ gst_omx_video_enc_set_output_crop (GstOMXVideoEnc * self, GstVideoInfo * info)
 
   return TRUE;
 }
+
+static gboolean
+gst_omx_video_enc_set_input_crop (GstOMXVideoEnc * self, GstVideoInfo * info)
+{
+  if (self->input_crop_left != GST_OMX_VIDEO_ENC_INPUT_CROP_LEFT_DEFAULT
+      || self->input_crop_top !=
+      GST_OMX_VIDEO_ENC_INPUT_CROP_TOP_DEFAULT
+      || self->input_crop_width !=
+      GST_OMX_VIDEO_ENC_INPUT_CROP_WIDTH_DEFAULT
+      || self->input_crop_height !=
+      GST_OMX_VIDEO_ENC_INPUT_CROP_HEIGHT_DEFAULT) {
+    OMX_ERRORTYPE err;
+    OMX_CONFIG_RECTTYPE rect;
+
+    GST_OMX_INIT_STRUCT (&rect);
+    rect.nPortIndex = self->enc_in_port->index;
+    rect.nLeft = self->input_crop_left;
+    rect.nTop = self->input_crop_top;
+    rect.nWidth = self->input_crop_width;
+    rect.nHeight = self->input_crop_height;
+
+    /* For split-field interlace mode, the caps (and also crop height) will
+     * contain the actual video frame height but OMX API expects height to be
+     * the field height so we divide by 2.
+     */
+    if (GST_VIDEO_INFO_INTERLACE_MODE (info) ==
+        GST_VIDEO_INTERLACE_MODE_ALTERNATE)
+      rect.nHeight /= 2;
+
+    GST_DEBUG_OBJECT (self,
+        "setting input crop rectangle: left=%d, top=%d, width=%d, height=%d",
+        self->input_crop_left, self->input_crop_top,
+        self->input_crop_width, self->input_crop_height);
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoCrop, &rect);
+    CHECK_ERR ("input-crop");
+  }
+
+  return TRUE;
+}
 #endif // USE_OMX_TARGET_ZYNQ_USCALE_PLUS
 
 static gboolean
@@ -3477,6 +3577,8 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   if (!gst_omx_video_enc_set_interlacing_parameters (self, info))
     return FALSE;
   if (!gst_omx_video_enc_set_output_crop (self, info))
+    return FALSE;
+  if (!gst_omx_video_enc_set_input_crop (self, info))
     return FALSE;
 #endif
 
@@ -4305,11 +4407,11 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
             self->minfo.white_point.x;
         hdr_sei_config.masteringDisplayColourVolume.whitePoint.nY =
             self->minfo.white_point.y;
-        hdr_sei_config.
-            masteringDisplayColourVolume.nMaxDisplayMasteringLuminance =
+        hdr_sei_config.masteringDisplayColourVolume.
+            nMaxDisplayMasteringLuminance =
             self->minfo.max_display_mastering_luminance;
-        hdr_sei_config.
-            masteringDisplayColourVolume.nMinDisplayMasteringLuminance =
+        hdr_sei_config.masteringDisplayColourVolume.
+            nMinDisplayMasteringLuminance =
             self->minfo.min_display_mastering_luminance;
       } else {
         hdr_sei_config.bHasMDCV = OMX_FALSE;
