@@ -28,7 +28,6 @@
 #include "gstomx.h"
 
 G_BEGIN_DECLS
-
 #define GST_TYPE_OMX_VIDEO_ENC \
   (gst_omx_video_enc_get_type())
 #define GST_OMX_VIDEO_ENC(obj) \
@@ -41,7 +40,6 @@ G_BEGIN_DECLS
   (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_OMX_VIDEO_ENC))
 #define GST_IS_OMX_VIDEO_ENC_CLASS(obj) \
   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_OMX_VIDEO_ENC))
-
 typedef struct _GstOMXVideoEnc GstOMXVideoEnc;
 typedef struct _GstOMXVideoEncClass GstOMXVideoEncClass;
 
@@ -58,7 +56,7 @@ struct _GstOMXVideoEnc
   /* TRUE if the component is configured and saw
    * the first buffer */
   gboolean started;
-   /* TRUE if the ports where disabled after being activated the first time. */
+  /* TRUE if the ports where disabled after being activated the first time. */
   gboolean disabled;
 
   GstClockTime last_upstream_ts;
@@ -69,11 +67,11 @@ struct _GstOMXVideoEnc
   GMutex drain_lock;
   GCond drain_cond;
   /* TRUE if EOS buffers shouldn't be forwarded */
-  gboolean draining; /* protected by drain_lock */
+  gboolean draining;            /* protected by drain_lock */
 
   /* properties */
   guint32 control_rate;
-  guint32 target_bitrate; /* protected by object lock */
+  guint32 target_bitrate;       /* protected by object lock */
   guint32 quant_i_frames;
   guint32 quant_p_frames;
   guint32 quant_b_frames;
@@ -151,13 +149,15 @@ struct _GstOMXVideoEncClass
 
   GstOMXClassData cdata;
 
-  gboolean            (*set_format)          (GstOMXVideoEnc * self, GstOMXPort * port, GstVideoCodecState * state);
-  GstCaps            *(*get_caps)           (GstOMXVideoEnc * self, GstOMXPort * port, GstVideoCodecState * state);
-  GstFlowReturn       (*handle_output_frame) (GstOMXVideoEnc * self, GstOMXPort * port, GstOMXBuffer * buffer, GstVideoCodecFrame * frame);
+    gboolean (*set_format) (GstOMXVideoEnc * self, GstOMXPort * port,
+      GstVideoCodecState * state);
+  GstCaps *(*get_caps) (GstOMXVideoEnc * self, GstOMXPort * port,
+      GstVideoCodecState * state);
+    GstFlowReturn (*handle_output_frame) (GstOMXVideoEnc * self,
+      GstOMXPort * port, GstOMXBuffer * buffer, GstVideoCodecFrame * frame);
 };
 
 GType gst_omx_video_enc_get_type (void);
 
 G_END_DECLS
-
 #endif /* __GST_OMX_VIDEO_ENC_H__ */

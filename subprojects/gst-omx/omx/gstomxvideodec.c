@@ -1371,8 +1371,8 @@ gst_omx_video_dec_deallocate_output_buffers (GstOMXVideoDec * self)
 
 #if defined (USE_OMX_TARGET_RPI) && defined (HAVE_GST_GL)
     err =
-        gst_omx_port_deallocate_buffers (self->eglimage ? self->
-        egl_out_port : self->dec_out_port);
+        gst_omx_port_deallocate_buffers (self->
+        eglimage ? self->egl_out_port : self->dec_out_port);
 #else
     err = gst_omx_port_deallocate_buffers (self->dec_out_port);
 #endif
@@ -3203,8 +3203,8 @@ gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
       port_def.format.video.nFrameHeight != GST_VIDEO_INFO_FIELD_HEIGHT (info);
   is_format_change |= (port_def.format.video.xFramerate == 0
       && info->fps_n != 0)
-      || !gst_omx_video_is_equal_framerate_q16 (port_def.format.
-      video.xFramerate, framerate_q16);
+      || !gst_omx_video_is_equal_framerate_q16 (port_def.format.video.
+      xFramerate, framerate_q16);
   is_format_change |= (self->codec_data != state->codec_data);
   if (klass->is_format_change)
     is_format_change |=

@@ -662,7 +662,8 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
               0, G_MAXINT, 0, G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS),
           G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
 
-  g_object_class_install_property (gobject_class, PROP_XAVC_MAX_PICTURE_SIZES_IN_BITS,
+  g_object_class_install_property (gobject_class,
+      PROP_XAVC_MAX_PICTURE_SIZES_IN_BITS,
       gst_param_spec_array ("xavc-max-picture-sizes-in-bits",
           "Max picture size for I,P and B frames in bits for XAVC",
           "Max picture sizes based on frame types ('<I, P, B>') in bits for XAVC"
@@ -675,10 +676,10 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
 
   g_object_class_install_property (gobject_class, PROP_UNIFORM_SLICE_TYPE,
       g_param_spec_boolean ("uniform-slice-type", "Uniform slice type",
-        "Enable/Disable uniform slice type in slice header",
-        GST_OMX_VIDEO_ENC_UNIFORM_SLICE_TYPE_DEFAULT,
-		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
-		GST_PARAM_MUTABLE_READY));
+          "Enable/Disable uniform slice type in slice header",
+          GST_OMX_VIDEO_ENC_UNIFORM_SLICE_TYPE_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
 #endif
 
   element_class->change_state =
@@ -1352,7 +1353,8 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
     CHECK_ERR ("max-picture-sizes");
   }
 
-  if (self->xavc_max_picture_size_in_bits_i != GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_I_DEFAULT
+  if (self->xavc_max_picture_size_in_bits_i !=
+      GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_I_DEFAULT
       || self->xavc_max_picture_size_in_bits_p !=
       GST_OMX_VIDEO_ENC_XAVC_MAX_PICTURE_SIZE_IN_BITS_P_DEFAULT
       || self->xavc_max_picture_size_in_bits_b !=
@@ -1361,13 +1363,17 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
 
     GST_OMX_INIT_STRUCT (&max_picture_sizes_in_bits);
     max_picture_sizes_in_bits.nPortIndex = self->enc_out_port->index;
-    max_picture_sizes_in_bits.nMaxPictureSizeI = self->xavc_max_picture_size_in_bits_i;
-    max_picture_sizes_in_bits.nMaxPictureSizeP = self->xavc_max_picture_size_in_bits_p;
-    max_picture_sizes_in_bits.nMaxPictureSizeB = self->xavc_max_picture_size_in_bits_b;
+    max_picture_sizes_in_bits.nMaxPictureSizeI =
+        self->xavc_max_picture_size_in_bits_i;
+    max_picture_sizes_in_bits.nMaxPictureSizeP =
+        self->xavc_max_picture_size_in_bits_p;
+    max_picture_sizes_in_bits.nMaxPictureSizeB =
+        self->xavc_max_picture_size_in_bits_b;
 
     GST_DEBUG_OBJECT (self,
         "setting max_picture_size_in_bits_i=%d, max_picture_size_in_bits_p=%d, max_picture_size_in_bits_b=%d",
-        self->xavc_max_picture_size_in_bits_i, self->xavc_max_picture_size_in_bits_p,
+        self->xavc_max_picture_size_in_bits_i,
+        self->xavc_max_picture_size_in_bits_p,
         self->xavc_max_picture_size_in_bits_b);
 
     err =
@@ -1378,19 +1384,20 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
   }
 
   if (self->uniform_slice_type != GST_OMX_VIDEO_ENC_UNIFORM_SLICE_TYPE_DEFAULT) {
-      OMX_ALG_VIDEO_PARAM_UNIFORM_SLICE_TYPE uniform_slice_type;
+    OMX_ALG_VIDEO_PARAM_UNIFORM_SLICE_TYPE uniform_slice_type;
 
-	  GST_OMX_INIT_STRUCT (&uniform_slice_type);
-      uniform_slice_type.nPortIndex = self->enc_out_port->index;
-      uniform_slice_type.bEnableUniformSliceType = self->uniform_slice_type;
+    GST_OMX_INIT_STRUCT (&uniform_slice_type);
+    uniform_slice_type.nPortIndex = self->enc_out_port->index;
+    uniform_slice_type.bEnableUniformSliceType = self->uniform_slice_type;
 
-	  GST_DEBUG_OBJECT (self, "%s uniform_slice_type",
-	      self->uniform_slice_type ? "Enable" : "Disable");
+    GST_DEBUG_OBJECT (self, "%s uniform_slice_type",
+        self->uniform_slice_type ? "Enable" : "Disable");
 
-      err =
-           gst_omx_component_set_parameter (self->uniform_slice_type,
-	       (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoUniformSliceType, &uniform_slice_type);
-      CHECK_ERR ("uniform_slice_type");
+    err =
+        gst_omx_component_set_parameter (self->uniform_slice_type,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoUniformSliceType,
+        &uniform_slice_type);
+    CHECK_ERR ("uniform_slice_type");
   }
 
   return TRUE;
@@ -1745,9 +1752,9 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
     case PROP_SKIP_FRAME:
       self->skip_frame = g_value_get_boolean (value);
       break;
-	case PROP_UNIFORM_SLICE_TYPE:
-	  self->uniform_slice_type = g_value_get_boolean (value);
-	  break;
+    case PROP_UNIFORM_SLICE_TYPE:
+      self->uniform_slice_type = g_value_get_boolean (value);
+      break;
     case PROP_MAX_PICTURE_SIZE:
       self->max_picture_size = g_value_get_uint (value);
       break;
@@ -1839,21 +1846,24 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
 
       v = gst_value_array_get_value (value, 0);
       if (!G_VALUE_HOLDS_INT (v)) {
-        GST_ERROR_OBJECT (self, "xavc-max-picture-sizes-in-bits for I frame is not int");
+        GST_ERROR_OBJECT (self,
+            "xavc-max-picture-sizes-in-bits for I frame is not int");
         break;
       }
       self->xavc_max_picture_size_in_bits_i = g_value_get_int (v);
 
       v = gst_value_array_get_value (value, 1);
       if (!G_VALUE_HOLDS_INT (v)) {
-        GST_ERROR_OBJECT (self, "xavc-max-picture-sizes-in-bits for P frame is not int");
+        GST_ERROR_OBJECT (self,
+            "xavc-max-picture-sizes-in-bits for P frame is not int");
         break;
       }
       self->xavc_max_picture_size_in_bits_p = g_value_get_int (v);
 
       v = gst_value_array_get_value (value, 2);
       if (!G_VALUE_HOLDS_INT (v)) {
-        GST_ERROR_OBJECT (self, "xavc-max-picture-sizes-in-bits for B frame is not int");
+        GST_ERROR_OBJECT (self,
+            "xavc-max-picture-sizes-in-bits for B frame is not int");
         break;
       }
       self->xavc_max_picture_size_in_bits_b = g_value_get_int (v);
@@ -1968,8 +1978,8 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
     case PROP_MAX_CONSECUTIVE_SKIP:
       g_value_set_uint (value, self->max_consecutive_skip);
       break;
-	case PROP_UNIFORM_SLICE_TYPE:
-	  g_value_set_boolean (value, self->uniform_slice_type);
+    case PROP_UNIFORM_SLICE_TYPE:
+      g_value_set_boolean (value, self->uniform_slice_type);
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -2357,7 +2367,7 @@ static void
 xlnx_ll_vcu_init_delay (void)
 {
   /* Delay to compensate the VCU encoder init time */
-  g_usleep(2000);
+  g_usleep (2000);
 }
 #endif
 static void
@@ -2446,7 +2456,7 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
       if (self->xlnx_ll && self->started && self->in_pool_used) {
         GstEvent *event;
 
-        xlnx_ll_vcu_init_delay();
+        xlnx_ll_vcu_init_delay ();
         GST_DEBUG_OBJECT (self, "Tell XLNX-LL producer it can start streaming");
         event = gst_event_new_custom (GST_EVENT_CUSTOM_UPSTREAM,
             gst_structure_new ("xlnx-ll-consumer-ready", NULL, NULL));
@@ -3353,7 +3363,8 @@ gst_omx_video_enc_set_output_crop (GstOMXVideoEnc * self, GstVideoInfo * info)
      * contain the actual video frame height but OMX API expects height to be
      * the field height so we divide by 2.
      */
-    if (GST_VIDEO_INFO_INTERLACE_MODE(info) == GST_VIDEO_INTERLACE_MODE_ALTERNATE)
+    if (GST_VIDEO_INFO_INTERLACE_MODE (info) ==
+        GST_VIDEO_INTERLACE_MODE_ALTERNATE)
       rect.nHeight /= 2;
 
     GST_DEBUG_OBJECT (self,
@@ -3363,8 +3374,7 @@ gst_omx_video_enc_set_output_crop (GstOMXVideoEnc * self, GstVideoInfo * info)
 
     err =
         gst_omx_component_set_parameter (self->enc,
-        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoCrop,
-        &rect);
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoCrop, &rect);
     CHECK_ERR ("output-crop");
   }
 
@@ -4295,11 +4305,11 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
             self->minfo.white_point.x;
         hdr_sei_config.masteringDisplayColourVolume.whitePoint.nY =
             self->minfo.white_point.y;
-        hdr_sei_config.masteringDisplayColourVolume.
-            nMaxDisplayMasteringLuminance =
+        hdr_sei_config.
+            masteringDisplayColourVolume.nMaxDisplayMasteringLuminance =
             self->minfo.max_display_mastering_luminance;
-        hdr_sei_config.masteringDisplayColourVolume.
-            nMinDisplayMasteringLuminance =
+        hdr_sei_config.
+            masteringDisplayColourVolume.nMinDisplayMasteringLuminance =
             self->minfo.min_display_mastering_luminance;
       } else {
         hdr_sei_config.bHasMDCV = OMX_FALSE;
@@ -4375,7 +4385,7 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
   if (self->xlnx_ll && starting && !self->in_pool_used) {
     GstEvent *event;
 
-    xlnx_ll_vcu_init_delay();
+    xlnx_ll_vcu_init_delay ();
     GST_DEBUG_OBJECT (self, "Tell XLNX-LL producer it can start streaming");
     event = gst_event_new_custom (GST_EVENT_CUSTOM_UPSTREAM,
         gst_structure_new ("xlnx-ll-consumer-ready", NULL, NULL));
