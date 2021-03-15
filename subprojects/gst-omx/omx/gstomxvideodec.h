@@ -104,6 +104,8 @@ struct _GstOMXVideoDec
   guint32 internal_entropy_buffers;
   gboolean low_latency;
   gboolean split_input;
+  gint32 output_position_x;
+  gint32 output_position_y;
 #endif
 };
 
