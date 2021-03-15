@@ -94,12 +94,16 @@ enum
   PROP_LOW_LATENCY,
   PROP_LATENCY_MODE,
   PROP_SPLIT_INPUT,
+  PROP_OUTPUT_POSITION,
 };
 
 #define GST_OMX_VIDEO_DEC_INTERNAL_ENTROPY_BUFFERS_DEFAULT (5)
 #define GST_OMX_VIDEO_DEC_LOW_LATENCY_DEFAULT              (FALSE)
 #define GST_OMX_VIDEO_DEC_LATENCY_MODE_DEFAULT          (0xffffffff)
 #define GST_OMX_VIDEO_DEC_SPLIT_INPUT_DEFAULT              (FALSE)
+#define GST_OMX_VIDEO_DEC_OUTPUT_POSITION_X_DEFAULT        (0)
+#define GST_OMX_VIDEO_DEC_OUTPUT_POSITION_Y_DEFAULT        (0)
+
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
 #define LATENCY_MODE_LOW_DEPRECATION_MESSAGE \
@@ -173,6 +177,32 @@ gst_omx_video_dec_set_property (GObject * object, guint prop_id,
     case PROP_SPLIT_INPUT:
       self->split_input = g_value_get_boolean (value);
       break;
+    case PROP_OUTPUT_POSITION:
+    {
+      const GValue *v;
+
+      if (gst_value_array_get_size (value) != 2) {
+        GST_ERROR_OBJECT (self,
+            "Badly formated output-position, must contains 2 gint");
+        break;
+      }
+
+      v = gst_value_array_get_value (value, 0);
+      if (!G_VALUE_HOLDS_INT (v)) {
+        GST_ERROR_OBJECT (self, "output-position x is not int");
+        break;
+      }
+      self->output_position_x = g_value_get_int (v);
+
+      v = gst_value_array_get_value (value, 1);
+      if (!G_VALUE_HOLDS_INT (v)) {
+        GST_ERROR_OBJECT (self, "output-position y is not int");
+        break;
+      }
+      self->output_position_y = g_value_get_int (v);
+
+      break;
+    }
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -254,6 +284,15 @@ gst_omx_video_dec_class_init (GstOMXVideoDecClass * klass)
           "When disabled, decoder will copy all input buffers to internal circular buffer and process them.",
           GST_OMX_VIDEO_DEC_SPLIT_INPUT_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_OUTPUT_POSITION,
+      gst_param_spec_array ("output-position",
+          "Position coordinates for the start of active pixel data in output video buffer",
+          "Position coordinates of start of active pixel data in video buffer ('<position_x, position_y>')",
+          g_param_spec_int ("position-x", "position value",
+              "Position coordinates x and y in output video buffer",
+              0, G_MAXINT, 0, G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS),
+          G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
 #endif
 
   element_class->change_state =
@@ -306,6 +345,8 @@ gst_omx_video_dec_init (GstOMXVideoDec * self)
       GST_OMX_VIDEO_DEC_INTERNAL_ENTROPY_BUFFERS_DEFAULT;
   self->low_latency = GST_OMX_VIDEO_DEC_LOW_LATENCY_DEFAULT;
   self->split_input = GST_OMX_VIDEO_DEC_SPLIT_INPUT_DEFAULT;
+  self->output_position_x = GST_OMX_VIDEO_DEC_OUTPUT_POSITION_X_DEFAULT;
+  self->output_position_y = GST_OMX_VIDEO_DEC_OUTPUT_POSITION_Y_DEFAULT;
 #endif
 
   gst_video_decoder_set_packetized (GST_VIDEO_DECODER (self), TRUE);
@@ -384,6 +425,26 @@ set_zynqultrascaleplus_props (GstOMXVideoDec * self)
         gst_omx_component_set_parameter (self->dec,
         (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoInputParsed, &split_input);
     CHECK_ERR ("split input mode");
+  }
+  {
+    if (self->output_position_x !=
+        GST_OMX_VIDEO_DEC_OUTPUT_POSITION_X_DEFAULT
+        || self->output_position_y !=
+        GST_OMX_VIDEO_DEC_OUTPUT_POSITION_Y_DEFAULT) {
+      OMX_ERRORTYPE err;
+      OMX_CONFIG_POINTTYPE point;
+      GST_OMX_INIT_STRUCT (&point);
+      point.nPortIndex = self->dec_out_port->index;
+      point.nX = self->output_position_x;
+      point.nY = self->output_position_y;
+      GST_DEBUG_OBJECT (self,
+          "setting output position for active pixel data in decoded video buffer: x=%d, y=%d",
+          self->output_position_x, self->output_position_y);
+      err =
+          gst_omx_component_set_parameter (self->dec,
+          (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoOutputPosition, &point);
+      CHECK_ERR ("output-position");
+    }
   }
 
   return TRUE;
