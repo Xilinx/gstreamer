@@ -1695,7 +1695,9 @@ gst_kms_sink_hdr_set_metadata (GstKMSSink * self, GstCaps * caps)
   gst_video_content_light_level_init (&cinfo);
 
   if (gst_video_colorimetry_matches (&self->vinfo.colorimetry,
-          GST_VIDEO_COLORIMETRY_BT2100_PQ)) {
+          GST_VIDEO_COLORIMETRY_BT2100_PQ)
+      || gst_video_colorimetry_matches (&self->vinfo.colorimetry,
+          GST_VIDEO_COLORIMETRY_BT2100_HLG)) {
     int i;
 
 #ifdef HAVE_GEN_HDR_OUTPUT_METADATA
@@ -1703,8 +1705,13 @@ gst_kms_sink_hdr_set_metadata (GstKMSSink * self, GstCaps * caps)
     hdr_metadata.size = sizeof (struct hdr_metadata_infoframe);
 #endif
     hdr_infoframe->metadata_type = DRM_STATIC_METADATA_TYPE1;
-    hdr_infoframe->eotf = DRM_EOTF_SMPTE_ST2084;
-    GST_LOG_OBJECT (self, "Setting EOTF to: %u", DRM_EOTF_SMPTE_ST2084);
+    if (gst_video_colorimetry_matches (&self->vinfo.colorimetry,
+            GST_VIDEO_COLORIMETRY_BT2100_PQ))
+      hdr_infoframe->eotf = DRM_EOTF_SMPTE_ST2084;
+    else
+      hdr_infoframe->eotf = DRM_EOTF_BT_2100_HLG;
+
+    GST_LOG_OBJECT (self, "Setting EOTF to: %u", hdr_infoframe->eotf);
 
     if (gst_video_mastering_display_info_from_caps (&minfo, caps)) {
       for (i = 0; i < 3; i++) {
