@@ -247,6 +247,7 @@ typedef enum
  *     contains the 3D arrangement for stereoscopic 3D video (Since: 1.6)
  * @GST_H264_SEI_MASTERING_DISPLAY_COLOUR_VOLUME: Mastering display colour volume information SEI message (D.2.29) (Since: 1.18)
  * @GST_H264_SEI_CONTENT_LIGHT_LEVEL: Content light level information SEI message (D.2.31) (Since: 1.18)
+ * @GST_H265_SEI_ALTERNATIVE_TRANSFER_CHARACTERISTICS: Preferred Transfer Characteristics SEI message (D.2.32)
  * @GST_H264_SEI_UNHANDLED_PAYLOAD: Unhandled SEI message. This may or may not
  *     be defined by spec (Since 1.18)
  * ...
@@ -263,6 +264,7 @@ typedef enum
   GST_H264_SEI_FRAME_PACKING = 45,
   GST_H264_SEI_MASTERING_DISPLAY_COLOUR_VOLUME = 137,
   GST_H264_SEI_CONTENT_LIGHT_LEVEL = 144,
+  GST_H264_SEI_ALTERNATIVE_TRANSFER_CHARACTERISTICS = 147,
       /* and more...  */
 
   /* Unhandled SEI type */
@@ -363,6 +365,7 @@ typedef struct _GstH264StereoVideoInfo        GstH264StereoVideoInfo;
 typedef struct _GstH264FramePacking           GstH264FramePacking;
 typedef struct _GstH264MasteringDisplayColourVolume GstH264MasteringDisplayColourVolume;
 typedef struct _GstH264ContentLightLevel        GstH264ContentLightLevel;
+typedef struct _GstH264AlternativeTransferCharacteristics GstH264AlternativeTransferCharacteristics;
 typedef struct _GstH264SEIUnhandledPayload    GstH264SEIUnhandledPayload;
 typedef struct _GstH264SEIMessage             GstH264SEIMessage;
 
@@ -1185,6 +1188,19 @@ struct _GstH264SEIUnhandledPayload
   guint size;
 };
 
+/**
+ * GstH264AlternativeTransferCharacteristics:
+ * The preferred alternative value for the transfer_characteristics element in
+ * the VUI of the SPS
+ *
+ * D.2.32
+ *
+ */
+struct _GstH264AlternativeTransferCharacteristics
+{
+  guint8 preferred_transfer_characteristics;
+};
+
 struct _GstH264SEIMessage
 {
   GstH264SEIPayloadType payloadType;
@@ -1199,6 +1215,7 @@ struct _GstH264SEIMessage
     GstH264MasteringDisplayColourVolume mastering_display_colour_volume;
     GstH264ContentLightLevel content_light_level;
     GstH264SEIUnhandledPayload unhandled_payload;
+    GstH264AlternativeTransferCharacteristics alt_transfer_char;
     /* ... could implement more */
   } payload;
 };

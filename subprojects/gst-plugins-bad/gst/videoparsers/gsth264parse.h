@@ -166,6 +166,9 @@ struct _GstH264Parse
   GstVideoContentLightLevel content_light_level;
   guint content_light_level_state;
 
+  guint8 preferred_transfer_char;
+  guint alt_transfer_char_state;
+
   /* For forward predicted trickmode */
   gboolean discard_bidirectional;
 };
