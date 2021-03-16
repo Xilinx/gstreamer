@@ -1306,6 +1306,21 @@ error:
 }
 
 static GstH264ParserResult
+gst_h264_parser_parse_alternative_transfer_characteristics (GstH264NalParser *
+    parser, GstH264AlternativeTransferCharacteristics * atc, NalReader * nr)
+{
+  GST_DEBUG ("parsing \"Alternative transfer characteristics\"");
+
+  READ_UINT8 (nr, atc->preferred_transfer_characteristics, 8);
+
+  return GST_H264_PARSER_OK;
+
+error:
+  GST_WARNING ("error parsing \"Alternative transfer characteristics\"");
+  return GST_H264_PARSER_ERROR;
+}
+
+static GstH264ParserResult
 gst_h264_parser_parse_sei_message (GstH264NalParser * nalparser,
     NalReader * nr, GstH264SEIMessage * sei)
 {
@@ -1375,6 +1390,11 @@ gst_h264_parser_parse_sei_message (GstH264NalParser * nalparser,
     case GST_H264_SEI_CONTENT_LIGHT_LEVEL:
       res = gst_h264_parser_parse_content_light_level_info (nalparser,
           &sei->payload.content_light_level, nr);
+      break;
+    case GST_H264_SEI_ALTERNATIVE_TRANSFER_CHARACTERISTICS:
+      res =
+          gst_h264_parser_parse_alternative_transfer_characteristics (nalparser,
+          &sei->payload.alt_transfer_char, nr);
       break;
     default:
       res = gst_h264_parser_parse_sei_unhandled_payload (nalparser,

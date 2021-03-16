@@ -294,6 +294,8 @@ gst_h264_parse_reset_stream_info (GstH264Parse * h264parse)
 
   gst_video_content_light_level_init (&h264parse->content_light_level);
   h264parse->content_light_level_state = GST_H264_PARSE_SEI_EXPIRED;
+
+  h264parse->alt_transfer_char_state = GST_H264_PARSE_SEI_EXPIRED;
 }
 
 static void
@@ -932,6 +934,27 @@ gst_h264_parse_process_sei (GstH264Parse * h264parse, GstH264NalUnit * nalu)
 
         break;
       }
+      case GST_H264_SEI_ALTERNATIVE_TRANSFER_CHARACTERISTICS:
+      {
+        guint8 ptc;
+
+        ptc = sei.payload.alt_transfer_char.preferred_transfer_characteristics;
+
+        GST_LOG_OBJECT (h264parse,
+            "alternative transfer characteristics found: "
+            "preferred transfer characteristic:(%u)", ptc);
+
+        if (h264parse->alt_transfer_char_state == GST_H264_PARSE_SEI_EXPIRED) {
+          h264parse->update_caps = TRUE;
+        } else if (ptc != h264parse->preferred_transfer_char) {
+          h264parse->update_caps = TRUE;
+        }
+
+        h264parse->alt_transfer_char_state = GST_H264_PARSE_SEI_PARSED;
+        h264parse->preferred_transfer_char = ptc;
+
+        break;
+      }
       default:{
         gint payload_type = sei.payloadType;
 
@@ -1146,6 +1169,12 @@ gst_h264_parse_process_nal (GstH264Parse * h264parse, GstH264NalUnit * nalu)
         else if (h264parse->content_light_level_state ==
             GST_H264_PARSE_SEI_ACTIVE)
           h264parse->content_light_level_state = GST_H264_PARSE_SEI_EXPIRED;
+
+        if (h264parse->alt_transfer_char_state == GST_H264_PARSE_SEI_PARSED)
+          h264parse->alt_transfer_char_state = GST_H264_PARSE_SEI_ACTIVE;
+        else if (h264parse->alt_transfer_char_state ==
+            GST_H264_PARSE_SEI_ACTIVE)
+          h264parse->alt_transfer_char_state = GST_H264_PARSE_SEI_EXPIRED;
       }
       break;
     case GST_H264_NAL_AU_DELIMITER:
@@ -2469,6 +2498,26 @@ gst_h264_parse_update_src_caps (GstH264Parse * h264parse, GstCaps * caps)
             "bit-depth-chroma", G_TYPE_UINT, bit_depth_chroma, NULL);
 
       if (colorimetry && (!s || !gst_structure_has_field (s, "colorimetry"))) {
+        if (h264parse->alt_transfer_char_state != GST_H264_PARSE_SEI_EXPIRED) {
+          GstVideoColorimetry ci = { 0, };
+          gboolean ret;
+
+          ret = gst_video_colorimetry_from_string (&ci, colorimetry);
+          if (ret
+              && ci.transfer !=
+              gst_video_transfer_function_from_iso
+              (h264parse->preferred_transfer_char)) {
+            ci.transfer =
+                gst_video_transfer_function_from_iso
+                (h264parse->preferred_transfer_char);
+
+            g_free (colorimetry);
+            colorimetry = gst_video_colorimetry_to_string (&ci);
+            GST_DEBUG_OBJECT (h264parse,
+                "Forcing colorimetry to %s due to ATC SEI", colorimetry);
+          }
+        }
+
         gst_caps_set_simple (caps, "colorimetry", G_TYPE_STRING, colorimetry,
             NULL);
       }
