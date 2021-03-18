@@ -834,6 +834,10 @@ gst_omx_video_dec_fill_buffer (GstOMXVideoDec * self,
         src_size[1] = src_stride[1] * nslice;
         dst_height[1] = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo);
         break;
+      case GST_VIDEO_FORMAT_GRAY10_LE32:
+        /* Need ((width + 2) / 3) 32-bits words */
+        dst_width[0] = (GST_VIDEO_INFO_WIDTH (vinfo) + 2) / 3 * 4;
+        break;
       default:
         g_assert_not_reached ();
         break;
@@ -3058,6 +3062,10 @@ get_color_format_from_chroma (const gchar * chroma_format,
         return OMX_COLOR_FormatL4;
       case 8:
         return OMX_COLOR_FormatL8;
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+      case 10:
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL10bitPacked;
+#endif
       case 16:
         return OMX_COLOR_FormatL16;
       case 24:

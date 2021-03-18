@@ -92,6 +92,9 @@ gst_omx_video_get_format_from_omx (OMX_COLOR_FORMATTYPE omx_colorformat)
     case OMX_ALG_COLOR_FormatYUV422SemiPlanar10bitPacked:
       format = GST_VIDEO_FORMAT_NV16_10LE32;
       break;
+    case OMX_ALG_COLOR_FormatL10bitPacked:
+      format = GST_VIDEO_FORMAT_GRAY10_LE32;
+      break;
 #pragma GCC diagnostic pop
 #endif
     default:

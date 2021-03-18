@@ -2907,6 +2907,13 @@ gst_omx_video_enc_configure_input_buffer (GstOMXVideoEnc * self,
       break;
 
     case OMX_COLOR_FormatL8:
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+      /* Formats defined in extensions have their own enum so disable to -Wswitch warning */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch"
+    case OMX_ALG_COLOR_FormatL10bitPacked:
+#pragma GCC diagnostic pop
+#endif
       port_def.nBufferSize =
           port_def.format.video.nStride * port_def.format.video.nFrameHeight;
       break;
@@ -4804,6 +4811,7 @@ filter_supported_formats (GList * negotiation_map)
       case GST_VIDEO_FORMAT_NV16:
       case GST_VIDEO_FORMAT_NV16_10LE32:
       case GST_VIDEO_FORMAT_GRAY8:
+      case GST_VIDEO_FORMAT_GRAY10_LE32:
         cur = g_list_next (cur);
         continue;
       default:
