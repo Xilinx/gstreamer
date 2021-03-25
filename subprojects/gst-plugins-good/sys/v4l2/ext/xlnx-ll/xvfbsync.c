@@ -961,13 +961,15 @@ xvfbsync_enc_sync_chan_add_buffer_ (EncSyncChannel * enc_sync_chan,
           xvfbsync_syncip_add_buffer (enc_sync_chan->sync_channel->sync,
           &config);
 
-      if (!ret) {
+      if (!ret)
         GST_DEBUG ("Encoder: Pushed buffer in sync ip");
+      else
+        GST_ERROR ("Encoder: skipping buf and not programming sync ip");
 
-        if (buf)
-          free (buf);
-        xvfbsync_queue_pop (&enc_sync_chan->buffers);
-      }
+      if (buf)
+        free (buf);
+      xvfbsync_queue_pop (&enc_sync_chan->buffers);
+
       --num_fb_to_enable;
     }
   }
