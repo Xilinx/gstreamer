@@ -5142,6 +5142,11 @@ gst_v4l2_object_decide_allocation (GstV4l2Object * obj, GstQuery * query)
      * frame. */
     own_min = min + obj->min_buffers + 2;
 
+    /* Allocate only 3 bufs as syncip has only 3 buffer slots available to be
+     * programmed at a time. */
+    if (obj->xlnx_ll)
+      own_min = 3;
+
     /* If no allocation parameters where provided, allow for a little more
      * buffers and enable copy threshold */
     if (!update) {
