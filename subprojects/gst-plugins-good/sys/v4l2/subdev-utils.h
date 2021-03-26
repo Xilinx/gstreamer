@@ -25,6 +25,8 @@
 #include <gst/gst.h>
 
 #include "gstv4l2object.h"
+#include "ext/v4l2-subdev.h"
+
 
 G_BEGIN_DECLS
 
@@ -41,6 +43,8 @@ GstV4l2Subdev *    gst_v4l2_subdev_new (GstV4l2Object * obj);
 void               gst_v4l2_subdev_free (GstV4l2Subdev * subdev);
 void               gst_v4l2_subdev_free_gpointer (gpointer data);
 
+gboolean           gst_v4l2_subdev_g_fmt (GstV4l2Subdev * v4l2subdev, struct v4l2_subdev_format * fmt);
+gboolean           gst_v4l2_subdev_get_colorspace (struct v4l2_subdev_format * fmt, GstVideoColorimetry * cinfo);
 
 G_END_DECLS
 
