@@ -55,11 +55,9 @@ struct _GstV4l2Src
 
   /*< private >*/
   GstV4l2Object * v4l2object;
-  GstV4l2Object * subdev;
+  GData * subdevs;
 
   guint64 offset;
-  GstPoll *event_poll_subdev;
-  GstPollFD poll_fd_subdev;
   gboolean next_offset_same;
 
   /* offset adjust after renegotiation */
