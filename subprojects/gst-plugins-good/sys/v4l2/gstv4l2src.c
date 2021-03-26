@@ -59,6 +59,7 @@
 #include "gstv4l2src.h"
 #include "gstv4l2media.h"
 #include "gstv4l2object.h"
+#include "subdev-utils.h"
 #include "ext/media.h"
 
 #include "gstv4l2colorbalance.h"
@@ -330,10 +331,7 @@ gst_v4l2src_init (GstV4l2Src * v4l2src)
   /* Avoid the slow probes */
   v4l2src->v4l2object->skip_try_fmt_probes = TRUE;
 
-  v4l2src->event_poll_subdev = gst_poll_new (TRUE);
-  v4l2src->subdev =
-      gst_v4l2_object_new (GST_ELEMENT (v4l2src), GST_OBJECT (v4l2src), 0,
-      DEFAULT_PROP_DEVICE, gst_v4l2_get_output, gst_v4l2_set_output, NULL);
+  g_datalist_init (&v4l2src->subdevs);
 
   gst_base_src_set_format (GST_BASE_SRC (v4l2src), GST_FORMAT_TIME);
   gst_base_src_set_live (GST_BASE_SRC (v4l2src), TRUE);
@@ -348,10 +346,7 @@ static void
 gst_v4l2src_finalize (GstV4l2Src * v4l2src)
 {
   gst_v4l2_object_destroy (v4l2src->v4l2object);
-  gst_poll_free (v4l2src->event_poll_subdev);
-
-  if (v4l2src->subdev)
-    gst_v4l2_object_destroy (v4l2src->subdev);
+  g_datalist_clear (&v4l2src->subdevs);
 
   G_OBJECT_CLASS (parent_class)->finalize ((GObject *) (v4l2src));
 }
@@ -1190,34 +1185,46 @@ find_subdev (GstV4l2Media * media, GstV4l2MediaEntity * entity,
 }
 
 static gboolean
-gst_v4l2_try_opening_subdevice (GstV4l2Src * self, const gchar * subdev)
+gst_v4l2_try_opening_subdevice (GstV4l2Src * self, const gchar * subdev,
+    const gchar * key)
 {
   /* v4l2 subdev */
-  gst_v4l2_object_set_device (self->subdev, subdev);
-  if (!gst_v4l2_object_open (self->subdev, NULL))
+  GstV4l2Subdev *v4l2subdev = gst_v4l2_subdev_new (self->v4l2object);
+
+  gst_v4l2_object_set_device (v4l2subdev->subdev, subdev);
+  if (!gst_v4l2_object_open (v4l2subdev->subdev, NULL))
     goto failed;
+  g_datalist_set_data_full (&self->subdevs, key, v4l2subdev,
+      gst_v4l2_subdev_free_gpointer);
 
   return TRUE;
 
 failed:
-  if (GST_V4L2_IS_OPEN (self->subdev))
-    gst_v4l2_object_close (self->subdev);
+  if (GST_V4L2_IS_OPEN (v4l2subdev->subdev))
+    gst_v4l2_object_close (v4l2subdev->subdev);
+  gst_v4l2_subdev_free (v4l2subdev);
 
   return FALSE;
 }
 
 static gboolean
-gst_v4l2_setup_scd_subdev (GstV4l2Src * self)
+gst_v4l2_setup_subdev_poll (GstV4l2Src * self, const gchar * key)
 {
-  gst_poll_fd_init (&self->poll_fd_subdev);
-  self->poll_fd_subdev.fd = self->subdev->video_fd;
-  gst_poll_add_fd (self->event_poll_subdev, &self->poll_fd_subdev);
-  gst_poll_fd_ctl_pri (self->event_poll_subdev, &self->poll_fd_subdev, TRUE);
+  GstV4l2Subdev *v4l2subdev = g_datalist_get_data (&self->subdevs, key);
 
-  if (!gst_v4l2_subscribe_event (self->subdev, SCD_EVENT_TYPE, 0, 0)) {
-    if (GST_V4L2_IS_OPEN (self->subdev)) {
-      gst_v4l2_object_close (self->subdev);
+  v4l2subdev->poll_fd.fd = v4l2subdev->subdev->video_fd;
+  gst_poll_add_fd (v4l2subdev->event_poll, &v4l2subdev->poll_fd);
+  gst_poll_fd_ctl_pri (v4l2subdev->event_poll, &v4l2subdev->poll_fd, TRUE);
+
+  if (!g_strcmp0 (key, ENTITY_SCD_PREFIX)) {
+    if (!gst_v4l2_subscribe_event (v4l2subdev->subdev, SCD_EVENT_TYPE, 0, 0)) {
+      if (GST_V4L2_IS_OPEN (v4l2subdev->subdev)) {
+        gst_v4l2_object_close (v4l2subdev->subdev);
+      }
+      return FALSE;
     }
+  } else {
+    GST_WARNING_OBJECT (self, "Polling event not supporting for %s", key);
     return FALSE;
   }
 
@@ -1262,7 +1269,10 @@ gst_v4l2_find_subdev (GstV4l2Src * self, const gchar * prefix,
 
     GST_DEBUG_OBJECT (self, "subdev '%s' (%s)", entity->name, subdev_file);
 
-    result = gst_v4l2_try_opening_subdevice (self, subdev_file);
+    if (prefix)
+      result = gst_v4l2_try_opening_subdevice (self, subdev_file, prefix);
+    else
+      result = gst_v4l2_try_opening_subdevice (self, subdev_file, suffix);
 
     g_free (subdev_file);
   }
@@ -1272,6 +1282,17 @@ out:
   g_list_free (entities);
   gst_v4l2_media_free (media);
   return result;
+}
+
+static void
+close_subdev (GQuark key_id, gpointer data, gpointer user_data)
+{
+  GstV4l2Subdev *v4l2subdev = (GstV4l2Subdev *) data;
+
+  if (v4l2subdev->poll_fd.fd >= 0)
+    gst_poll_remove_fd (v4l2subdev->event_poll, &v4l2subdev->poll_fd);
+  if (GST_V4L2_IS_OPEN (v4l2subdev->subdev))
+    gst_v4l2_object_close (v4l2subdev->subdev);
 }
 
 static GstStateChangeReturn
@@ -1310,22 +1331,23 @@ gst_v4l2src_change_state (GstElement * element, GstStateChange transition)
         GST_DEBUG_OBJECT (v4l2src, "No HDMI subdev found");
         v4l2src->is_hdr_supported = FALSE;
       } else {
+        GstV4l2Subdev *v4l2subdev =
+            (GstV4l2Subdev *) g_datalist_get_data (&v4l2src->subdevs,
+            ENTITY_HDMI_SUFFIX);
+
         GST_DEBUG_OBJECT (v4l2src, "HDMI subdev found");
-        if (!gst_edid_is_hdr10_supported (v4l2src->subdev)) {
+        if (!gst_edid_is_hdr10_supported (v4l2subdev->subdev)) {
           GST_DEBUG_OBJECT (v4l2src,
               "EDID does not have HDR10 EOTF support. Disabling HDR");
           v4l2src->is_hdr_supported = FALSE;
         }
-        gst_v4l2_object_close (v4l2src->subdev);
       }
 
       if (!gst_v4l2_find_subdev (v4l2src, ENTITY_SCD_PREFIX, NULL)) {
         GST_DEBUG_OBJECT (v4l2src, "No SCD subdev found");
-        gst_v4l2_object_destroy (v4l2src->subdev);
-        v4l2src->subdev = NULL;
       } else {
         GST_DEBUG_OBJECT (v4l2src, "SCD subdev found");
-        if (!gst_v4l2_setup_scd_subdev (v4l2src)) {
+        if (!gst_v4l2_setup_subdev_poll (v4l2src, ENTITY_SCD_PREFIX)) {
           GST_DEBUG_OBJECT (v4l2src, "Unable to setup SCD subdev");
         }
       }
@@ -1342,12 +1364,8 @@ gst_v4l2src_change_state (GstElement * element, GstStateChange transition)
       if (!gst_v4l2_object_close (obj))
         return GST_STATE_CHANGE_FAILURE;
 
-      if (v4l2src->subdev) {
-        gst_poll_remove_fd (v4l2src->event_poll_subdev,
-            &v4l2src->poll_fd_subdev);
-        if (!gst_v4l2_object_close (v4l2src->subdev))
-          return GST_STATE_CHANGE_FAILURE;
-      }
+      g_datalist_foreach (&v4l2src->subdevs, close_subdev, NULL);
+
       break;
     default:
       break;
@@ -1357,14 +1375,15 @@ gst_v4l2src_change_state (GstElement * element, GstStateChange transition)
 }
 
 static GstFlowReturn
-gst_v4l2_scd_wait_event (GstV4l2Src * self, struct v4l2_event *event)
+gst_v4l2_wait_event (GstV4l2Src * self, GstV4l2Subdev * v4l2subdev,
+    struct v4l2_event *event, guint event_type, GstClockTime timeout)
 {
   gint wait_ret;
   gboolean error = FALSE;
 
 again:
-  GST_LOG_OBJECT (self, "waiting for event");
-  wait_ret = gst_poll_wait (self->event_poll_subdev, GST_CLOCK_TIME_NONE);
+  GST_LOG_OBJECT (self, "waiting for event of type %d", event_type);
+  wait_ret = gst_poll_wait (v4l2subdev->event_poll, timeout);
   if (G_UNLIKELY (wait_ret < 0)) {
     switch (errno) {
       case EBUSY:
@@ -1378,23 +1397,27 @@ again:
     }
   }
 
+  if (!wait_ret) {
+    GST_DEBUG_OBJECT (self, "No event occurred before timeout");
+    return GST_FLOW_OK;
+  }
+
   if (error
-      || gst_poll_fd_has_error (self->event_poll_subdev,
-          &self->poll_fd_subdev)) {
+      || gst_poll_fd_has_error (v4l2subdev->event_poll, &v4l2subdev->poll_fd)) {
     GST_ELEMENT_ERROR (self, RESOURCE, READ, (NULL), ("poll error: %s (%d)",
             g_strerror (errno), errno));
     return GST_FLOW_ERROR;
   }
 
-  if (!gst_v4l2_dqevent (self->subdev, event)) {
+  if (!gst_v4l2_dqevent (v4l2subdev->subdev, event)) {
     GST_ELEMENT_ERROR (self, RESOURCE, READ, (NULL),
         ("Failed to dqueue event"));
     return GST_FLOW_ERROR;
   }
 
-  if (event->type != SCD_EVENT_TYPE) {
+  if (event->type != event_type) {
     GST_WARNING_OBJECT (self, "Received wrong type of event: %d (expected: %d)",
-        event->type, SCD_EVENT_TYPE);
+        event->type, event_type);
     goto again;
   }
 
@@ -1588,6 +1611,7 @@ gst_v4l2src_create (GstPushSrc * src, GstBuffer ** buf)
 {
   GstV4l2Src *v4l2src = GST_V4L2SRC (src);
   GstV4l2Object *obj = v4l2src->v4l2object;
+  GstV4l2Subdev *v4l2subdev;
   GstFlowReturn ret;
   GstClock *clock;
   GstClockTime abs_time, base_time, timestamp, duration;
@@ -1637,8 +1661,13 @@ gst_v4l2src_create (GstPushSrc * src, GstBuffer ** buf)
   if (G_UNLIKELY (ret != GST_FLOW_OK))
     goto error;
 
-  if (v4l2src->subdev) {
-    ret = gst_v4l2_scd_wait_event (v4l2src, &event);
+  v4l2subdev =
+      (GstV4l2Subdev *) g_datalist_get_data (&v4l2src->subdevs,
+      ENTITY_SCD_PREFIX);
+  if (v4l2subdev) {
+    ret =
+        gst_v4l2_wait_event (v4l2src, v4l2subdev, &event, SCD_EVENT_TYPE,
+        GST_CLOCK_TIME_NONE);
     if (G_UNLIKELY (ret != GST_FLOW_OK))
       return ret;
 
