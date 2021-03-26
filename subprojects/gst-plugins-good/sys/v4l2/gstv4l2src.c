@@ -75,6 +75,7 @@ GST_DEBUG_CATEGORY (v4l2src_debug);
 /* For Xilinx Specific IPs */
 #define ENTITY_HDMI_SUFFIX    "v_hdmi_rx_ss"
 #define ENTITY_SCD_PREFIX     "xlnx-scdchan"
+#define ENTITY_SDI_SUFFIX     "v_smpte_uhdsdi_rx_ss"
 #define SCD_EVENT_TYPE        0x08000301
 
 enum
@@ -543,12 +544,42 @@ gst_v4l2src_set_format (GstV4l2Src * v4l2src, GstCaps * caps,
     GstV4l2Error * error)
 {
   GstV4l2Object *obj;
+  GstV4l2Subdev *v4l2subdev;
 
   obj = v4l2src->v4l2object;
 
   /* make sure we stop capturing and dealloc buffers */
   if (!gst_v4l2_object_stop (obj))
     return FALSE;
+
+  v4l2subdev =
+      (GstV4l2Subdev *) g_datalist_get_data (&v4l2src->subdevs,
+      ENTITY_SDI_SUFFIX);
+  if (v4l2subdev) {
+    GstVideoColorimetry ci = { 0, };
+    struct v4l2_subdev_format fmt;
+    gint ret;
+
+    fmt.pad = 0;
+    fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+
+    ret = gst_v4l2_subdev_g_fmt (v4l2subdev, &fmt);
+    if (ret)
+      ret = gst_v4l2_subdev_get_colorspace (&fmt, &ci);
+
+    if (ret
+        && !gst_structure_get_string (gst_caps_get_structure (caps, 0),
+            "colorimetry")) {
+      gchar *colorimetry_str = gst_video_colorimetry_to_string (&ci);
+
+      gst_caps_set_simple (caps, "colorimetry", G_TYPE_STRING,
+          colorimetry_str, NULL);
+      GST_DEBUG_OBJECT (v4l2src,
+          "No colorimetry info in caps. Forcing colorimetry to %s",
+          colorimetry_str);
+      g_free (colorimetry_str);
+    }
+  }
 
   g_signal_emit (v4l2src, gst_v4l2_signals[SIGNAL_PRE_SET_FORMAT], 0,
       v4l2src->v4l2object->video_fd, caps);
@@ -1351,6 +1382,11 @@ gst_v4l2src_change_state (GstElement * element, GstStateChange transition)
           GST_DEBUG_OBJECT (v4l2src, "Unable to setup SCD subdev");
         }
       }
+
+      if (!gst_v4l2_find_subdev (v4l2src, NULL, ENTITY_SDI_SUFFIX))
+        GST_DEBUG_OBJECT (v4l2src, "No SDI subdev found");
+      else
+        GST_DEBUG_OBJECT (v4l2src, "SDI subdev found");
       break;
     default:
       break;
