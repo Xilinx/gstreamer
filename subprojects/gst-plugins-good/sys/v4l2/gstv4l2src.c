@@ -1254,6 +1254,14 @@ gst_v4l2_setup_subdev_poll (GstV4l2Src * self, const gchar * key)
       }
       return FALSE;
     }
+  } else if (!g_strcmp0 (key, ENTITY_SDI_SUFFIX)) {
+    if (!gst_v4l2_subscribe_event (v4l2subdev->subdev, V4L2_EVENT_SOURCE_CHANGE,
+            0, 0)) {
+      if (GST_V4L2_IS_OPEN (v4l2subdev->subdev)) {
+        gst_v4l2_object_close (v4l2subdev->subdev);
+      }
+      return FALSE;
+    }
   } else {
     GST_WARNING_OBJECT (self, "Polling event not supporting for %s", key);
     return FALSE;
@@ -1383,10 +1391,14 @@ gst_v4l2src_change_state (GstElement * element, GstStateChange transition)
         }
       }
 
-      if (!gst_v4l2_find_subdev (v4l2src, NULL, ENTITY_SDI_SUFFIX))
+      if (!gst_v4l2_find_subdev (v4l2src, NULL, ENTITY_SDI_SUFFIX)) {
         GST_DEBUG_OBJECT (v4l2src, "No SDI subdev found");
-      else
+      } else {
         GST_DEBUG_OBJECT (v4l2src, "SDI subdev found");
+        if (!gst_v4l2_setup_subdev_poll (v4l2src, ENTITY_SDI_SUFFIX)) {
+          GST_DEBUG_OBJECT (v4l2src, "Unable to setup SDI subdev");
+        }
+      }
       break;
     default:
       break;
@@ -1465,6 +1477,7 @@ gst_v4l2src_poll_subdevs (GstV4l2Src * self)
 {
   GstV4l2Subdev *v4l2subdev;
 
+  /* SCD event */
   v4l2subdev =
       (GstV4l2Subdev *) g_datalist_get_data (&self->subdevs, ENTITY_SCD_PREFIX);
   if (v4l2subdev) {
@@ -1494,6 +1507,50 @@ gst_v4l2src_poll_subdevs (GstV4l2Src * self)
 
       gst_pad_push_event (GST_BASE_SRC_PAD (self), scd_event);
     }
+  }
+
+  /* SDI resolution change */
+  v4l2subdev =
+      (GstV4l2Subdev *) g_datalist_get_data (&self->subdevs, ENTITY_SDI_SUFFIX);
+  if (v4l2subdev) {
+    GstVideoColorimetry ci = { 0, };
+    struct v4l2_event event;
+    struct v4l2_subdev_format fmt;
+    GstFlowReturn ret;
+    GstCaps *cur_caps = NULL, *new_caps = NULL;
+
+    ret =
+        gst_v4l2_wait_event (self, v4l2subdev, &event,
+        V4L2_EVENT_SOURCE_CHANGE, 0);
+    if (G_UNLIKELY (ret != GST_FLOW_OK))
+      return ret;
+
+    fmt.pad = 0;
+    fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+
+    ret = gst_v4l2_subdev_g_fmt (v4l2subdev, &fmt);
+    if (ret)
+      ret = gst_v4l2_subdev_get_colorspace (&fmt, &ci);
+
+    cur_caps = gst_pad_get_current_caps (GST_BASE_SRC_PAD (self));
+    if (ret && cur_caps && (new_caps = gst_caps_copy (cur_caps))) {
+      gchar *colorimetry_str = gst_video_colorimetry_to_string (&ci);
+
+      if (g_strcmp0 (gst_structure_get_string (gst_caps_get_structure
+                  (cur_caps, 0), "colorimetry"), colorimetry_str)) {
+        gst_caps_set_simple (new_caps, "colorimetry", G_TYPE_STRING,
+            colorimetry_str, NULL);
+        gst_pad_set_caps (GST_BASE_SRC_PAD (self), new_caps);
+        GST_DEBUG_OBJECT (self, "SDI source change. Setting colorimetry to %s",
+            colorimetry_str);
+      }
+      g_free (colorimetry_str);
+    }
+
+    if (cur_caps)
+      gst_caps_unref (cur_caps);
+    if (new_caps)
+      gst_caps_unref (new_caps);
   }
 
   return GST_FLOW_OK;
