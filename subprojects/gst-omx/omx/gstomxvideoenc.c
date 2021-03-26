@@ -805,18 +805,17 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   }
 
 static gboolean
-gst_omx_video_enc_set_color_primaries (GstOMXVideoEnc * self)
+gst_omx_video_enc_set_color_primaries (GstOMXVideoEnc * self,
+    GstVideoColorPrimaries primaries)
 {
   OMX_ERRORTYPE err = OMX_ErrorNone;
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-  GstVideoInfo *info = &self->input_state->info;
-  GstVideoColorimetry cinfo = GST_VIDEO_INFO_COLORIMETRY (info);
   OMX_ALG_VIDEO_PARAM_COLOR_PRIMARIES param;
 
   GST_OMX_INIT_STRUCT (&param);
   param.nPortIndex = self->enc_in_port->index;
 
-  switch (cinfo.primaries) {
+  switch (primaries) {
     case GST_VIDEO_COLOR_PRIMARIES_BT709:
       param.eColorPrimaries = OMX_ALG_VIDEO_COLOR_PRIMARIES_BT_709;
       break;
@@ -851,13 +850,11 @@ gst_omx_video_enc_set_color_primaries (GstOMXVideoEnc * self)
     case GST_VIDEO_COLOR_PRIMARIES_UNKNOWN:
     default:
       GST_WARNING_OBJECT (self,
-          "Provided color primaries %d (%s) are not supported", cinfo.primaries,
-          gst_video_colorimetry_to_string (&cinfo));
+          "Provided color primaries %d are not supported", primaries);
       param.eColorPrimaries = OMX_ALG_VIDEO_COLOR_PRIMARIES_UNSPECIFIED;
   }
 
-  GST_DEBUG_OBJECT (self, "Set color primaries to %d (%s)",
-      param.eColorPrimaries, gst_video_colorimetry_to_string (&cinfo));
+  GST_DEBUG_OBJECT (self, "Set color primaries to %d ", param.eColorPrimaries);
 
   err =
       gst_omx_component_set_parameter (self->enc,
@@ -872,18 +869,17 @@ gst_omx_video_enc_set_color_primaries (GstOMXVideoEnc * self)
 }
 
 static gboolean
-gst_omx_video_enc_set_transfer_characteristics (GstOMXVideoEnc * self)
+gst_omx_video_enc_set_transfer_characteristics (GstOMXVideoEnc * self,
+    GstVideoTransferFunction transfer)
 {
   OMX_ERRORTYPE err = OMX_ErrorNone;
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-  GstVideoInfo *info = &self->input_state->info;
-  GstVideoColorimetry cinfo = GST_VIDEO_INFO_COLORIMETRY (info);
   OMX_ALG_VIDEO_PARAM_TRANSFER_CHARACTERISTICS param;
 
   GST_OMX_INIT_STRUCT (&param);
   param.nPortIndex = self->enc_in_port->index;
 
-  switch (cinfo.transfer) {
+  switch (transfer) {
     case GST_VIDEO_TRANSFER_SMPTE2084:
       param.eTransferCharac = OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_BT_2100_PQ;
       break;
@@ -904,14 +900,13 @@ gst_omx_video_enc_set_transfer_characteristics (GstOMXVideoEnc * self)
     case GST_VIDEO_TRANSFER_ARIB_STD_B67:
     default:
       GST_WARNING_OBJECT (self,
-          "Provided transfer characteristics %d (%s) are not supported",
-          cinfo.transfer, gst_video_colorimetry_to_string (&cinfo));
+          "Provided transfer characteristics %d are not supported", transfer);
       param.eTransferCharac =
           OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_UNSPECIFIED;
   }
 
-  GST_DEBUG_OBJECT (self, "Set transfer characteristics to %d (%s)",
-      param.eTransferCharac, gst_video_colorimetry_to_string (&cinfo));
+  GST_DEBUG_OBJECT (self, "Set transfer characteristics to %d",
+      param.eTransferCharac);
 
   err =
       gst_omx_component_set_parameter (self->enc,
@@ -926,18 +921,17 @@ gst_omx_video_enc_set_transfer_characteristics (GstOMXVideoEnc * self)
 }
 
 static gboolean
-gst_omx_video_enc_set_color_matrix (GstOMXVideoEnc * self)
+gst_omx_video_enc_set_color_matrix (GstOMXVideoEnc * self,
+    GstVideoColorMatrix matrix)
 {
   OMX_ERRORTYPE err = OMX_ErrorNone;
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-  GstVideoInfo *info = &self->input_state->info;
-  GstVideoColorimetry cinfo = GST_VIDEO_INFO_COLORIMETRY (info);
   OMX_ALG_VIDEO_PARAM_COLOR_MATRIX param;
 
   GST_OMX_INIT_STRUCT (&param);
   param.nPortIndex = self->enc_in_port->index;
 
-  switch (cinfo.matrix) {
+  switch (matrix) {
     case GST_VIDEO_COLOR_MATRIX_BT2020:
       param.eColorMatrix = OMX_ALG_VIDEO_COLOR_MATRIX_BT_2100_YCBCR;
       break;
@@ -949,13 +943,11 @@ gst_omx_video_enc_set_color_matrix (GstOMXVideoEnc * self)
     case GST_VIDEO_COLOR_MATRIX_SMPTE240M:
     default:
       GST_WARNING_OBJECT (self,
-          "Provided color matrix %d (%s) is not supported", cinfo.matrix,
-          gst_video_colorimetry_to_string (&cinfo));
+          "Provided color matrix %d is not supported", matrix);
       param.eColorMatrix = OMX_ALG_VIDEO_COLOR_MATRIX_UNSPECIFIED;
   }
 
-  GST_DEBUG_OBJECT (self, "Set color matrix to %d (%s)",
-      param.eColorMatrix, gst_video_colorimetry_to_string (&cinfo));
+  GST_DEBUG_OBJECT (self, "Set color matrix to %d", param.eColorMatrix);
 
   err =
       gst_omx_component_set_parameter (self->enc,
@@ -3506,6 +3498,7 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   GstVideoInfo *info = &state->info;
   GList *negotiation_map = NULL, *l;
   GstCaps *caps;
+  GstVideoColorimetry cinfo = GST_VIDEO_INFO_COLORIMETRY (info);
 
   self = GST_OMX_VIDEO_ENC (encoder);
   klass = GST_OMX_VIDEO_ENC_GET_CLASS (encoder);
@@ -3672,13 +3665,13 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
     gst_video_codec_state_unref (self->input_state);
   self->input_state = gst_video_codec_state_ref (state);
 
-  if (!gst_omx_video_enc_set_color_primaries (self))
+  if (!gst_omx_video_enc_set_color_primaries (self, cinfo.primaries))
     return FALSE;
 
-  if (!gst_omx_video_enc_set_transfer_characteristics (self))
+  if (!gst_omx_video_enc_set_transfer_characteristics (self, cinfo.transfer))
     return FALSE;
 
-  if (!gst_omx_video_enc_set_color_matrix (self))
+  if (!gst_omx_video_enc_set_color_matrix (self, cinfo.matrix))
     return FALSE;
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
