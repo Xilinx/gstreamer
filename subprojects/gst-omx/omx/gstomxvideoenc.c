@@ -880,8 +880,16 @@ gst_omx_video_enc_set_transfer_characteristics (GstOMXVideoEnc * self,
   param.nPortIndex = self->enc_in_port->index;
 
   switch (transfer) {
+    case GST_VIDEO_TRANSFER_BT2020_10:
+      param.eTransferCharac =
+          OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_BT_2020_10B;
+      break;
     case GST_VIDEO_TRANSFER_SMPTE2084:
       param.eTransferCharac = OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_BT_2100_PQ;
+      break;
+    case GST_VIDEO_TRANSFER_ARIB_STD_B67:
+      param.eTransferCharac =
+          OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_BT_2100_HLG;
       break;
     case GST_VIDEO_TRANSFER_UNKNOWN:
     case GST_VIDEO_TRANSFER_GAMMA10:
@@ -896,8 +904,6 @@ gst_omx_video_enc_set_transfer_characteristics (GstOMXVideoEnc * self,
     case GST_VIDEO_TRANSFER_LOG316:
     case GST_VIDEO_TRANSFER_BT2020_12:
     case GST_VIDEO_TRANSFER_ADOBERGB:
-    case GST_VIDEO_TRANSFER_BT2020_10:
-    case GST_VIDEO_TRANSFER_ARIB_STD_B67:
     default:
       GST_WARNING_OBJECT (self,
           "Provided transfer characteristics %d are not supported", transfer);
