@@ -2274,6 +2274,9 @@ gst_v4l2_object_get_colorspace (GstV4l2Object * v4l2object,
     case V4L2_XFER_FUNC_SMPTE2084:
       cinfo->transfer = GST_VIDEO_TRANSFER_SMPTE2084;
       break;
+    case V4L2_XFER_FUNC_HLG:
+      cinfo->transfer = GST_VIDEO_TRANSFER_ARIB_STD_B67;
+      break;
     case V4L2_XFER_FUNC_DEFAULT:
       /* nothing, just use defaults for colorspace */
       break;
@@ -3729,6 +3732,9 @@ gst_v4l2_object_set_format_full (GstV4l2Object * v4l2object, GstCaps * caps,
       break;
     case GST_VIDEO_COLOR_MATRIX_UNKNOWN:
       /* We let the driver pick a default one */
+      break;
+    case GST_VIDEO_TRANSFER_ARIB_STD_B67:
+      transfer = V4L2_XFER_FUNC_HLG;
       break;
     default:
       GST_WARNING_OBJECT (v4l2object->dbg_obj,
