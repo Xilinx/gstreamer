@@ -1252,6 +1252,45 @@ again:
   return GST_FLOW_OK;
 }
 
+static GstFlowReturn
+gst_v4l2src_poll_subdevs (GstV4l2Src * self)
+{
+  GstV4l2Subdev *v4l2subdev;
+
+  v4l2subdev =
+      (GstV4l2Subdev *) g_datalist_get_data (&self->subdevs, ENTITY_SCD_PREFIX);
+  if (v4l2subdev) {
+    struct v4l2_event event;
+    guint8 sc_detected;
+    GstFlowReturn ret;
+
+    ret =
+        gst_v4l2_wait_event (self, v4l2subdev, &event, SCD_EVENT_TYPE,
+        GST_CLOCK_TIME_NONE);
+    if (G_UNLIKELY (ret != GST_FLOW_OK))
+      return ret;
+
+    sc_detected = event.u.data[0];
+    GST_LOG_OBJECT (self, "Received SCD event with data %d", sc_detected);
+
+    if (sc_detected) {
+      GstEvent *scd_event;
+      GstStructure *s;
+
+      GST_DEBUG_OBJECT (self, "scene change detected; sending event");
+
+      s = gst_structure_new ("omx-alg/scene-change",
+          "look-ahead", G_TYPE_UINT, 0, NULL);
+
+      scd_event = gst_event_new_custom (GST_EVENT_CUSTOM_DOWNSTREAM, s);
+
+      gst_pad_push_event (GST_BASE_SRC_PAD (self), scd_event);
+    }
+  }
+
+  return GST_FLOW_OK;
+}
+
 static gboolean
 gst_v4l2src_get_controls (GstV4l2Src * self,
     struct v4l2_ext_control *control, guint count)
@@ -1422,14 +1461,11 @@ gst_v4l2src_create (GstPushSrc * src, GstBuffer ** buf)
 {
   GstV4l2Src *v4l2src = GST_V4L2SRC (src);
   GstV4l2Object *obj = v4l2src->v4l2object;
-  GstV4l2Subdev *v4l2subdev;
   GstFlowReturn ret;
   GstClock *clock;
   GstClockTime abs_time, base_time, timestamp, duration;
   GstClockTime delay;
   GstMessage *qos_msg;
-  struct v4l2_event event;
-  guint8 sc_detected;
   gboolean half_frame;
 
   do {
@@ -1476,33 +1512,10 @@ gst_v4l2src_create (GstPushSrc * src, GstBuffer ** buf)
   if (G_UNLIKELY (ret != GST_FLOW_OK))
     goto error;
 
-  v4l2subdev =
-      (GstV4l2Subdev *) g_datalist_get_data (&v4l2src->subdevs,
-      ENTITY_SCD_PREFIX);
-  if (v4l2subdev) {
-    ret =
-        gst_v4l2_wait_event (v4l2src, v4l2subdev, &event, SCD_EVENT_TYPE,
-        GST_CLOCK_TIME_NONE);
-    if (G_UNLIKELY (ret != GST_FLOW_OK))
-      return ret;
-
-    sc_detected = event.u.data[0];
-    GST_LOG_OBJECT (v4l2src, "Received SCD event with data %d", sc_detected);
-
-    if (sc_detected) {
-      GstEvent *event;
-      GstStructure *s;
-
-      GST_DEBUG_OBJECT (v4l2src, "scene change detected; sending event");
-
-      s = gst_structure_new ("omx-alg/scene-change",
-          "look-ahead", G_TYPE_UINT, 0, NULL);
-
-      event = gst_event_new_custom (GST_EVENT_CUSTOM_DOWNSTREAM, s);
-
-      gst_pad_push_event (GST_BASE_SRC_PAD (src), event);
-    }
-  }
+  ret = gst_v4l2src_poll_subdevs (v4l2src);
+  if (G_UNLIKELY (ret != GST_FLOW_OK))
+    return ret;
+ 
   timestamp = GST_BUFFER_TIMESTAMP (*buf);
   duration = obj->duration;
 
