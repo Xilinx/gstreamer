@@ -341,6 +341,7 @@ enum
   PROP_XAVC_MAX_PICTURE_SIZES_IN_BITS,
   PROP_UNIFORM_SLICE_TYPE,
   PROP_INPUT_CROP,
+  PROP_HLG_SDR_COMPATIBLE,
 };
 
 /* FIXME: Better defaults */
@@ -389,6 +390,8 @@ enum
 #define GST_OMX_VIDEO_ENC_INPUT_CROP_TOP_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_INPUT_CROP_WIDTH_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_INPUT_CROP_HEIGHT_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_HLG_SDR_COMPATIBLE_DEFAULT (FALSE)
+
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
 #define OMX_ALG_GST_EVENT_INSERT_LONGTERM "omx-alg/insert-longterm"
@@ -698,6 +701,13 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
       g_param_spec_boolean ("uniform-slice-type", "Uniform slice type",
           "Enable/Disable uniform slice type in slice header",
           GST_OMX_VIDEO_ENC_UNIFORM_SLICE_TYPE_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_HLG_SDR_COMPATIBLE,
+      g_param_spec_boolean ("hlg-sdr-compatible", "HLG SDR compatible mode",
+          "If enabled and input caps contain HLG colorimetry, insert BT2020 EOTF and ATC SEI instead",
+          GST_OMX_VIDEO_ENC_HLG_SDR_COMPATIBLE_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
 #endif
@@ -1932,7 +1942,9 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
 
       break;
     }
-
+    case PROP_HLG_SDR_COMPATIBLE:
+      self->hlg_sdr_compatible = g_value_get_boolean (value);
+      break;
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -2042,6 +2054,10 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
       break;
     case PROP_UNIFORM_SLICE_TYPE:
       g_value_set_boolean (value, self->uniform_slice_type);
+      break;
+    case PROP_HLG_SDR_COMPATIBLE:
+      g_value_set_boolean (value, self->hlg_sdr_compatible);
+      break;
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -3748,6 +3764,41 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
 #endif
   }
 
+  if (self->hlg_sdr_compatible) {
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+    if (cinfo.transfer == GST_VIDEO_TRANSFER_ARIB_STD_B67) {
+      OMX_ALG_VIDEO_PARAM_ALTERNATIVE_TRANSFER_CHARACTERISTICS_SEI
+          atc_sei_param;
+      OMX_ERRORTYPE err;
+
+      GST_OMX_INIT_STRUCT (&atc_sei_param);
+      atc_sei_param.nPortIndex = self->enc_out_port->index;
+      atc_sei_param.bEnableAlternativeTransferCharacteristicsSEI = OMX_TRUE;
+
+      err =
+          gst_omx_component_set_parameter (self->enc,
+          OMX_ALG_IndexParamVideoAlternativeTransferCharacteristicsSEI,
+          &atc_sei_param);
+      if (err != OMX_ErrorNone) {
+        GST_ERROR_OBJECT (self, "Failed to enable ATC SEI: %s (0x%08x)",
+            gst_omx_error_to_string (err), err);
+        return FALSE;
+      }
+      GST_DEBUG_OBJECT (self, "ATC SEI insertion enabled");
+
+      if (!gst_omx_video_enc_set_transfer_characteristics (self,
+              GST_VIDEO_TRANSFER_BT2020_10))
+        return FALSE;
+    } else {
+      self->hlg_sdr_compatible = FALSE;
+      GST_DEBUG_OBJECT (self,
+          "HLG SDR compatible mode enabled but don't have HLG colorimetry. Ignoring HLG SDR compatible mode");
+    }
+#else
+    GST_DEBUG_OBJECT (self, "Enabling ATC is not implemented for this target");
+#endif
+  }
+
   self->downstream_flow_ret = GST_FLOW_OK;
   return TRUE;
 }
@@ -4397,7 +4448,8 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
       }
     }
 #endif
-    if ((self->has_mcdv_sei || self->has_cll_sei) && starting) {
+    if ((self->has_mcdv_sei || self->has_cll_sei || self->hlg_sdr_compatible)
+        && starting) {
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
       OMX_ALG_VIDEO_CONFIG_HIGH_DYNAMIC_RANGE_SEI hdr_sei_config;
       OMX_ERRORTYPE err;
@@ -4440,6 +4492,15 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
             self->linfo.max_frame_average_light_level;
       } else {
         hdr_sei_config.bHasCLL = OMX_FALSE;
+      }
+
+      if (self->hlg_sdr_compatible) {
+        hdr_sei_config.bHasATC = OMX_TRUE;
+        hdr_sei_config.
+            alternativeTransferCharacteristics.preferredTransferCharacteristics
+            = OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_BT_2100_HLG;
+      } else {
+        hdr_sei_config.bHasATC = OMX_FALSE;
       }
 
       err =
