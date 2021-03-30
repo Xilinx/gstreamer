@@ -77,6 +77,9 @@ GST_DEBUG_CATEGORY_STATIC (gst_kms_sink_debug);
 GST_DEBUG_CATEGORY_STATIC (CAT_PERFORMANCE);
 #define GST_CAT_DEFAULT gst_kms_sink_debug
 
+/* sink is zynqmp DisplayPort */
+gboolean is_dp = FALSE;
+
 static GstFlowReturn gst_kms_sink_show_frame (GstVideoSink * vsink,
     GstBuffer * buf);
 static void gst_kms_sink_video_overlay_init (GstVideoOverlayInterface * iface);
@@ -1592,15 +1595,11 @@ gst_kms_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
   if (((self->devname ? !strcmp (self->devname, "xlnx") : 0)
           && conn->connector_type == DRM_MODE_CONNECTOR_DisplayPort)
       || (self->bus_id ? strstr (self->bus_id, "zynqmp-display") : 0)) {
-    switch (vinfo.finfo->format) {
-      case GST_VIDEO_FORMAT_I420:
-      case GST_VIDEO_FORMAT_YV12:
+        is_dp = TRUE;
         gst_video_alignment_reset (&align);
         for (i = 0; i < GST_VIDEO_INFO_N_PLANES (&vinfo); i++)
           align.stride_align[i] = 255;  /* 256-byte alignment */
         gst_video_info_align (&vinfo, &align);
-        break;
-    }
   }
 
   size = GST_VIDEO_INFO_SIZE (&vinfo);
