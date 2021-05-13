@@ -52,7 +52,7 @@ typedef uint64_t u64;
 
 GST_DEBUG_CATEGORY (xvfbsync_debug);
 #define GST_CAT_DEFAULT xvfbsync_debug
-
+#define ROUND_UP_16(num) (((num)+15)&~15)
 
 /**********************************/
 /* xvfbsync private structs/enums */
@@ -677,6 +677,9 @@ set_enc_framebuffer_config (XLNXLLBuf * buf,
   src_row_size = is_10bit_packed (buf->t_fourcc) ?
       ((buf->t_dim.i_width + 2) / 3 * 4) :
       buf->t_dim.i_width * get_pixel_size (buf->t_fourcc);
+  /*FIXME: This assumes producer is configured to 2 samples per clock */
+  src_row_size = ROUND_UP_16 (src_row_size);
+  GST_TRACE ("Row size in bytes : %d", src_row_size);
   config.dma_fd = buf->dma_fd;
 
   config.luma_start_offset[XLNXSYNC_PROD] = buf->t_planes[PLANE_Y].i_offset;
