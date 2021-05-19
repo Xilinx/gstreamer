@@ -457,6 +457,45 @@ xml_get_src_entity (struct media_device *media, GList *src_list)
 }
 
 /*
+ * This is internal function that queries capabilities of the device
+ *
+ * input - name of the device
+ *
+ * output - device capabilities
+ *
+ */
+static int
+query_capabilities (const char *name, unsigned int *device_caps)
+{
+  int ret;
+  struct v4l2_capability caps;
+
+  int v4lfd = open(name, O_RDWR);
+  if (v4lfd < 0) {
+    GST_DEBUG ("failed to open device %s\n", name);
+    return v4lfd;
+  }
+
+  memset(&caps, 0, sizeof(caps));
+
+  ret = ioctl(v4lfd, VIDIOC_QUERYCAP, &caps);
+  if (ret < 0) {
+    GST_DEBUG ("unable to query capabilities %s\n", name);
+    close(v4lfd);
+    return ret;
+  }
+
+  GST_DEBUG ("device %s capabilities 0x%8.8x device_caps 0x%8.8x \n",
+              name, caps.capabilities, caps.device_caps);
+
+  *device_caps = caps.device_caps;
+
+  close(v4lfd);
+
+  return ret;
+}
+
+/*
  * This is internal function that adds an entity to a list if it has only sink pads
  *
  * input - media device
@@ -476,6 +515,7 @@ xml_get_sink_entity (struct media_device *media, GList *sink_list)
     int pad_count, j;
     int has_sink;
     const struct media_entity_desc *info;
+    unsigned int device_caps;
 
     entity = media_get_entity (media, i);
     info = media_entity_get_info (entity);
@@ -497,8 +537,16 @@ xml_get_sink_entity (struct media_device *media, GList *sink_list)
     /* check if sink and of name /dev/video */
     if (has_sink && name &&
         !(strncmp ("/dev/video", name, strlen ("/dev/video")))) {
-      /* add entity to list */
-      sink_list = g_list_prepend (sink_list, entity);
+      if (!(query_capabilities(name, &device_caps))) {
+        if (device_caps & (V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_CAPTURE_MPLANE)) {
+          /* add entity to list */
+          sink_list = g_list_prepend (sink_list, entity);
+        } else {
+          GST_DEBUG ("%s does not have capture capabilities\n", name);
+        }
+      } else {
+        GST_DEBUG ("%s query capabilities failed\n", name);
+      }
     } else {
       GST_DEBUG ("%s : has_sink = %d and dev name = %s\n", __func__, has_sink,
           name);
