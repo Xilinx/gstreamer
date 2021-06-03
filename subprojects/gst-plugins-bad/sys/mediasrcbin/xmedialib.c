@@ -188,6 +188,54 @@ set_default_controls (struct media_entity *entity)
 }
 
 /*
+ * This is internal function that finds the corresponding
+ * sink pad from source pad of an entity
+ *
+ * input - media entity
+ * input - source pad index
+ *
+ * output - sink pad index
+ *
+ */
+static unsigned int
+find_entity_sink_pad_from_src_pad (struct media_entity *entity,
+    unsigned int source_pad_index)
+{
+  unsigned int k = 0, sink_pad_index = 0;
+  unsigned int total_sink_pad = 0, total_src_pad = 0;
+
+  const struct media_entity_desc *info;
+  info = media_entity_get_info (entity);
+
+  for (k = 0; k < info->pads; k++) {
+    const struct media_pad *pad = media_entity_get_pad (entity, k);
+    if (pad->flags & MEDIA_PAD_FL_SINK) {
+      total_sink_pad++;
+    } else if (pad->flags & MEDIA_PAD_FL_SOURCE) {
+      total_src_pad++;
+    }
+  }
+
+  if (source_pad_index >= total_sink_pad) {
+    sink_pad_index = source_pad_index - total_sink_pad;
+    /* Return 1st sink pad if match not found */
+    if (sink_pad_index >= total_sink_pad)
+      sink_pad_index = 0;
+  } else {
+    sink_pad_index = total_src_pad + source_pad_index;
+    /* Return 1st sink pad if match not found */
+    if (sink_pad_index >= info->pads)
+      sink_pad_index = total_src_pad;
+  }
+
+  GST_DEBUG ("sink_pad_index = %d source_pad_index = %d "
+      "total_sink_pad = %d total_src_pad = %d\n", sink_pad_index,
+      source_pad_index, total_sink_pad, total_src_pad);
+
+  return sink_pad_index;
+}
+
+/*
  * This function initialize the pipeline by traversing the media graph
  * from the source entities to sink entities and try to set source
  * entities format whereever possible into the pipeline
@@ -270,7 +318,7 @@ xml_srcent_init (gpointer data, gpointer user_data)
                 __func__, media_entity_get_devname (entity));
           }
 
-          GST_DEBUG ("\t get format [pad:%d fmt:%s/%ux%u@%u/%u\n", j,
+          GST_DEBUG ("\t get src format [pad:%d fmt:%s/%ux%u@%u/%u\n", j,
               v4l2_subdev_pixelcode_to_string (format.code),
               format.width, format.height,
               interval.numerator, interval.denominator);
@@ -283,39 +331,38 @@ xml_srcent_init (gpointer data, gpointer user_data)
 
           /* Set sink pad format on same entity source pad if possible */
           if (pad_count > 1) {
-            int k;
 
-            for (k = 0; k < pad_count; k++) {
-              const struct media_pad *sink_pad =
-                  media_entity_get_pad (entity, k);
+            unsigned int sink_pad_index =
+            find_entity_sink_pad_from_src_pad (entity, j);
+            struct v4l2_mbus_framefmt sink_format;
+            struct v4l2_fract sink_interval = { 0, 0 };
 
-              if (sink_pad->flags & MEDIA_PAD_FL_SINK) {
-                struct v4l2_mbus_framefmt sink_format;
-                struct v4l2_fract sink_interval = { 0, 0 };
-
-                ret = v4l2_subdev_get_format (entity, &sink_format, k, 0, which);
-                if (ret != 0) {
-                  GST_DEBUG (" %s : failed to get format\n", __func__);
-                  return;
-                }
-
-                ret =
-                    v4l2_subdev_get_frame_interval (entity, &sink_interval, k, 0);
-                if (ret != 0 && ret != -ENOTTY && ret != -EINVAL) {
-                  GST_DEBUG ("%s - Failed to get frame interval for %s!\n",
-                      __func__, media_entity_get_devname (entity));
-                }
-
-                format.width = sink_format.width;
-                format.height = sink_format.height;
-                format.code = sink_format.code;
-
-                interval.numerator = sink_interval.numerator;
-                interval.denominator = sink_interval.denominator;
-
-                break;
-              }
+            ret = v4l2_subdev_get_format (entity, &sink_format,
+                sink_pad_index, 0, which);
+            if (ret != 0) {
+              GST_DEBUG (" %s : failed to get format\n", __func__);
+              return;
             }
+
+            ret = v4l2_subdev_get_frame_interval (entity, &sink_interval,
+                sink_pad_index, 0);
+            if (ret != 0 && ret != -ENOTTY && ret != -EINVAL) {
+              GST_DEBUG ("%s - Failed to get frame interval for %s!\n",
+                  __func__, media_entity_get_devname (entity));
+            }
+
+            GST_DEBUG ("\t get sink format [pad:%d fmt:%s/%ux%u@%u/%u\n",
+                sink_pad_index,
+                v4l2_subdev_pixelcode_to_string (sink_format.code),
+                sink_format.width, sink_format.height,
+                sink_interval.numerator, sink_interval.denominator);
+
+            format.width = sink_format.width;
+            format.height = sink_format.height;
+            format.code = sink_format.code;
+
+            interval.numerator = sink_interval.numerator;
+            interval.denominator = sink_interval.denominator;
           }
 
           ret = v4l2_subdev_set_format (entity, &format, j, 0, which);
@@ -383,11 +430,15 @@ xml_srcent_init (gpointer data, gpointer user_data)
           }
 
           /* This is done in case the source pad and sink format pad don't match */
-          if (format.code != remote_format.code) {
+          if (format.code != remote_format.code ||
+              format.width != remote_format.width ||
+              format.height != remote_format.height) {
             GST_DEBUG
-                ("sink pad format %s doesn't match source pad format %s!\n",
+                ("sink pad fmt:%s/%ux%u doesn't match source pad fmt:%s/%ux%u\n",
                 v4l2_subdev_pixelcode_to_string (remote_format.code),
-                v4l2_subdev_pixelcode_to_string (format.code));
+                remote_format.width, remote_format.height,
+                v4l2_subdev_pixelcode_to_string (format.code),
+                format.width, format.height);
 
             format = remote_format;
 
@@ -395,6 +446,10 @@ xml_srcent_init (gpointer data, gpointer user_data)
             if (ret != 0) {
               GST_DEBUG (" %s : failed to set format on src pad\n", __func__);
             }
+
+            GST_DEBUG ("\t set src format [pad:%d fmt:%s/%ux%u\n", j,
+                v4l2_subdev_pixelcode_to_string (format.code),
+                format.width, format.height);
           }
 
           if (format.code != remote_format.code) {
@@ -916,7 +971,7 @@ xml_set_connected_src_pad (const char *video_dev_path,
           if (link->sink == pad &&
               link->source->entity->info.type == MEDIA_ENT_T_V4L2_SUBDEV) {
 
-            struct v4l2_mbus_framefmt format;
+            struct v4l2_mbus_framefmt format, try_format;
             struct v4l2_fract interval = { 0, 0 };
             enum v4l2_subdev_format_whence which = V4L2_SUBDEV_FORMAT_ACTIVE;
             struct media_entity *remote_entity = link->source->entity;
@@ -938,7 +993,8 @@ xml_set_connected_src_pad (const char *video_dev_path,
                   __func__, media_entity_get_devname (entity));
             }
 
-            GST_DEBUG ("\t get format [pad:%d fmt:%s/%ux%u@%u/%u\n", j,
+            GST_DEBUG ("\t get format [pad:%d fmt:%s/%ux%u@%u/%u\n",
+                remote_pad_index,
                 v4l2_subdev_pixelcode_to_string (format.code),
                 format.width, format.height,
                 interval.numerator, interval.denominator);
@@ -973,7 +1029,9 @@ xml_set_connected_src_pad (const char *video_dev_path,
                     __func__, media_entity_get_devname (entity));
               }
 
-              if (format.code == sink_format.code) {
+              if (format.code == sink_format.code &&
+                  format.width == sink_format.width &&
+                  format.height == sink_format.height) {
                 ret = 0;
                 continue;
               }
@@ -986,6 +1044,7 @@ xml_set_connected_src_pad (const char *video_dev_path,
               interval.numerator = sink_interval.numerator;
             }
 
+            try_format = format;
             GST_DEBUG ("\t try to set new format [pad:%d fmt:%s/%ux%u@%u/%u\n",
                 remote_pad_index,
                 v4l2_subdev_pixelcode_to_string (format.code), format.width,
@@ -1008,6 +1067,40 @@ xml_set_connected_src_pad (const char *video_dev_path,
                 remote_pad_index,
                 v4l2_subdev_pixelcode_to_string (format.code), format.width,
                 format.height, interval.numerator, interval.denominator);
+
+            /*
+             * when traversing graph from sink to source in reverse order,
+             * if entity sink pad format does not match with remote entity
+             * source pad format because remote entity source pad format
+             * did not allow to change due to driver restriction then
+             * it will set remote entity sink pad format which will
+             * automatically set remote entity source pad format
+             */
+            if (format.code != try_format.code ||
+                format.width != try_format.width ||
+                format.height != try_format.height) {
+
+              unsigned int sink_pad_index;
+
+              GST_DEBUG
+                  ("sink pad fmt:%s/%ux%u doesn't match source pad fmt:%s/%ux%u\n",
+                  v4l2_subdev_pixelcode_to_string (try_format.code),
+                  try_format.width, try_format.height,
+                  v4l2_subdev_pixelcode_to_string (format.code),
+                  format.width, format.height);
+
+              sink_pad_index = find_entity_sink_pad_from_src_pad (remote_entity,
+                                   remote_pad_index);
+              ret = v4l2_subdev_set_format (remote_entity, &try_format,
+                        sink_pad_index, 0, which);
+              if (ret != 0) {
+                GST_DEBUG (" %s : failed to set format on remote entity sink pad\n",
+                    __func__);
+              }
+              GST_DEBUG ("\t set sink format [pad:%d fmt:%s/%ux%u\n",
+                  sink_pad_index, v4l2_subdev_pixelcode_to_string (try_format.code),
+                  try_format.width, try_format.height);
+            }
 
             ret = set_default_controls (remote_entity);
             if (ret < 0) {
