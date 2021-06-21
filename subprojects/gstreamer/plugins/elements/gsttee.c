@@ -688,10 +688,22 @@ gst_tee_query_allocation (const GValue * item, GValue * ret, gpointer user_data)
 
       gst_query_parse_nth_allocation_meta (ctx->query, ctx_index, &ctx_param);
 
-      /* Keep meta which has no params */
-      if (ctx_param == NULL && param == NULL)
+      /* Keep previous query meta if no meta available for current query */
+      if (param == NULL)
         continue;
 
+      /* Update current query meta if no meta available for previous query */
+      if (ctx_param == NULL) {
+        gst_query_remove_nth_allocation_meta (ctx->query, ctx_index);
+        gst_query_add_allocation_meta (ctx->query, api, param);
+        continue;
+      }
+
+      /* Keep meta if previous and current query meta are same */
+      if (gst_structure_is_equal (param, ctx_param))
+        continue;
+
+      /* Remove meta if previous and current query meta are not same */
       GST_DEBUG_OBJECT (ctx->tee, "Dropping allocation meta %s",
           g_type_name (api));
       gst_query_remove_nth_allocation_meta (ctx->query, ctx_index);
