@@ -65,6 +65,7 @@
 
 #define GST_PLUGIN_NAME "kmssink"
 #define GST_PLUGIN_DESC "Video sink using the Linux kernel mode setting API"
+#define OMX_ALG_GST_EVENT_INSERT_PREFIX_SEI "omx-alg/sei-parsed"
 
 #ifndef DRM_MODE_FB_ALTERNATE_TOP
 #  define DRM_MODE_FB_ALTERNATE_TOP       (1<<2)        /* for alternate top field */
@@ -72,6 +73,12 @@
 #ifndef DRM_MODE_FB_ALTERNATE_BOTTOM
 #  define DRM_MODE_FB_ALTERNATE_BOTTOM    (1<<3)        /* for alternate bottom field */
 #endif
+
+#define LUMA_PLANE                        0
+#define CHROMA_PLANE                      1
+#define RED_CHROMA_U                      90
+#define RED_CHROMA_V                      240
+#define RECTANGLE_THICKNESS               3
 
 GST_DEBUG_CATEGORY_STATIC (gst_kms_sink_debug);
 GST_DEBUG_CATEGORY_STATIC (CAT_PERFORMANCE);
@@ -85,6 +92,7 @@ static GstFlowReturn gst_kms_sink_show_frame (GstVideoSink * vsink,
 static void gst_kms_sink_video_overlay_init (GstVideoOverlayInterface * iface);
 static void gst_kms_sink_drain (GstKMSSink * self);
 static void ensure_kms_allocator (GstKMSSink * self);
+static gboolean gst_kms_sink_sink_event (GstBaseSink * bsink, GstEvent * event);
 
 #define parent_class gst_kms_sink_parent_class
 G_DEFINE_TYPE_WITH_CODE (GstKMSSink, gst_kms_sink, GST_TYPE_VIDEO_SINK,
@@ -126,6 +134,23 @@ enum
   DRM_EOTF_SMPTE_ST2084,
   DRM_EOTF_BT_2100_HLG,
 };
+
+typedef struct
+{
+  guint xmin;
+  guint ymin;
+  guint width;
+  guint height;
+} roi_coordinate;
+
+typedef struct
+{
+  guint count;
+  guint ts;
+  roi_coordinate *coordinate_param;
+} roi_params;
+
+static roi_params roi_param;
 
 static GParamSpec *g_properties[PROP_N] = { NULL, };
 
@@ -1725,6 +1750,76 @@ event_failed:
 }
 
 static gboolean
+draw_rectangle (guint8 * chroma, roi_coordinate * roi, guint roi_cnt,
+    guint frame_w, guint frame_h, guint stride)
+{
+  guint i = 0, j = 0, roi_ind = 0;
+  guint x = 0, y = 0, w = 0, h = 0;
+  guint8 *chroma_offset1, *chroma_offset2, *chroma_offset3;
+  guint8 thickness = 0;
+  for (roi_ind = 0; roi_ind < roi_cnt; roi_ind++) {
+    /* Validate roi */
+    if ((roi[roi_ind].xmin + roi[roi_ind].width) > frame_w) {
+      roi[roi_ind].width = frame_w - roi[roi_ind].xmin;
+    }
+    if ((roi[roi_ind].ymin + roi[roi_ind].height) > frame_h) {
+      roi[roi_ind].height = frame_h - roi[roi_ind].ymin;
+    }
+    if (((roi[roi_ind].xmin + roi[roi_ind].width) > frame_w) ||
+        ((roi[roi_ind].ymin + roi[roi_ind].height) > frame_h)) {
+      GST_WARNING
+          ("skipping invalid roi xmin, ymin, width, height %d::%d::%d::%d",
+          roi[roi_ind].xmin, roi[roi_ind].ymin, roi[roi_ind].width,
+          roi[roi_ind].height);
+      continue;
+    }
+    if ((0 == roi[roi_ind].width) || (0 == roi[roi_ind].height)) {
+      GST_WARNING
+          ("skipping invalid roi xmin, ymin, width, height %d::%d::%d::%d",
+          roi[roi_ind].xmin, roi[roi_ind].ymin, roi[roi_ind].width,
+          roi[roi_ind].height);
+      continue;
+    }
+    x = ((roi[roi_ind].xmin & 0x1) ==
+        0) ? (roi[roi_ind].xmin) : (roi[roi_ind].xmin - 1);
+    y = roi[roi_ind].ymin;
+    w = ((roi[roi_ind].width & 0x1) ==
+        0) ? (roi[roi_ind].width) : (roi[roi_ind].width - 1);
+    h = roi[roi_ind].height;
+
+    chroma_offset1 = chroma + ((y >> 1) * stride) + x;
+    chroma_offset2 = chroma_offset1 + ((h >> 1) - 1) * stride;
+    chroma_offset3 = chroma_offset1 + w - 2;
+
+    for (thickness = 0; thickness < RECTANGLE_THICKNESS; thickness++) {
+      /* Draw horizontal lines */
+      for (i = 0; i < w; i = i + 2) {
+        *(chroma_offset1 + i) = RED_CHROMA_U;
+        *(chroma_offset1 + i + 1) = RED_CHROMA_V;
+        *(chroma_offset2 + i) = RED_CHROMA_U;
+        *(chroma_offset2 + i + 1) = RED_CHROMA_V;
+      }
+
+      /* Draw vertical lines */
+      for (i = 0, j = 0; i < (h >> 1); i++) {
+        *(chroma_offset1 + j) = RED_CHROMA_U;
+        *(chroma_offset1 + j + 1) = RED_CHROMA_V;
+        *(chroma_offset3 + j) = RED_CHROMA_U;
+        *(chroma_offset3 + j + 1) = RED_CHROMA_V;
+        j += stride;
+      }
+
+      chroma_offset1 = chroma_offset1 + stride + 2;
+      chroma_offset2 = chroma_offset2 - stride + 2;
+      chroma_offset3 = chroma_offset3 + stride - 2;
+      w = w - 4;
+      h = h - 4;
+    }
+  }
+  return TRUE;
+}
+
+static gboolean
 gst_kms_sink_import_dmabuf (GstKMSSink * self, GstBuffer * inbuf,
     GstBuffer ** outbuf)
 {
@@ -1735,6 +1830,7 @@ gst_kms_sink_import_dmabuf (GstKMSSink * self, GstBuffer * inbuf,
   guint mems_idx[GST_VIDEO_MAX_PLANES];
   gsize mems_skip[GST_VIDEO_MAX_PLANES];
   GstMemory *mems[GST_VIDEO_MAX_PLANES];
+  GstMapInfo info;
 
   if (!self->has_prime_import)
     return FALSE;
@@ -1784,8 +1880,21 @@ gst_kms_sink_import_dmabuf (GstKMSSink * self, GstBuffer * inbuf,
     /* And all memory found must be dmabuf */
     if (!gst_is_dmabuf_memory (mems[i]))
       return FALSE;
-  }
 
+    if ((i == CHROMA_PLANE) && meta) {
+      GST_DEBUG_OBJECT (self, "xlnxkmssink :: Buffer chroma plane received");
+      gst_memory_map (mems[i], &info, GST_MAP_READWRITE);
+      if (info.data && roi_param.coordinate_param && roi_param.count > 0) {
+        draw_rectangle ((info.data + meta->offset[i]),
+            roi_param.coordinate_param, roi_param.count, meta->width,
+            meta->height, meta->stride[i]);
+        roi_param.count = 0;
+        g_free (roi_param.coordinate_param);
+        roi_param.coordinate_param = NULL;
+      }
+      gst_memory_unmap (mems[i], &info);
+    }
+  }
   ensure_kms_allocator (self);
 
   kmsmem = (GstKMSMemory *) gst_kms_allocator_get_cached (mems[0]);
@@ -1949,6 +2058,79 @@ done:
     gst_buffer_copy_into (buf, inbuf, GST_BUFFER_COPY_METADATA, 0, -1);
 
   return buf;
+}
+
+static gboolean
+handle_sei_info (GstKMSSink * self, GstEvent * event)
+{
+  const GstStructure *s;
+  guint32 payload_type;
+  GstBuffer *buf;
+  GstMapInfo map;
+  s = gst_event_get_structure (event);
+
+  if (!gst_structure_get (s, "payload-type", G_TYPE_UINT, &payload_type,
+          "payload", GST_TYPE_BUFFER, &buf, NULL)) {
+    GST_WARNING_OBJECT (self, "Failed to parse event");
+    return TRUE;
+  }
+  if (payload_type != 77) {
+    GST_WARNING_OBJECT (self,
+        "Payload type is not matching to draw boundign box.");
+    return TRUE;
+  }
+  if (!gst_buffer_map (buf, &map, GST_MAP_READ)) {
+    GST_WARNING_OBJECT (self, "Failed to map payload buffer");
+    gst_buffer_unref (buf);
+    return TRUE;
+  }
+
+  GST_DEBUG_OBJECT (self, "Requesting  (payload-type=%d)", payload_type);
+
+  gint uint_size = sizeof (unsigned int);
+  guint num = 2;
+  gint i = 0;
+  roi_param.ts = *(unsigned int *) (map.data);
+  roi_param.count = *(unsigned int *) (map.data + (num * uint_size));
+  num++;
+  roi_param.coordinate_param =
+      g_malloc0 (roi_param.count * sizeof (roi_coordinate));
+  GST_DEBUG_OBJECT (self, "xlnxkmssink :: roi count %u\n", roi_param.count);
+  for (i = 0; i < roi_param.count; i++) {
+    roi_param.coordinate_param[i].xmin =
+        *(unsigned int *) (map.data + (num * uint_size));
+    num++;
+    roi_param.coordinate_param[i].ymin =
+        *(unsigned int *) (map.data + (num * uint_size));
+    num++;
+    roi_param.coordinate_param[i].width =
+        *(unsigned int *) (map.data + (num * uint_size));
+    num++;
+    roi_param.coordinate_param[i].height =
+        *(unsigned int *) (map.data + (num * uint_size));
+    num++;
+    GST_DEBUG_OBJECT (self,
+        "xlnxkmssink :: frame no, roi no, xmin, ymin, width, height %u::%u::%u::%u::%u\n",
+        (i + 1), roi_param.coordinate_param[i].xmin,
+        roi_param.coordinate_param[i].ymin, roi_param.coordinate_param[i].width,
+        roi_param.coordinate_param[i].height);
+  }
+  gst_buffer_unmap (buf, &map);
+  gst_buffer_unref (buf);
+
+  return TRUE;
+}
+
+static gboolean
+gst_kms_sink_sink_event (GstBaseSink * bsink, GstEvent * event)
+{
+  GstKMSSink *self;
+  self = GST_KMS_SINK (bsink);
+  if (gst_event_has_name (event, OMX_ALG_GST_EVENT_INSERT_PREFIX_SEI)) {
+    GST_DEBUG_OBJECT (self, "xlnxkmssink :: SEI event received\n");
+    handle_sei_info (self, event);
+  }
+  return GST_BASE_SINK_CLASS (parent_class)->event (bsink, event);
 }
 
 static GstFlowReturn
@@ -2366,6 +2548,7 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
 
   videosink_class->show_frame = gst_kms_sink_show_frame;
 
+  basesink_class->event = GST_DEBUG_FUNCPTR (gst_kms_sink_sink_event);
   gobject_class->finalize = gst_kms_sink_finalize;
   gobject_class->set_property = gst_kms_sink_set_property;
   gobject_class->get_property = gst_kms_sink_get_property;
