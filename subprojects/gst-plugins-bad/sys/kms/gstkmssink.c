@@ -71,6 +71,7 @@
 
 #define GST_PLUGIN_NAME "kmssink"
 #define GST_PLUGIN_DESC "Video sink using the Linux kernel mode setting API"
+#define OMX_ALG_GST_EVENT_INSERT_PREFIX_SEI "omx-alg/sei-parsed"
 
 #ifndef DRM_MODE_FB_ALTERNATE_TOP
 #  define DRM_MODE_FB_ALTERNATE_TOP       (1<<2)        /* for alternate top field */
@@ -78,6 +79,13 @@
 #ifndef DRM_MODE_FB_ALTERNATE_BOTTOM
 #  define DRM_MODE_FB_ALTERNATE_BOTTOM    (1<<3)        /* for alternate bottom field */
 #endif
+
+#define LUMA_PLANE                        0
+#define CHROMA_PLANE                      1
+#define ROI_RECT_THICKNESS_MIN            0
+#define ROI_RECT_THICKNESS_MAX            5
+#define ROI_RECT_COLOR_MIN                0
+#define ROI_RECT_COLOR_MAX                255
 
 GST_DEBUG_CATEGORY_STATIC (gst_kms_sink_debug);
 GST_DEBUG_CATEGORY_STATIC (CAT_PERFORMANCE);
@@ -90,6 +98,7 @@ static GstFlowReturn gst_kms_sink_show_frame (GstVideoSink * vsink,
     GstBuffer * buf);
 static void gst_kms_sink_video_overlay_init (GstVideoOverlayInterface * iface);
 static void gst_kms_sink_drain (GstKMSSink * self);
+static gboolean gst_kms_sink_sink_event (GstBaseSink * bsink, GstEvent * event);
 
 #define parent_class gst_kms_sink_parent_class
 G_DEFINE_TYPE_WITH_CODE (GstKMSSink, gst_kms_sink, GST_TYPE_VIDEO_SINK,
@@ -118,6 +127,9 @@ enum
   PROP_SKIP_VSYNC,
   PROP_FULLSCREEN_OVERLAY,
   PROP_FORCE_NTSC_TV,
+  PROP_DRAW_ROI,
+  PROP_ROI_RECT_THICKNESS,
+  PROP_ROI_RECT_COLOR,
   PROP_N,
 };
 
@@ -2034,6 +2046,116 @@ event_failed:
 }
 
 static gboolean
+draw_rectangle (guint8 * chroma, roi_coordinate * roi, guint roi_cnt,
+    guint frame_w, guint frame_h, guint stride, guint roi_rect_thickness,
+    const GValue * roi_rect_yuv_color, GstVideoFormat format)
+{
+  guint i = 0, j = 0, k = 0, roi_ind = 0;
+  guint x = 0, y = 0, w = 0, h = 0;
+  guint8 *chroma_offset1, *chroma_offset2, *chroma_offset3;
+  guint8 *h_chroma_offset1, *h_chroma_offset2, *h_chroma_offset3;
+  guint8 *v_chroma_offset1, *v_chroma_offset2, *v_chroma_offset3;
+  guint8 thickness = 0;
+  gint u = 0, v = 0, vert_sampling = 0;
+
+  for (roi_ind = 0; roi_ind < roi_cnt; roi_ind++) {
+    /* Validate roi */
+    if ((roi[roi_ind].xmin + roi[roi_ind].width) > frame_w) {
+      roi[roi_ind].width = frame_w - roi[roi_ind].xmin;
+    }
+    if ((roi[roi_ind].ymin + roi[roi_ind].height) > frame_h) {
+      roi[roi_ind].height = frame_h - roi[roi_ind].ymin;
+    }
+    if (((roi[roi_ind].xmin + roi[roi_ind].width) > frame_w) ||
+        ((roi[roi_ind].ymin + roi[roi_ind].height) > frame_h)) {
+      GST_WARNING
+          ("skipping invalid roi xmin, ymin, width, height %d::%d::%d::%d",
+          roi[roi_ind].xmin, roi[roi_ind].ymin, roi[roi_ind].width,
+          roi[roi_ind].height);
+      continue;
+    }
+    if ((0 == roi[roi_ind].width) || (0 == roi[roi_ind].height)) {
+      GST_WARNING
+          ("skipping invalid roi xmin, ymin, width, height %d::%d::%d::%d",
+          roi[roi_ind].xmin, roi[roi_ind].ymin, roi[roi_ind].width,
+          roi[roi_ind].height);
+      continue;
+    }
+
+    /* Always start from first chroma component so make x even */
+    x = ((roi[roi_ind].xmin & 0x1) ==
+        0) ? (roi[roi_ind].xmin) : (roi[roi_ind].xmin - 1);
+    y = roi[roi_ind].ymin;
+    /* Always end with last chroma component so make width even */
+    w = ((roi[roi_ind].width & 0x1) ==
+        0) ? (roi[roi_ind].width) : (roi[roi_ind].width - 1);
+    h = roi[roi_ind].height;
+
+    if (format == GST_VIDEO_FORMAT_NV12)
+      vert_sampling = 2;
+    else if (format == GST_VIDEO_FORMAT_NV16)
+      vert_sampling = 1;
+
+    chroma_offset1 = chroma + ((y / vert_sampling) * stride) + x;
+    chroma_offset2 = chroma_offset1 + ((h / vert_sampling) - 1) * stride;
+    chroma_offset3 = chroma_offset1 + w - 2;
+
+    v_chroma_offset1 = h_chroma_offset1 = chroma_offset1;
+    v_chroma_offset2 = h_chroma_offset2 = chroma_offset2;
+    v_chroma_offset3 = h_chroma_offset3 = chroma_offset3;
+
+    if (gst_value_array_get_size (roi_rect_yuv_color) == 3) {
+      u = g_value_get_int (gst_value_array_get_value (roi_rect_yuv_color, 1));
+      v = g_value_get_int (gst_value_array_get_value (roi_rect_yuv_color, 2));
+    }
+
+    /* Draw horizontal lines */
+    for (thickness = 0; thickness < roi_rect_thickness; thickness++) {
+      for (k = 0; k < (2 / vert_sampling); k++) {
+        for (i = 0; i < w; i = i + 2) {
+          *(h_chroma_offset1 + i) = u;
+          *(h_chroma_offset1 + i + 1) = v;
+          *(h_chroma_offset2 + i) = u;
+          *(h_chroma_offset2 + i + 1) = v;
+        }
+        /* To draw same line horizontally for NV16 format as no vertical subsampling */
+        if (k < ((2 / vert_sampling) - 1)) {
+          /* Increase h_chroma_offset1 by stride vertically */
+          h_chroma_offset1 = h_chroma_offset1 + stride;
+          /* Decrease h_chroma_offset2 by stride vertically */
+          h_chroma_offset2 = h_chroma_offset2 - stride;
+        }
+      }
+      /* Increase h_chroma_offset1 by stride vertically and by 2 horizontally */
+      h_chroma_offset1 = h_chroma_offset1 + stride + 2;
+      /* Decrease h_chroma_offset2 by stride vertically and increase by 2 horizontally */
+      h_chroma_offset2 = h_chroma_offset2 - stride + 2;
+      /* Reduce width by 2 from both the side so effectively it will reduce 4 */
+      w = w - 4;
+    }
+
+    /* Draw vertical lines */
+    for (thickness = 0; thickness < roi_rect_thickness; thickness++) {
+      for (i = 0, j = 0; i < (h / vert_sampling); i++) {
+        *(v_chroma_offset1 + j) = u;
+        *(v_chroma_offset1 + j + 1) = v;
+        *(v_chroma_offset3 + j) = u;
+        *(v_chroma_offset3 + j + 1) = v;
+        j += stride;
+      }
+      /* Increase v_chroma_offset1 by stride vertically and by 2 horizontally */
+      v_chroma_offset1 = v_chroma_offset1 + stride + 2;
+      /* Increase v_chroma_offset3 by stride vertically and decrease by 2 horizontally */
+      v_chroma_offset3 = v_chroma_offset3 + stride - 2;
+      /* Reduce height by stride from both the side so effectively it will reduce by 2
+       * for NV16 format and by 4 for NV12 format */
+      h = h - (2 * vert_sampling);
+    }
+  }
+  return TRUE;
+}
+
+static gboolean
 gst_kms_sink_import_dmabuf (GstKMSSink * self, GstBuffer * inbuf,
     GstBuffer ** outbuf)
 {
@@ -2044,6 +2166,7 @@ gst_kms_sink_import_dmabuf (GstKMSSink * self, GstBuffer * inbuf,
   guint mems_idx[GST_VIDEO_MAX_PLANES];
   gsize mems_skip[GST_VIDEO_MAX_PLANES];
   GstMemory *mems[GST_VIDEO_MAX_PLANES];
+  GstMapInfo info;
 
   if (!self->has_prime_import)
     return FALSE;
@@ -2093,8 +2216,31 @@ gst_kms_sink_import_dmabuf (GstKMSSink * self, GstBuffer * inbuf,
     /* And all memory found must be dmabuf */
     if (!gst_is_dmabuf_memory (mems[i]))
       return FALSE;
-  }
 
+    if ((i == CHROMA_PLANE) && meta && self->draw_roi) {
+      /* Draw ROI feature currently only supported for NV12 & NV16 formats */
+      if ((self->vinfo.finfo->format == GST_VIDEO_FORMAT_NV12) ||
+          (self->vinfo.finfo->format == GST_VIDEO_FORMAT_NV16)) {
+        GST_DEBUG_OBJECT (self, "xlnxkmssink :: Buffer chroma plane received");
+        gst_memory_map (mems[i], &info, GST_MAP_READWRITE);
+        if (info.data && self->roi_param.coordinate_param
+            && self->roi_param.count > 0) {
+          draw_rectangle ((info.data + meta->offset[i]),
+              self->roi_param.coordinate_param, self->roi_param.count,
+              meta->width, meta->height, meta->stride[i],
+              self->roi_rect_thickness, &self->roi_rect_yuv_color,
+              self->vinfo.finfo->format);
+          self->roi_param.count = 0;
+          g_free (self->roi_param.coordinate_param);
+          self->roi_param.coordinate_param = NULL;
+        }
+        gst_memory_unmap (mems[i], &info);
+      } else {
+        GST_DEBUG_OBJECT (self, "Draw ROI feature not supported for %s format",
+            gst_video_format_to_string (self->vinfo.finfo->format));
+      }
+    }
+  }
   ensure_kms_allocator (self);
 
   kmsmem = (GstKMSMemory *) gst_kms_allocator_get_cached (mems[0]);
@@ -2258,6 +2404,82 @@ done:
     gst_buffer_copy_into (buf, inbuf, GST_BUFFER_COPY_METADATA, 0, -1);
 
   return buf;
+}
+
+static gboolean
+handle_sei_info (GstKMSSink * self, GstEvent * event)
+{
+  const GstStructure *s;
+  guint32 payload_type;
+  GstBuffer *buf;
+  GstMapInfo map;
+  s = gst_event_get_structure (event);
+
+  if (!gst_structure_get (s, "payload-type", G_TYPE_UINT, &payload_type,
+          "payload", GST_TYPE_BUFFER, &buf, NULL)) {
+    GST_WARNING_OBJECT (self, "Failed to parse event");
+    return TRUE;
+  }
+  if (payload_type != 77) {
+    GST_WARNING_OBJECT (self,
+        "Payload type is not matching to draw boundign box.");
+    gst_buffer_unref (buf);
+    return TRUE;
+  }
+  if (!gst_buffer_map (buf, &map, GST_MAP_READ)) {
+    GST_WARNING_OBJECT (self, "Failed to map payload buffer");
+    gst_buffer_unref (buf);
+    return TRUE;
+  }
+
+  GST_DEBUG_OBJECT (self, "Requesting  (payload-type=%d)", payload_type);
+
+  gint uint_size = sizeof (unsigned int);
+  guint num = 2;
+  gint i = 0;
+  self->roi_param.ts = *(unsigned int *) (map.data);
+  self->roi_param.count = *(unsigned int *) (map.data + (num * uint_size));
+  num++;
+  self->roi_param.coordinate_param =
+      g_malloc0 (self->roi_param.count * sizeof (roi_coordinate));
+  GST_DEBUG_OBJECT (self, "xlnxkmssink :: roi count %u\n",
+      self->roi_param.count);
+  for (i = 0; i < self->roi_param.count; i++) {
+    self->roi_param.coordinate_param[i].xmin =
+        *(unsigned int *) (map.data + (num * uint_size));
+    num++;
+    self->roi_param.coordinate_param[i].ymin =
+        *(unsigned int *) (map.data + (num * uint_size));
+    num++;
+    self->roi_param.coordinate_param[i].width =
+        *(unsigned int *) (map.data + (num * uint_size));
+    num++;
+    self->roi_param.coordinate_param[i].height =
+        *(unsigned int *) (map.data + (num * uint_size));
+    num++;
+    GST_DEBUG_OBJECT (self,
+        "xlnxkmssink :: frame no, roi no, xmin, ymin, width, height %u::%u::%u::%u::%u\n",
+        (i + 1), self->roi_param.coordinate_param[i].xmin,
+        self->roi_param.coordinate_param[i].ymin,
+        self->roi_param.coordinate_param[i].width,
+        self->roi_param.coordinate_param[i].height);
+  }
+  gst_buffer_unmap (buf, &map);
+  gst_buffer_unref (buf);
+
+  return TRUE;
+}
+
+static gboolean
+gst_kms_sink_sink_event (GstBaseSink * bsink, GstEvent * event)
+{
+  GstKMSSink *self;
+  self = GST_KMS_SINK (bsink);
+  if (gst_event_has_name (event, OMX_ALG_GST_EVENT_INSERT_PREFIX_SEI)) {
+    GST_DEBUG_OBJECT (self, "xlnxkmssink :: SEI event received\n");
+    handle_sei_info (self, event);
+  }
+  return GST_BASE_SINK_CLASS (parent_class)->event (bsink, event);
 }
 
 static GstFlowReturn
@@ -2609,6 +2831,19 @@ gst_kms_sink_set_property (GObject * object, guint prop_id,
     case PROP_FORCE_NTSC_TV:
       sink->force_ntsc_tv = g_value_get_boolean (value);
       break;
+    case PROP_DRAW_ROI:
+      sink->draw_roi = g_value_get_boolean (value);
+      break;
+    case PROP_ROI_RECT_THICKNESS:
+      sink->roi_rect_thickness = g_value_get_uint (value);
+      break;
+    case PROP_ROI_RECT_COLOR:
+      if (gst_value_array_get_size (value) == 3)
+        g_value_copy (value, &sink->roi_rect_yuv_color);
+      else
+        GST_DEBUG_OBJECT (sink,
+            "Badly formatted color value, must contain three gint");
+      break;
     default:
       if (!gst_video_overlay_set_property (object, PROP_N, prop_id, value))
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -2674,6 +2909,15 @@ gst_kms_sink_get_property (GObject * object, guint prop_id,
     case PROP_FORCE_NTSC_TV:
       g_value_set_boolean (value, sink->force_ntsc_tv);
       break;
+    case PROP_DRAW_ROI:
+      g_value_set_boolean (value, sink->draw_roi);
+      break;
+    case PROP_ROI_RECT_THICKNESS:
+      g_value_set_uint (value, sink->roi_rect_thickness);
+      break;
+    case PROP_ROI_RECT_COLOR:
+      g_value_copy (&sink->roi_rect_yuv_color, value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -2692,6 +2936,7 @@ gst_kms_sink_finalize (GObject * object)
   g_clear_pointer (&sink->connector_props, gst_structure_free);
   g_clear_pointer (&sink->plane_props, gst_structure_free);
   g_clear_pointer (&sink->tmp_kmsmem, gst_memory_unref);
+  g_value_unset (&sink->roi_rect_yuv_color);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -2708,6 +2953,7 @@ gst_kms_sink_init (GstKMSSink * sink)
   sink->poll = gst_poll_new (TRUE);
   gst_video_info_init (&sink->vinfo);
   sink->skip_vsync = FALSE;
+  g_value_init (&sink->roi_rect_yuv_color, GST_TYPE_ARRAY);
 
 #ifdef HAVE_DRM_HDR
   sink->no_infoframe = FALSE;
@@ -2752,6 +2998,7 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
 
   videosink_class->show_frame = gst_kms_sink_show_frame;
 
+  basesink_class->event = GST_DEBUG_FUNCPTR (gst_kms_sink_sink_event);
   gobject_class->finalize = gst_kms_sink_finalize;
   gobject_class->set_property = gst_kms_sink_set_property;
   gobject_class->get_property = gst_kms_sink_get_property;
@@ -2934,6 +3181,43 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
       "Convert NTSC DV content to NTSC TV D1 display",
       "When enabled, NTSC DV (720x480i) content is displayed at NTSC TV D1 (720x486i) resolution",
       FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
+
+  /**
+   * kmssink: draw-roi:
+   *
+   * If draw-roi option is enabled then it will draw roi bounding-boxes on frame.
+   */
+  g_properties[PROP_DRAW_ROI] =
+      g_param_spec_boolean ("draw-roi", "draw roi",
+      "Enable draw-roi to draw bounding-boxes on frame",
+      FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
+
+  /**
+   * kmssink: roi-rectangle-thickness:
+   *
+   * If roi rectangle thickness is provided then it will draw roi bounding-boxes
+   * with given thickness.
+   */
+  g_properties[PROP_ROI_RECT_THICKNESS] =
+      g_param_spec_uint ("roi-rectangle-thickness", "roi rectangle thickness",
+      "ROI rectangle thickness size to draw bounding-boxes on frame",
+      ROI_RECT_THICKNESS_MIN, ROI_RECT_THICKNESS_MAX, ROI_RECT_THICKNESS_MIN,
+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
+
+  /**
+   * kmssink: roi-rectangle-color:
+   *
+   * If roi rectangle color is provided then it will draw roi bounding-boxes
+   * with given color.
+   */
+  g_properties[PROP_ROI_RECT_COLOR] =
+      gst_param_spec_array ("roi-rectangle-color", "roi rectangle color",
+      "ROI rectangle color ('<Y, U, V>') to draw bounding-boxes on frame",
+      g_param_spec_int ("color-val", "Color Value",
+          "One of Y, U or V value.", ROI_RECT_COLOR_MIN,
+          ROI_RECT_COLOR_MAX, ROI_RECT_COLOR_MIN,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT),
+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
 
   g_object_class_install_properties (gobject_class, PROP_N, g_properties);
 
