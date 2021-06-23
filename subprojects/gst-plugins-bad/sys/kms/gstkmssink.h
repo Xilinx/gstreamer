@@ -98,6 +98,11 @@ struct _GstKMSSink {
   gboolean reconfigure;
 
   gboolean force_ntsc_tv;
+
+  /* roi data */
+  gboolean draw_roi;
+  guint roi_rect_thickness;
+  GValue roi_rect_yuv_color;
 };
 
 struct _GstKMSSinkClass {
