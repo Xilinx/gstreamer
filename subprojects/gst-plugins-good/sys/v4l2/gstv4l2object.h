@@ -226,6 +226,8 @@ struct _GstV4l2Object {
    * the caps to reflect what was negotiated during fixation */
   gboolean skip_try_fmt_probes;
 
+  /* Stride alignment */
+  guint32 stride_align;
   /* For Xilinx Low Latency */
   gboolean xlnx_ll;
   gboolean xlnx_ll_dma_started;
@@ -257,7 +259,8 @@ GType gst_v4l2_object_get_type (void);
     PROP_EXTRA_CONTROLS,      \
     PROP_PIXEL_ASPECT_RATIO,  \
     PROP_FORCE_ASPECT_RATIO,  \
-    PROP_FORCE_NTSC_TV
+    PROP_FORCE_NTSC_TV,       \
+    PROP_STRIDE_ALIGNMENT
 
 /* create/destroy */
 GstV4l2Object*  gst_v4l2_object_new       (GstElement * element,
