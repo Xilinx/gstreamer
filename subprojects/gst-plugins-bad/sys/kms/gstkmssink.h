@@ -44,6 +44,21 @@ G_BEGIN_DECLS
 typedef struct _GstKMSSink GstKMSSink;
 typedef struct _GstKMSSinkClass GstKMSSinkClass;
 
+typedef struct
+{
+  guint xmin;
+  guint ymin;
+  guint width;
+  guint height;
+} roi_coordinate;
+
+typedef struct
+{
+  guint count;
+  guint ts;
+  roi_coordinate *coordinate_param;
+} roi_params;
+
 struct _GstKMSSink {
   GstVideoSink videosink;
 
@@ -103,6 +118,7 @@ struct _GstKMSSink {
   gboolean draw_roi;
   guint roi_rect_thickness;
   GValue roi_rect_yuv_color;
+  roi_params roi_param;
 };
 
 struct _GstKMSSinkClass {

@@ -139,23 +139,6 @@ enum
   DRM_EOTF_BT_2100_HLG,
 };
 
-typedef struct
-{
-  guint xmin;
-  guint ymin;
-  guint width;
-  guint height;
-} roi_coordinate;
-
-typedef struct
-{
-  guint count;
-  guint ts;
-  roi_coordinate *coordinate_param;
-} roi_params;
-
-static roi_params roi_param;
-
 static GParamSpec *g_properties[PROP_N] = { NULL, };
 
 static void
@@ -1931,14 +1914,16 @@ gst_kms_sink_import_dmabuf (GstKMSSink * self, GstBuffer * inbuf,
           (self->vinfo.finfo->format == GST_VIDEO_FORMAT_NV16)) {
         GST_DEBUG_OBJECT (self, "xlnxkmssink :: Buffer chroma plane received");
         gst_memory_map (mems[i], &info, GST_MAP_READWRITE);
-        if (info.data && roi_param.coordinate_param && roi_param.count > 0) {
+        if (info.data && self->roi_param.coordinate_param
+            && self->roi_param.count > 0) {
           draw_rectangle ((info.data + meta->offset[i]),
-              roi_param.coordinate_param, roi_param.count, meta->width,
-              meta->height, meta->stride[i], self->roi_rect_thickness,
-              &self->roi_rect_yuv_color, self->vinfo.finfo->format);
-          roi_param.count = 0;
-          g_free (roi_param.coordinate_param);
-          roi_param.coordinate_param = NULL;
+              self->roi_param.coordinate_param, self->roi_param.count,
+              meta->width, meta->height, meta->stride[i],
+              self->roi_rect_thickness, &self->roi_rect_yuv_color,
+              self->vinfo.finfo->format);
+          self->roi_param.count = 0;
+          g_free (self->roi_param.coordinate_param);
+          self->roi_param.coordinate_param = NULL;
         }
         gst_memory_unmap (mems[i], &info);
       } else {
@@ -2142,30 +2127,32 @@ handle_sei_info (GstKMSSink * self, GstEvent * event)
   gint uint_size = sizeof (unsigned int);
   guint num = 2;
   gint i = 0;
-  roi_param.ts = *(unsigned int *) (map.data);
-  roi_param.count = *(unsigned int *) (map.data + (num * uint_size));
+  self->roi_param.ts = *(unsigned int *) (map.data);
+  self->roi_param.count = *(unsigned int *) (map.data + (num * uint_size));
   num++;
-  roi_param.coordinate_param =
-      g_malloc0 (roi_param.count * sizeof (roi_coordinate));
-  GST_DEBUG_OBJECT (self, "xlnxkmssink :: roi count %u\n", roi_param.count);
-  for (i = 0; i < roi_param.count; i++) {
-    roi_param.coordinate_param[i].xmin =
+  self->roi_param.coordinate_param =
+      g_malloc0 (self->roi_param.count * sizeof (roi_coordinate));
+  GST_DEBUG_OBJECT (self, "xlnxkmssink :: roi count %u\n",
+      self->roi_param.count);
+  for (i = 0; i < self->roi_param.count; i++) {
+    self->roi_param.coordinate_param[i].xmin =
         *(unsigned int *) (map.data + (num * uint_size));
     num++;
-    roi_param.coordinate_param[i].ymin =
+    self->roi_param.coordinate_param[i].ymin =
         *(unsigned int *) (map.data + (num * uint_size));
     num++;
-    roi_param.coordinate_param[i].width =
+    self->roi_param.coordinate_param[i].width =
         *(unsigned int *) (map.data + (num * uint_size));
     num++;
-    roi_param.coordinate_param[i].height =
+    self->roi_param.coordinate_param[i].height =
         *(unsigned int *) (map.data + (num * uint_size));
     num++;
     GST_DEBUG_OBJECT (self,
         "xlnxkmssink :: frame no, roi no, xmin, ymin, width, height %u::%u::%u::%u::%u\n",
-        (i + 1), roi_param.coordinate_param[i].xmin,
-        roi_param.coordinate_param[i].ymin, roi_param.coordinate_param[i].width,
-        roi_param.coordinate_param[i].height);
+        (i + 1), self->roi_param.coordinate_param[i].xmin,
+        self->roi_param.coordinate_param[i].ymin,
+        self->roi_param.coordinate_param[i].width,
+        self->roi_param.coordinate_param[i].height);
   }
   gst_buffer_unmap (buf, &map);
   gst_buffer_unref (buf);
