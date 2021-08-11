@@ -56,6 +56,8 @@
 GST_DEBUG_CATEGORY_STATIC (gst_omx_video_dec_debug_category);
 #define GST_CAT_DEFAULT gst_omx_video_dec_debug_category
 
+static gboolean sync_frame_start = FALSE;
+
 /* prototypes */
 static void gst_omx_video_dec_finalize (GObject * object);
 
@@ -3507,7 +3509,11 @@ gst_omx_video_dec_handle_frame (GstVideoDecoder * decoder,
     return self->downstream_flow_ret;
   }
 
-  if (!self->started) {
+  if (GST_VIDEO_CODEC_FRAME_IS_SYNC_POINT (frame)) {
+    sync_frame_start = TRUE;
+  }
+
+  if (!self->started || !sync_frame_start) {
     if (!GST_VIDEO_CODEC_FRAME_IS_SYNC_POINT (frame) && !header) {
       gst_video_decoder_drop_frame (GST_VIDEO_DECODER (self), frame);
       return GST_FLOW_OK;
