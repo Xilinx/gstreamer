@@ -55,15 +55,6 @@
 GST_DEBUG_CATEGORY_EXTERN (gst_media_src_bin_debug);
 #define GST_CAT_DEFAULT gst_media_src_bin_debug
 
-/*
- * Controls are required to be set to do IMX274 MIPI camera tuning
- * for green shade issue.
- *
- * This is workaround in plugin as CSC driver overwrites the controls
- * to default value on set format function call. It should be removed
- * once issue is fixed into the CSC driver.
- *
- */
 static const struct
 {
   unsigned int id;
@@ -71,16 +62,6 @@ static const struct
 } default_ctrls[] = {
   {
   0x0098c981, 4},               /* MIPI Active Lanes 4 */
-  {
-  0x0098c9a1, 80},              /* CSC Brightness set */
-  {
-  0x0098c9a2, 55},              /* CSC Contrast set */
-  {
-  0x0098c9a3, 40},              /* CSC Red gain set */
-  {
-  0x0098c9a4, 24},              /* CSC Green gain set */
-  {
-  0x0098c9a5, 35},              /* CSC Blue gain set */
 };
 
 static void
