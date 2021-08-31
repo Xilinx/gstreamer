@@ -273,6 +273,7 @@ get_media_bus_format (GstVideoFormat gst_fmt)
     case GST_VIDEO_FORMAT_NV16_10LE32:
       return MEDIA_BUS_FMT_UYVY10_1X20;
     case GST_VIDEO_FORMAT_RGB:
+    case GST_VIDEO_FORMAT_BGR:
       return MEDIA_BUS_FMT_RBG888_1X24;
     case GST_VIDEO_FORMAT_GRAY8:
       return MEDIA_BUS_FMT_Y8_1X8;
