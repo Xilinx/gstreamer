@@ -3416,7 +3416,7 @@ foreach_metadata (GstBuffer * inbuf, GstMeta ** meta, gpointer user_data)
     if (G_UNLIKELY (buffer)) {
       if (frame->abidata.ABI.meta_buffer == NULL)
         frame->abidata.ABI.meta_buffer = gst_buffer_new ();
-      buffer = frame->abidata.ABI.meta_buffer = gst_buffer_new ();
+      buffer = frame->abidata.ABI.meta_buffer;
     }
 
     info->transform_func (buffer, *meta, inbuf, _gst_meta_transform_copy,
