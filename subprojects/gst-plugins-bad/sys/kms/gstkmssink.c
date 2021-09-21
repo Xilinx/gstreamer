@@ -2114,6 +2114,7 @@ handle_sei_info (GstKMSSink * self, GstEvent * event)
   if (payload_type != 77) {
     GST_WARNING_OBJECT (self,
         "Payload type is not matching to draw boundign box.");
+    gst_buffer_unref (buf);
     return TRUE;
   }
   if (!gst_buffer_map (buf, &map, GST_MAP_READ)) {
