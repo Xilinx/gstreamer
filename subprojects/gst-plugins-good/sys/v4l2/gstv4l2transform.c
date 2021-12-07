@@ -36,6 +36,7 @@
 #include <glib/gi18n-lib.h>
 
 #define DEFAULT_PROP_DEVICE "/dev/video10"
+#define DEFAULT_PROP_IMPORT_BUFFER_ALIG FALSE
 
 #define V4L2_TRANSFORM_QUARK \
 	g_quark_from_static_string("gst-v4l2-transform-info")
@@ -48,7 +49,8 @@ enum
 {
   PROP_0,
   V4L2_STD_OBJECT_PROPS,
-  PROP_DISABLE_PASSTHROUGH
+  PROP_DISABLE_PASSTHROUGH,
+  PROP_IMPORT_BUFFER_ALIG,
 };
 
 typedef struct
@@ -76,6 +78,9 @@ gst_v4l2_transform_set_property (GObject * object,
     case PROP_DISABLE_PASSTHROUGH:
       self->disable_passthrough = g_value_get_boolean (value);
       break;
+    case PROP_IMPORT_BUFFER_ALIG:
+      self->import_buffer_alignment = g_value_get_boolean (value);
+      break;
 
       /* By default, only set on output */
     default:
@@ -100,6 +105,9 @@ gst_v4l2_transform_get_property (GObject * object,
       break;
     case PROP_DISABLE_PASSTHROUGH:
       g_value_set_boolean (value, self->disable_passthrough);
+      break;
+    case PROP_IMPORT_BUFFER_ALIG:
+      g_value_set_boolean (value, self->import_buffer_alignment);
       break;
 
       /* By default read from output */
@@ -904,8 +912,9 @@ gst_v4l2_transform_prepare_output_buffer (GstBaseTransform * trans,
     gint min = MAX (GST_V4L2_MIN_BUFFERS (self->v4l2output),
         self->v4l2output->min_buffers);
 
-    if (self->v4l2output->mode == GST_V4L2_IO_USERPTR ||
-        self->v4l2output->mode == GST_V4L2_IO_DMABUF_IMPORT) {
+    if ((self->v4l2output->mode == GST_V4L2_IO_USERPTR ||
+            self->v4l2output->mode == GST_V4L2_IO_DMABUF_IMPORT) &&
+        self->import_buffer_alignment) {
       if (!gst_v4l2_object_try_import (self->v4l2output, inbuf)) {
         GST_ERROR_OBJECT (self, "cannot import buffers from upstream");
         return GST_FLOW_ERROR;
@@ -1094,6 +1103,7 @@ gst_v4l2_transform_init (GstV4l2Transform * self)
   /* V4L2 object are created in subinstance_init */
   /* enable QoS */
   gst_base_transform_set_qos_enabled (GST_BASE_TRANSFORM (self), TRUE);
+  self->import_buffer_alignment = DEFAULT_PROP_IMPORT_BUFFER_ALIG;
 }
 
 static void
@@ -1171,6 +1181,14 @@ gst_v4l2_transform_class_init (GstV4l2TransformClass * klass)
   g_object_class_install_property (gobject_class, PROP_DISABLE_PASSTHROUGH,
       g_param_spec_boolean ("disable-passthrough", "Disable Passthrough",
           "Forces passing buffers through the converter", FALSE,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  /* FIXME: Xilinx specific hack for 2019.1 */
+  g_object_class_install_property (gobject_class, PROP_IMPORT_BUFFER_ALIG,
+      g_param_spec_boolean ("import-buffer-alignment",
+          "Import buffer alignment",
+          "If enabled, pass the stride and padding of imported buffers to the v4l2 driver",
+          DEFAULT_PROP_IMPORT_BUFFER_ALIG,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 

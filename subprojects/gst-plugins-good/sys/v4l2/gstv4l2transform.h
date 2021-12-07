@@ -63,6 +63,7 @@ struct _GstV4l2Transform
   GstCaps *outcaps;
 
   gboolean disable_passthrough;
+  gboolean import_buffer_alignment;
 };
 
 struct _GstV4l2TransformClass
