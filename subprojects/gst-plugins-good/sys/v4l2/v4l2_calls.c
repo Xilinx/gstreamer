@@ -1239,38 +1239,59 @@ gst_v4l2_event_to_string (guint32 event)
   return "UNKNOWN";
 }
 
-gboolean
-gst_v4l2_subscribe_event (GstV4l2Object * v4l2object, guint32 event, guint32 id)
-{
-  struct v4l2_event_subscription sub = {.type = event,.id = id, };
-  gint ret;
 
-  GST_DEBUG_OBJECT (v4l2object->dbg_obj, "Subscribing to '%s' event",
-      gst_v4l2_event_to_string (event));
+gboolean
+gst_v4l2_subscribe_event (GstV4l2Object * v4l2object, guint32 type, guint32 id,
+    guint32 flags)
+{
+  struct v4l2_event_subscription argp;
+
+  GST_DEBUG_OBJECT (v4l2object->element,
+      "trying to subscribe to event %d (id: %u flags: 0x%08x)", type, id,
+      flags);
+
+  memset (&argp, 0, sizeof (argp));
 
   if (!GST_V4L2_IS_OPEN (v4l2object))
     return FALSE;
 
-  ret = v4l2object->ioctl (v4l2object->video_fd, VIDIOC_SUBSCRIBE_EVENT, &sub);
-  if (ret < 0)
-    goto failed;
+  argp.type = type;
+  argp.id = id;
+  argp.flags = flags;
+
+  if (v4l2object->ioctl (v4l2object->video_fd, VIDIOC_SUBSCRIBE_EVENT,
+          &argp) < 0)
+    goto subscribe_failed;
 
   return TRUE;
 
   /* ERRORS */
-failed:
-  {
-    if (errno == ENOTTY || errno == EINVAL) {
-      GST_DEBUG_OBJECT (v4l2object->dbg_obj,
-          "Cannot subscribe to '%s' event: %s",
-          gst_v4l2_event_to_string (event), "not supported");
-    } else {
-      GST_ERROR_OBJECT (v4l2object->dbg_obj,
-          "Cannot subscribe to '%s' event: %s",
-          gst_v4l2_event_to_string (event), g_strerror (errno));
-    }
+subscribe_failed:
+  GST_ELEMENT_WARNING (v4l2object->element, RESOURCE, SETTINGS,
+      (_("Failed to subscribe to event %d on device %s."),
+          type, v4l2object->videodev), GST_ERROR_SYSTEM);
+  return FALSE;
+}
+
+gboolean
+gst_v4l2_dqevent (GstV4l2Object * v4l2object, struct v4l2_event * event)
+{
+  g_return_val_if_fail (event, FALSE);
+
+  if (!GST_V4L2_IS_OPEN (v4l2object))
     return FALSE;
-  }
+
+  if (v4l2object->ioctl (v4l2object->video_fd, VIDIOC_DQEVENT, event) < 0)
+    goto dqevent_failed;
+
+  return TRUE;
+
+  /* ERRORS */
+dqevent_failed:
+  GST_ELEMENT_WARNING (v4l2object->element, RESOURCE, SETTINGS,
+      (_("Failed to dequeue event on device %s."),
+          v4l2object->videodev), GST_ERROR_SYSTEM);
+  return FALSE;
 }
 
 gboolean
