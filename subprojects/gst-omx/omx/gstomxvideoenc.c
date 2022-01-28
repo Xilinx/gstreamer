@@ -2416,7 +2416,7 @@ gst_omx_video_enc_ensure_nb_out_buffers (GstOMXVideoEnc * self)
   /* If dowstream tell us how many buffers it needs allocate as many extra buffers so we won't starve
    * if it keeps them downstream (like when using dynamic mode). */
   if (self->nb_downstream_buffers)
-    extra = self->nb_downstream_buffers;
+    extra = self->use_out_port_pool ? MAX(self->nb_downstream_buffers, 8) : self->nb_downstream_buffers;
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   if (g_getenv ("ENC_EXTRA_OP_BUFFERS") != NULL)
     extra += atoi (g_getenv ("ENC_EXTRA_OP_BUFFERS"));
