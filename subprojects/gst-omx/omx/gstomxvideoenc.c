@@ -296,7 +296,8 @@ static gboolean gst_omx_video_enc_decide_allocation (GstVideoEncoder * encoder,
 static GstFlowReturn gst_omx_video_enc_drain (GstOMXVideoEnc * self);
 
 static GstFlowReturn gst_omx_video_enc_handle_output_frame (GstOMXVideoEnc *
-    self, GstOMXPort * port, GstOMXBuffer * buf, GstVideoCodecFrame * frame);
+    self, GstOMXPort * port, GstBuffer * outbuf, GstOMXBuffer * buf,
+    GstVideoCodecFrame * frame);
 
 static gboolean gst_omx_video_enc_sink_event (GstVideoEncoder * encoder,
     GstEvent * event);
@@ -309,6 +310,7 @@ enum
   PROP_QUANT_I_FRAMES,
   PROP_QUANT_P_FRAMES,
   PROP_QUANT_B_FRAMES,
+  PROP_USE_OUT_PORT_POOL,
   PROP_QP_MODE,
   PROP_MIN_QP,
   PROP_MAX_QP,
@@ -348,6 +350,7 @@ enum
 #define GST_OMX_VIDEO_ENC_QUANT_I_FRAMES_DEFAULT (0xffffffff)
 #define GST_OMX_VIDEO_ENC_QUANT_P_FRAMES_DEFAULT (0xffffffff)
 #define GST_OMX_VIDEO_ENC_QUANT_B_FRAMES_DEFAULT (0xffffffff)
+#define GST_OMX_VIDEO_ENC_USE_OUT_PORT_POOL_DEFAULT (FALSE)
 #define GST_OMX_VIDEO_ENC_QP_MODE_DEFAULT (0xffffffff)
 #define GST_OMX_VIDEO_ENC_MIN_QP_DEFAULT (10)
 #define GST_OMX_VIDEO_ENC_MAX_QP_DEFAULT (51)
@@ -455,6 +458,13 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
       g_param_spec_uint ("quant-b-frames", "B-Frame Quantization",
           "Quantization parameter for B-frames (0xffffffff=component default)",
           0, G_MAXUINT, GST_OMX_VIDEO_ENC_QUANT_B_FRAMES_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_USE_OUT_PORT_POOL,
+      g_param_spec_boolean ("use-out-port-pool", "Use output port buffer pool",
+          "Use a buffer pool on the output port",
+          GST_OMX_VIDEO_ENC_USE_OUT_PORT_POOL_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
 
@@ -743,6 +753,7 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->quant_i_frames = GST_OMX_VIDEO_ENC_QUANT_I_FRAMES_DEFAULT;
   self->quant_p_frames = GST_OMX_VIDEO_ENC_QUANT_P_FRAMES_DEFAULT;
   self->quant_b_frames = GST_OMX_VIDEO_ENC_QUANT_B_FRAMES_DEFAULT;
+  self->use_out_port_pool = GST_OMX_VIDEO_ENC_USE_OUT_PORT_POOL_DEFAULT;
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   self->qp_mode = GST_OMX_VIDEO_ENC_QP_MODE_DEFAULT;
   self->min_qp = GST_OMX_VIDEO_ENC_MIN_QP_DEFAULT;
@@ -1614,6 +1625,11 @@ gst_omx_video_enc_deallocate_in_buffers (GstOMXVideoEnc * self)
 static gboolean
 gst_omx_video_enc_deallocate_out_buffers (GstOMXVideoEnc * self)
 {
+  if (self->out_port_pool) {
+    gst_buffer_pool_set_active (self->out_port_pool, FALSE);
+    g_clear_object (&self->out_port_pool);
+  }
+
   if (gst_omx_port_deallocate_buffers (self->enc_out_port) != OMX_ErrorNone)
     return FALSE;
 
@@ -1717,6 +1733,9 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
       break;
     case PROP_QUANT_B_FRAMES:
       self->quant_b_frames = g_value_get_uint (value);
+      break;
+    case PROP_USE_OUT_PORT_POOL:
+      self->use_out_port_pool = g_value_get_boolean (value);
       break;
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
     case PROP_QP_MODE:
@@ -1979,6 +1998,9 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
     case PROP_QUANT_B_FRAMES:
       g_value_set_uint (value, self->quant_b_frames);
       break;
+    case PROP_USE_OUT_PORT_POOL:
+      g_value_set_boolean (value, self->use_out_port_pool);
+      break;
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
     case PROP_QP_MODE:
       g_value_set_enum (value, self->qp_mode);
@@ -2226,7 +2248,7 @@ out:
 
 static GstFlowReturn
 gst_omx_video_enc_handle_output_frame (GstOMXVideoEnc * self, GstOMXPort * port,
-    GstOMXBuffer * buf, GstVideoCodecFrame * frame)
+    GstBuffer * outbuf, GstOMXBuffer * buf, GstVideoCodecFrame * frame)
 {
   GstOMXVideoEncClass *klass = GST_OMX_VIDEO_ENC_GET_CLASS (self);
   GstFlowReturn flow_ret = GST_FLOW_OK;
@@ -2246,49 +2268,38 @@ gst_omx_video_enc_handle_output_frame (GstOMXVideoEnc * self, GstOMXPort * port,
     return flow_ret;
   }
 
-  if ((buf->omx_buf->nFlags & OMX_BUFFERFLAG_CODECCONFIG)
-      && buf->omx_buf->nFilledLen > 0) {
+  if ((buf->omx_buf->nFlags & OMX_BUFFERFLAG_CODECCONFIG) &&
+      buf->omx_buf->nFilledLen > 0) {
     GstVideoCodecState *state;
-    GstBuffer *codec_data;
-    GstMapInfo map = GST_MAP_INFO_INIT;
     GstCaps *caps;
 
     GST_DEBUG_OBJECT (self, "Handling codec data");
 
     caps = get_output_caps (self);
-    codec_data = gst_buffer_new_and_alloc (buf->omx_buf->nFilledLen);
-
-    gst_buffer_map (codec_data, &map, GST_MAP_WRITE);
-    memcpy (map.data,
-        buf->omx_buf->pBuffer + buf->omx_buf->nOffset,
-        buf->omx_buf->nFilledLen);
-    gst_buffer_unmap (codec_data, &map);
     state =
         gst_video_encoder_set_output_state (GST_VIDEO_ENCODER (self), caps,
         self->input_state);
-    state->codec_data = codec_data;
+    if (outbuf->pool) {
+      /* if the buffer is from the pool, copy it to avoid holding an OMX
+       * buffer forever in the codec data; there is a danger of starvation */
+      state->codec_data = gst_buffer_copy_deep (outbuf);
+    } else {
+      state->codec_data = outbuf;
+      outbuf = NULL;
+    }
     gst_video_codec_state_unref (state);
+
     if (!gst_video_encoder_negotiate (GST_VIDEO_ENCODER (self))) {
       gst_video_codec_frame_unref (frame);
       GST_ERROR_OBJECT (self,
           "Downstream element refused to negotiate codec_data in the caps");
-      return GST_FLOW_NOT_NEGOTIATED;
+      flow_ret = GST_FLOW_NOT_NEGOTIATED;
+    } else {
+      gst_video_codec_frame_unref (frame);
+      flow_ret = GST_FLOW_OK;
     }
-    gst_video_codec_frame_unref (frame);
-    flow_ret = GST_FLOW_OK;
   } else if (buf->omx_buf->nFilledLen > 0) {
-    GstBuffer *outbuf;
-    GstMapInfo map = GST_MAP_INFO_INIT;
-
     GST_DEBUG_OBJECT (self, "Handling output data");
-
-    outbuf = gst_buffer_new_and_alloc (buf->omx_buf->nFilledLen);
-
-    gst_buffer_map (outbuf, &map, GST_MAP_WRITE);
-    memcpy (map.data,
-        buf->omx_buf->pBuffer + buf->omx_buf->nOffset,
-        buf->omx_buf->nFilledLen);
-    gst_buffer_unmap (outbuf, &map);
 
     GST_BUFFER_TIMESTAMP (outbuf) =
         gst_util_uint64_scale (GST_OMX_GET_TICKS (buf->omx_buf->nTimeStamp),
@@ -2364,15 +2375,20 @@ gst_omx_video_enc_handle_output_frame (GstOMXVideoEnc * self, GstOMXPort * port,
             gst_video_encoder_finish_subframe (GST_VIDEO_ENCODER (self), frame);
         gst_video_codec_frame_unref (frame);
       }
+      outbuf = NULL;
     } else {
       GST_ERROR_OBJECT (self, "No corresponding frame found");
       flow_ret = gst_pad_push (GST_VIDEO_ENCODER_SRC_PAD (self), outbuf);
+      outbuf = NULL;
     }
   } else if (frame != NULL) {
     /* Just ignore empty buffers, don't drop a frame for that */
     flow_ret = GST_FLOW_OK;
     gst_video_codec_frame_unref (frame);
   }
+
+  if (outbuf)
+    gst_buffer_unref (outbuf);
 
   return flow_ret;
 }
@@ -2405,6 +2421,8 @@ gst_omx_video_enc_allocate_out_buffers (GstOMXVideoEnc * self)
 {
   GstEvent *event;
   guint nb_buffers;
+  GstVideoCodecState *state;
+  GstStructure *config;
 
   if (gst_omx_port_allocate_buffers (self->enc_out_port) != OMX_ErrorNone)
     return FALSE;
@@ -2416,6 +2434,25 @@ gst_omx_video_enc_allocate_out_buffers (GstOMXVideoEnc * self)
           "nb-buffers", G_TYPE_UINT, nb_buffers, NULL));
 
   gst_pad_push_event (GST_VIDEO_DECODER_SRC_PAD (self), event);
+
+  if (self->use_out_port_pool) {
+    nb_buffers = self->enc_out_port->port_def.nBufferCountActual;
+
+    self->out_port_pool = gst_omx_buffer_pool_new (GST_ELEMENT_CAST (self),
+        self->enc, self->enc_out_port, GST_OMX_BUFFER_MODE_SYSTEM_MEMORY);
+
+    state = gst_video_encoder_get_output_state (GST_VIDEO_ENCODER (self));
+    config = gst_buffer_pool_get_config (self->out_port_pool);
+
+    gst_buffer_pool_config_set_params (config, state->caps,
+        self->enc_out_port->port_def.nBufferSize, nb_buffers, nb_buffers);
+    gst_buffer_pool_set_config (self->out_port_pool, config);
+
+    if (!gst_buffer_pool_set_active (self->out_port_pool, TRUE)) {
+      GST_ERROR_OBJECT (self, "failed to activate output port");
+      return FALSE;
+    }
+  }
 
   return TRUE;
 }
@@ -2472,6 +2509,7 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
   GstOMXVideoEncClass *klass;
   GstOMXPort *port = self->enc_out_port;
   GstOMXBuffer *buf = NULL;
+  GstBuffer *outbuf = NULL;
   GstVideoCodecFrame *frame;
   GstFlowReturn flow_ret = GST_FLOW_OK;
   GstOMXAcquireBufferReturn acq_return;
@@ -2614,12 +2652,40 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
   frame = gst_omx_video_find_nearest_frame (GST_ELEMENT_CAST (self), buf,
       gst_video_encoder_get_frames (GST_VIDEO_ENCODER (self)));
 
-  g_assert (klass->handle_output_frame);
+  if (frame) {
+    if (self->use_out_port_pool) {
+      gint i;
+      GstBufferPoolAcquireParams params = { 0, };
 
-  if (frame)
-    flow_ret =
-        klass->handle_output_frame (self, self->enc_out_port, buf, frame);
-  else {
+      i = gst_omx_port_find_buffer_idx (port, buf);
+      g_assert (i != -1);
+
+      GST_OMX_BUFFER_POOL (self->out_port_pool)->current_buffer_index = i;
+      flow_ret = gst_buffer_pool_acquire_buffer (self->out_port_pool, &outbuf,
+          &params);
+      if (flow_ret != GST_FLOW_OK) {
+        GST_ERROR_OBJECT (self, "failed to acquire output buffer from pool");
+      }
+    } else {
+      GstMapInfo map = GST_MAP_INFO_INIT;
+
+      outbuf = gst_buffer_new_and_alloc (buf->omx_buf->nFilledLen);
+
+      if (buf->omx_buf->nFilledLen > 0) {
+        gst_buffer_map (outbuf, &map, GST_MAP_WRITE);
+        memcpy (map.data,
+            buf->omx_buf->pBuffer + buf->omx_buf->nOffset,
+            buf->omx_buf->nFilledLen);
+        gst_buffer_unmap (outbuf, &map);
+      }
+    }
+
+    if (G_LIKELY (flow_ret == GST_FLOW_OK)) {
+      g_assert (klass->handle_output_frame);
+      flow_ret = klass->handle_output_frame (self, self->enc_out_port, outbuf,
+          buf, frame);
+    }
+  } else {
     gst_omx_port_release_buffer (self->enc_out_port, buf);
     goto flow_error;
   }
@@ -2627,9 +2693,13 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
 
   GST_DEBUG_OBJECT (self, "Finished frame: %s", gst_flow_get_name (flow_ret));
 
-  err = gst_omx_port_release_buffer (port, buf);
-  if (err != OMX_ErrorNone)
-    goto release_error;
+  /* if we are using a pool, the omx buffer belongs to the GstOMXMemory
+   * on the pooled buffer and will be released when the memory is released */
+  if (!self->use_out_port_pool) {
+    err = gst_omx_port_release_buffer (port, buf);
+    if (err != OMX_ErrorNone)
+      goto release_error;
+  }
 
   GST_VIDEO_ENCODER_STREAM_LOCK (self);
   self->downstream_flow_ret = flow_ret;

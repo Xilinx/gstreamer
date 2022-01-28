@@ -75,6 +75,7 @@ struct _GstOMXVideoEnc
   guint32 quant_i_frames;
   guint32 quant_p_frames;
   guint32 quant_b_frames;
+  gboolean use_out_port_pool;
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   guint32 qp_mode;
   guint32 min_qp;
@@ -140,6 +141,8 @@ struct _GstOMXVideoEnc
   /* TRUE if input buffers are from the pool we proposed to upstream */
   gboolean in_pool_used;
 
+  GstBufferPool *out_port_pool;
+
   /* TRUE if encoder is receiving input using XLNX-LL */
   gboolean xlnx_ll;
 
@@ -159,7 +162,8 @@ struct _GstOMXVideoEncClass
   GstCaps *(*get_caps) (GstOMXVideoEnc * self, GstOMXPort * port,
       GstVideoCodecState * state);
     GstFlowReturn (*handle_output_frame) (GstOMXVideoEnc * self,
-      GstOMXPort * port, GstOMXBuffer * buffer, GstVideoCodecFrame * frame);
+      GstOMXPort * port, GstBuffer * outbuf, GstOMXBuffer * buffer,
+      GstVideoCodecFrame * frame);
 };
 
 GType gst_omx_video_enc_get_type (void);

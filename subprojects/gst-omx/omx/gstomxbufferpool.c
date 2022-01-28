@@ -245,19 +245,20 @@ gst_omx_buffer_pool_set_config (GstBufferPool * bpool, GstStructure * config)
   if (caps == NULL)
     goto no_caps;
 
-  if (pool->port && pool->port->port_def.eDomain == OMX_PortDomainVideo
-      && pool->port->port_def.format.video.eCompressionFormat ==
-      OMX_VIDEO_CodingUnused) {
+  if (pool->port && pool->port->port_def.eDomain == OMX_PortDomainVideo) {
     GstVideoInfo info;
 
     /* now parse the caps from the config */
     if (!gst_video_info_from_caps (&info, caps))
       goto wrong_video_caps;
 
-    /* enable metadata based on config of the pool */
-    pool->add_videometa =
-        gst_buffer_pool_config_has_option (config,
-        GST_BUFFER_POOL_OPTION_VIDEO_META);
+    if (pool->port->port_def.format.video.eCompressionFormat ==
+        OMX_VIDEO_CodingUnused) {
+      /* enable metadata based on config of the pool */
+      pool->add_videometa =
+          gst_buffer_pool_config_has_option (config,
+          GST_BUFFER_POOL_OPTION_VIDEO_META);
+    }
 
     pool->video_info = info;
   }
@@ -343,87 +344,90 @@ gst_omx_buffer_pool_alloc_buffer (GstBufferPool * bpool,
 
     pool->need_copy = FALSE;
   } else {
-    const guint nstride = pool->port->port_def.format.video.nStride;
-    const guint nslice = pool->port->port_def.format.video.nSliceHeight;
-    gsize offset[GST_VIDEO_MAX_PLANES] = { 0, };
-    gint stride[GST_VIDEO_MAX_PLANES] = { nstride, 0, };
-
     buf = gst_buffer_new ();
 
-    switch (GST_VIDEO_INFO_FORMAT (&pool->video_info)) {
-      case GST_VIDEO_FORMAT_ABGR:
-      case GST_VIDEO_FORMAT_ARGB:
-      case GST_VIDEO_FORMAT_RGB16:
-      case GST_VIDEO_FORMAT_BGR16:
-      case GST_VIDEO_FORMAT_YUY2:
-      case GST_VIDEO_FORMAT_UYVY:
-      case GST_VIDEO_FORMAT_YVYU:
-      case GST_VIDEO_FORMAT_GRAY8:
-      case GST_VIDEO_FORMAT_GRAY10_LE32:
-        break;
-      case GST_VIDEO_FORMAT_I420:
-        stride[1] = nstride / 2;
-        offset[1] = offset[0] + stride[0] * nslice;
-        stride[2] = nstride / 2;
-        offset[2] = offset[1] + (stride[1] * nslice / 2);
-        break;
-      case GST_VIDEO_FORMAT_NV12:
-      case GST_VIDEO_FORMAT_NV12_10LE32:
-      case GST_VIDEO_FORMAT_NV16:
-      case GST_VIDEO_FORMAT_NV16_10LE32:
-        stride[1] = nstride;
-        offset[1] = offset[0] + stride[0] * nslice;
-        break;
-      default:
-        g_assert_not_reached ();
-        break;
-    }
+    if (GST_VIDEO_INFO_FORMAT (&pool->video_info) != GST_VIDEO_FORMAT_ENCODED) {
+      const guint nstride = pool->port->port_def.format.video.nStride;
+      const guint nslice = pool->port->port_def.format.video.nSliceHeight;
+      gsize offset[GST_VIDEO_MAX_PLANES] = { 0, };
+      gint stride[GST_VIDEO_MAX_PLANES] = { nstride, 0, };
 
-    if (pool->add_videometa) {
-      pool->need_copy = FALSE;
-    } else {
-      GstVideoInfo info;
-      gboolean need_copy = FALSE;
-      gint i;
-
-      gst_video_info_init (&info);
-      gst_video_info_set_format (&info,
-          GST_VIDEO_INFO_FORMAT (&pool->video_info),
-          GST_VIDEO_INFO_WIDTH (&pool->video_info),
-          GST_VIDEO_INFO_HEIGHT (&pool->video_info));
-
-      for (i = 0; i < GST_VIDEO_INFO_N_PLANES (&pool->video_info); i++) {
-        if (info.stride[i] != stride[i] || info.offset[i] != offset[i]) {
-          GST_DEBUG_OBJECT (pool,
-              "Need to copy output frames because of stride/offset mismatch: plane %d stride %d (expected: %d) offset %"
-              G_GSIZE_FORMAT " (expected: %" G_GSIZE_FORMAT
-              ") nStride: %d nSliceHeight: %d ", i, stride[i], info.stride[i],
-              offset[i], info.offset[i], nstride, nslice);
-
-          need_copy = TRUE;
+      switch (GST_VIDEO_INFO_FORMAT (&pool->video_info)) {
+        case GST_VIDEO_FORMAT_ABGR:
+        case GST_VIDEO_FORMAT_ARGB:
+        case GST_VIDEO_FORMAT_RGB16:
+        case GST_VIDEO_FORMAT_BGR16:
+        case GST_VIDEO_FORMAT_YUY2:
+        case GST_VIDEO_FORMAT_UYVY:
+        case GST_VIDEO_FORMAT_YVYU:
+        case GST_VIDEO_FORMAT_GRAY8:
+        case GST_VIDEO_FORMAT_GRAY10_LE32:
           break;
-        }
+        case GST_VIDEO_FORMAT_I420:
+          stride[1] = nstride / 2;
+          offset[1] = offset[0] + stride[0] * nslice;
+          stride[2] = nstride / 2;
+          offset[2] = offset[1] + (stride[1] * nslice / 2);
+          break;
+        case GST_VIDEO_FORMAT_NV12:
+        case GST_VIDEO_FORMAT_NV12_10LE32:
+        case GST_VIDEO_FORMAT_NV16:
+        case GST_VIDEO_FORMAT_NV16_10LE32:
+          stride[1] = nstride;
+          offset[1] = offset[0] + stride[0] * nslice;
+          break;
+        default:
+          g_assert_not_reached ();
+          break;
       }
 
-      pool->need_copy = need_copy;
-    }
+      if (pool->add_videometa) {
+        pool->need_copy = FALSE;
+      } else {
+        GstVideoInfo info;
+        gboolean need_copy = FALSE;
+        gint i;
 
-    if (pool->need_copy || pool->add_videometa) {
-      /* We always add the videometa. It's the job of the user
-       * to copy the buffer if pool->need_copy is TRUE
-       */
-      GstVideoMeta *meta;
-      GstVideoAlignment align;
+        gst_video_info_init (&info);
+        gst_video_info_set_format (&info,
+            GST_VIDEO_INFO_FORMAT (&pool->video_info),
+            GST_VIDEO_INFO_WIDTH (&pool->video_info),
+            GST_VIDEO_INFO_HEIGHT (&pool->video_info));
 
-      meta = gst_buffer_add_video_meta_full (buf, GST_VIDEO_FRAME_FLAG_NONE,
-          GST_VIDEO_INFO_FORMAT (&pool->video_info),
-          GST_VIDEO_INFO_WIDTH (&pool->video_info),
-          GST_VIDEO_INFO_HEIGHT (&pool->video_info),
-          GST_VIDEO_INFO_N_PLANES (&pool->video_info), offset, stride);
+        for (i = 0; i < GST_VIDEO_INFO_N_PLANES (&pool->video_info); i++) {
+          if (info.stride[i] != stride[i] || info.offset[i] != offset[i]) {
+            GST_DEBUG_OBJECT (pool,
+                "Need to copy output frames because of stride/offset mismatch: "
+                "plane %d stride %d (expected: %d) offset %"
+                G_GSIZE_FORMAT " (expected: %" G_GSIZE_FORMAT
+                ") nStride: %d nSliceHeight: %d ", i, stride[i], info.stride[i],
+                offset[i], info.offset[i], nstride, nslice);
 
-      if (gst_omx_video_get_port_padding (pool->port, &pool->video_info,
-              &align))
-        gst_video_meta_set_alignment (meta, align);
+            need_copy = TRUE;
+            break;
+          }
+        }
+
+        pool->need_copy = need_copy;
+      }
+
+      if (pool->need_copy || pool->add_videometa) {
+        /* We always add the videometa. It's the job of the user
+         * to copy the buffer if pool->need_copy is TRUE
+         */
+        GstVideoMeta *meta;
+        GstVideoAlignment align;
+
+        meta = gst_buffer_add_video_meta_full (buf, GST_VIDEO_FRAME_FLAG_NONE,
+            GST_VIDEO_INFO_FORMAT (&pool->video_info),
+            GST_VIDEO_INFO_WIDTH (&pool->video_info),
+            GST_VIDEO_INFO_HEIGHT (&pool->video_info),
+            GST_VIDEO_INFO_N_PLANES (&pool->video_info), offset, stride);
+
+        if (gst_omx_video_get_port_padding (pool->port, &pool->video_info,
+                &align))
+          gst_video_meta_set_alignment (meta, align);
+      }
     }
   }
 
