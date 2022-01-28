@@ -3517,6 +3517,9 @@ gst_omx_video_dec_handle_frame (GstVideoDecoder * decoder,
         (GstTaskFunction) gst_omx_video_dec_loop, decoder, NULL);
   }
 
+  GST_DEBUG_OBJECT (self, "Input buffer memory type: %s",
+      gst_buffer_peek_memory(frame->input_buffer, 0) ->allocator->mem_type);
+
   timestamp = frame->pts;
   duration = frame->duration;
   port = self->dec_in_port;
