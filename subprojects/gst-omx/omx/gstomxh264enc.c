@@ -42,7 +42,8 @@ static gboolean gst_omx_h264_enc_set_format (GstOMXVideoEnc * enc,
 static GstCaps *gst_omx_h264_enc_get_caps (GstOMXVideoEnc * enc,
     GstOMXPort * port, GstVideoCodecState * state);
 static GstFlowReturn gst_omx_h264_enc_handle_output_frame (GstOMXVideoEnc *
-    self, GstOMXPort * port, GstOMXBuffer * buf, GstVideoCodecFrame * frame);
+    self, GstOMXPort * port, GstBuffer * outbuf, GstOMXBuffer * buf,
+    GstVideoCodecFrame * frame);
 static gboolean gst_omx_h264_enc_flush (GstVideoEncoder * enc);
 static gboolean gst_omx_h264_enc_stop (GstVideoEncoder * enc);
 static void gst_omx_h264_enc_set_property (GObject * object, guint prop_id,
@@ -1170,7 +1171,7 @@ gst_omx_h264_enc_get_caps (GstOMXVideoEnc * enc, GstOMXPort * port,
 
 static GstFlowReturn
 gst_omx_h264_enc_handle_output_frame (GstOMXVideoEnc * enc, GstOMXPort * port,
-    GstOMXBuffer * buf, GstVideoCodecFrame * frame)
+    GstBuffer * outbuf, GstOMXBuffer * buf, GstVideoCodecFrame * frame)
 {
   GstOMXH264Enc *self = GST_OMX_H264_ENC (enc);
 
@@ -1180,19 +1181,20 @@ gst_omx_h264_enc_handle_output_frame (GstOMXVideoEnc * enc, GstOMXPort * port,
      * in the caps!
      */
     GstBuffer *hdrs;
-    GstMapInfo map = GST_MAP_INFO_INIT;
     GstFlowReturn flow_ret;
 
     GST_DEBUG_OBJECT (self, "got codecconfig in byte-stream format");
 
-    hdrs = gst_buffer_new_and_alloc (buf->omx_buf->nFilledLen);
+    if (outbuf->pool) {
+      /* if the buffer is from the pool, copy it to avoid holding an OMX
+       * buffer forever in the codec data; there is a danger of starvation */
+      hdrs = gst_buffer_copy_deep (outbuf);
+      gst_buffer_unref (outbuf);
+    } else {
+      hdrs = outbuf;
+    }
     GST_BUFFER_FLAG_SET (hdrs, GST_BUFFER_FLAG_HEADER);
 
-    gst_buffer_map (hdrs, &map, GST_MAP_WRITE);
-    memcpy (map.data,
-        buf->omx_buf->pBuffer + buf->omx_buf->nOffset,
-        buf->omx_buf->nFilledLen);
-    gst_buffer_unmap (hdrs, &map);
     self->headers = g_list_append (self->headers, gst_buffer_ref (hdrs));
     frame->output_buffer = hdrs;
     flow_ret =
@@ -1207,6 +1209,6 @@ gst_omx_h264_enc_handle_output_frame (GstOMXVideoEnc * enc, GstOMXPort * port,
 
   return
       GST_OMX_VIDEO_ENC_CLASS
-      (gst_omx_h264_enc_parent_class)->handle_output_frame (enc, port, buf,
-      frame);
+      (gst_omx_h264_enc_parent_class)->handle_output_frame (enc, port, outbuf,
+      buf, frame);
 }
