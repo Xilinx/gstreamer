@@ -480,6 +480,7 @@ OMX_ERRORTYPE     gst_omx_port_update_port_definition (GstOMXPort *port, OMX_PAR
 
 GstOMXAcquireBufferReturn gst_omx_port_acquire_buffer (GstOMXPort *port, GstOMXBuffer **buf, GstOMXWait wait);
 OMX_ERRORTYPE     gst_omx_port_release_buffer (GstOMXPort *port, GstOMXBuffer *buf);
+gint              gst_omx_port_find_buffer_idx (GstOMXPort *port, GstOMXBuffer *buf);
 
 OMX_ERRORTYPE     gst_omx_port_set_flushing (GstOMXPort *port, GstClockTime timeout, gboolean flush);
 gboolean          gst_omx_port_is_flushing (GstOMXPort *port);

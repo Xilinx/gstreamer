@@ -2205,17 +2205,11 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
     GST_ERROR_OBJECT (self, "No corresponding frame found");
 
     if (self->out_port_pool) {
-      gint i, n;
+      gint i;
       GstBufferPoolAcquireParams params = { 0, };
 
-      n = port->buffers->len;
-      for (i = 0; i < n; i++) {
-        GstOMXBuffer *tmp = g_ptr_array_index (port->buffers, i);
-
-        if (tmp == buf)
-          break;
-      }
-      g_assert (i != n);
+      i = gst_omx_port_find_buffer_idx (port, buf);
+      g_assert (i != -1);
 
       GST_OMX_BUFFER_POOL (self->out_port_pool)->current_buffer_index = i;
       flow_ret =
@@ -2257,18 +2251,12 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
     flow_ret = gst_pad_push (GST_VIDEO_DECODER_SRC_PAD (self), outbuf);
   } else if (buf->omx_buf->nFilledLen > 0 || buf->eglimage) {
     if (self->out_port_pool) {
-      gint i, n;
+      gint i;
       GstBuffer *outbuf;
       GstBufferPoolAcquireParams params = { 0, };
 
-      n = port->buffers->len;
-      for (i = 0; i < n; i++) {
-        GstOMXBuffer *tmp = g_ptr_array_index (port->buffers, i);
-
-        if (tmp == buf)
-          break;
-      }
-      g_assert (i != n);
+      i = gst_omx_port_find_buffer_idx (port, buf);
+      g_assert (i != -1);
 
       GST_OMX_BUFFER_POOL (self->out_port_pool)->current_buffer_index = i;
       flow_ret =

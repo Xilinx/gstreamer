@@ -2569,6 +2569,22 @@ done:
   return err;
 }
 
+gint
+gst_omx_port_find_buffer_idx (GstOMXPort * port, GstOMXBuffer * buf)
+{
+  gint i, n;
+
+  n = port->buffers->len;
+  for (i = 0; i < n; i++) {
+    GstOMXBuffer *tmp = g_ptr_array_index (port->buffers, i);
+
+    if (tmp == buf)
+      return i;
+  }
+
+  return -1;
+}
+
 /* NOTE: Must be called while holding comp->lock */
 static gboolean
 should_wait_until_flushed (GstOMXPort * port)
