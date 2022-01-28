@@ -1894,6 +1894,15 @@ gst_v4l2src_event (GstBaseSrc * basesrc, GstEvent * event)
               "Received XLNX-LowLatency consumer ready event in normal mode; ignoring");
         }
         return TRUE;
+      } else if (gst_event_has_name (event, "xlnx-ll-reset-slot")) {
+        if (self->v4l2object->xlnx_ll) {
+          xvfbsync_enc_sync_reset_slot (&self->v4l2object->enc_sync_chan);
+        } else {
+          GST_WARNING_OBJECT (self,
+              "Received reset slot event in normal mode, ignoring");
+        }
+
+        return TRUE;
       }
     }
 

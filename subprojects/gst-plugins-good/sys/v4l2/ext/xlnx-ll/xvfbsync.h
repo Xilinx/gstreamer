@@ -265,6 +265,13 @@ int xvfbsync_enc_sync_chan_add_buffer (EncSyncChannel * enc_sync_chan,
 int xvfbsync_enc_sync_chan_enable (EncSyncChannel * enc_sync_chan);
 
 /**
+ * xvfbsync_enc_sync_reset_slot - Reset current SyncIp slot
+ * @enc_sync_chan: Channel to be enabled
+ * Returns 0 if no errors, else -1
+ */
+void xvfbsync_enc_sync_reset_slot (EncSyncChannel * enc_sync_chan);
+
+/**
  * xvfbsync_enc_sync_chan_set_intr_mask - Set SyncIp interrupt mask
  * @enc_sync_chan: Channel to mask interrupt
  * @intr_mask: Interrupts that should be masked
