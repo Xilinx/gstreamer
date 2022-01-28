@@ -2399,7 +2399,10 @@ gst_omx_video_enc_ensure_nb_out_buffers (GstOMXVideoEnc * self)
   GstOMXVideoEncClass *klass = GST_OMX_VIDEO_ENC_GET_CLASS (self);
   guint extra = 0;
 
-  if (!(klass->cdata.hacks & GST_OMX_HACK_ENSURE_BUFFER_COUNT_ACTUAL))
+  /* ensure nBufferCountActual only if we have a buffer pool
+   * or if the hack is enabled */
+  if (!(self->use_out_port_pool ||
+          klass->cdata.hacks & GST_OMX_HACK_ENSURE_BUFFER_COUNT_ACTUAL))
     return TRUE;
 
   /* If dowstream tell us how many buffers it needs allocate as many extra buffers so we won't starve
@@ -5303,7 +5306,7 @@ gst_omx_video_enc_decide_allocation (GstVideoEncoder * encoder,
     GstQuery * query)
 {
   GstOMXVideoEnc *self = GST_OMX_VIDEO_ENC (encoder);
-  guint min = 1;
+  guint min = self->use_out_port_pool ? 2 : 1;
 
   if (!GST_VIDEO_ENCODER_CLASS
       (gst_omx_video_enc_parent_class)->decide_allocation (encoder, query))
