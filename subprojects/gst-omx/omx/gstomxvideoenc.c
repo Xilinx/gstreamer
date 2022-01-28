@@ -2222,6 +2222,21 @@ gst_omx_video_enc_handle_output_frame (GstOMXVideoEnc * self, GstOMXPort * port,
   GstOMXVideoEncClass *klass = GST_OMX_VIDEO_ENC_GET_CLASS (self);
   GstFlowReturn flow_ret = GST_FLOW_OK;
 
+  if (buf->omx_buf->nFlags & OMX_BUFFERFLAG_DATACORRUPT) {
+    if ((buf->omx_buf->nFlags & OMX_BUFFERFLAG_ENDOFFRAME))
+      flow_ret = gst_video_encoder_finish_frame (GST_VIDEO_ENCODER (self), frame);
+    else
+       gst_video_codec_frame_unref (frame);
+
+    GST_DEBUG_OBJECT (self, "Buffer with data coppupt, dropping it");
+    buf->omx_buf->nFlags = 0;
+    buf->omx_buf->nOffset = 0;
+    buf->omx_buf->nFilledLen = 0;
+    GST_OMX_SET_TICKS (buf->omx_buf->nTimeStamp, G_GUINT64_CONSTANT (0));
+
+    return flow_ret;
+  }
+
   if ((buf->omx_buf->nFlags & OMX_BUFFERFLAG_CODECCONFIG)
       && buf->omx_buf->nFilledLen > 0) {
     GstVideoCodecState *state;
@@ -2569,6 +2584,18 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
     GST_DEBUG_OBJECT (self, "Flushing");
     gst_omx_port_release_buffer (self->enc_out_port, buf);
     goto flushing;
+  }
+
+  if ((buf->omx_buf->nFlags & OMX_BUFFERFLAG_DATACORRUPT) &&
+      (buf->omx_buf->nFlags & OMX_BUFFERFLAG_ENDOFFRAME) &&
+      (self->xlnx_ll)) {
+    GST_DEBUG_OBJECT (self, "Send reset SyncIP slot event to upstream");
+    GstEvent *event;
+    event = gst_event_new_custom (GST_EVENT_CUSTOM_UPSTREAM,
+                    gst_structure_new ("xlnx-ll-reset-slot", NULL, NULL));
+
+    gst_pad_push_event (GST_VIDEO_ENCODER_SINK_PAD (self), event);
+    g_usleep(100000);
   }
 
   GST_DEBUG_OBJECT (self, "Handling buffer: 0x%08x (%s) %" G_GUINT64_FORMAT,
