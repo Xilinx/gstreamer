@@ -183,6 +183,14 @@ xvfbsync_queue_pop (Queue * q)
   return true;
 }
 
+void
+xvfbsync_enc_sync_reset_slot (EncSyncChannel * enc_sync_chan)
+{
+  int ret = 0;
+  ret = ioctl (enc_sync_chan->sync_channel->sync->fd, XLNXSYNC_RESET_SLOT);
+
+}
+
 static bool
 xvfbsync_queue_push (Queue * q, XLNXLLBuf * buf_ptr)
 {
