@@ -1549,6 +1549,14 @@ gst_omx_video_enc_open (GstVideoEncoder * encoder)
   self->enc_in_port = gst_omx_component_add_port (self->enc, in_port_index);
   self->enc_out_port = gst_omx_component_add_port (self->enc, out_port_index);
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  if(self->use_out_port_pool)
+  {
+    GST_DEBUG_OBJECT (self, "Configure encoder output to export dmabuf");
+    gst_omx_port_set_dmabuf (self->enc_out_port, TRUE);
+  }
+#endif
+
   if (!self->enc_in_port || !self->enc_out_port)
     return FALSE;
 
@@ -2442,7 +2450,7 @@ gst_omx_video_enc_allocate_out_buffers (GstOMXVideoEnc * self)
     nb_buffers = self->enc_out_port->port_def.nBufferCountActual;
 
     self->out_port_pool = gst_omx_buffer_pool_new (GST_ELEMENT_CAST (self),
-        self->enc, self->enc_out_port, GST_OMX_BUFFER_MODE_SYSTEM_MEMORY);
+        self->enc, self->enc_out_port, GST_OMX_BUFFER_MODE_DMABUF);
 
     state = gst_video_encoder_get_output_state (GST_VIDEO_ENCODER (self));
     config = gst_buffer_pool_get_config (self->out_port_pool);
