@@ -3834,11 +3834,11 @@ get_format_range_extension_profile (const GstH265ProfileTierLevel * ptl)
         0, 0, 0, 0, 0, 0, 0, 1, 1, FALSE, 20},
     /* Xilinx specific */
     /* main-422-10 + max_8bit_constraint_flag */
-    {GST_H265_PROFILE_MAIN_422_XILINX, 1, 1, 1, 1, 0, 0, 0, 0, TRUE, 4},
+    {GST_H265_PROFILE_MAIN_422_XILINX, 0, 1, 1, 1, 1, 0, 0, 0, 0, TRUE, 4},
     /* monochrome-12 + max_10bit_constraint_flag */
-    {GST_H265_PROFILE_MONOCHROME_10_XILINX, 1, 1, 0, 1, 1, 1, 0, 0, TRUE, 1},
+    {GST_H265_PROFILE_MONOCHROME_10_XILINX, 0, 1, 1, 0, 1, 1, 1, 0, 0, TRUE, 1},
     /* main-422-10-intra + max_8bit_constraint_flag  */
-    {GST_H265_PROFILE_MAIN_422_INTRA_XILINX, 1, 1, 1, 1, 0, 0, 1, 0, FALSE, 12},
+    {GST_H265_PROFILE_MAIN_422_INTRA_XILINX, 0, 1, 1, 1, 1, 0, 0, 1, 0, FALSE, 12},
   };
 
   return get_extension_profile (profiles, G_N_ELEMENTS (profiles), ptl);
