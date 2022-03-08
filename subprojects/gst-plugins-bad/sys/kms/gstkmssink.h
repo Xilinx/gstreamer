@@ -113,6 +113,7 @@ struct _GstKMSSink {
   gboolean reconfigure;
 
   gboolean force_ntsc_tv;
+  gboolean gray_to_yuv444;
 
   /* roi data */
   gboolean draw_roi;

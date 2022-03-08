@@ -81,6 +81,8 @@
 #define ROI_RECT_COLOR_MIN                0
 #define ROI_RECT_COLOR_MAX                255
 
+#define GRAY_HEIGHT_MAX                   6480
+
 GST_DEBUG_CATEGORY_STATIC (gst_kms_sink_debug);
 GST_DEBUG_CATEGORY_STATIC (CAT_PERFORMANCE);
 #define GST_CAT_DEFAULT gst_kms_sink_debug
@@ -120,6 +122,7 @@ enum
   PROP_PLANE_PROPS,
   PROP_FULLSCREEN_OVERLAY,
   PROP_FORCE_NTSC_TV,
+  PROP_GRAY_TO_YUV444,
   PROP_DRAW_ROI,
   PROP_ROI_RECT_THICKNESS,
   PROP_ROI_RECT_COLOR,
@@ -1243,6 +1246,32 @@ gst_kms_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
 
   GST_OBJECT_LOCK (self);
 
+  if (self->gray_to_yuv444) {
+    int i;
+    gint min, max;
+    GValue *h = { 0, };
+
+    out_caps = gst_caps_new_empty ();
+
+    for (i = 0; i < gst_caps_get_size (caps); i++) {
+      s = gst_structure_copy (gst_caps_get_structure (caps, i));
+      h = gst_structure_get_value (s, "height");
+      if (GST_VALUE_HOLDS_INT_RANGE (h)) {
+        min = gst_value_get_int_range_min (h);
+        max = gst_value_get_int_range_max (h);
+        if (max < GRAY_HEIGHT_MAX)
+          max = GRAY_HEIGHT_MAX;
+        gst_structure_set (s, "height", GST_TYPE_INT_RANGE, min, max, NULL);
+      } else {
+        gst_structure_set (s, "height", G_TYPE_INT, GRAY_HEIGHT_MAX, NULL);
+      }
+      gst_caps_append_structure (out_caps, s);
+    }
+
+    out_caps = gst_caps_merge (out_caps, caps);
+    caps = out_caps;
+  }
+
   if (!self->can_scale) {
     out_caps = gst_caps_new_empty ();
     gst_video_calculate_device_ratio (self->hdisplay, self->vdisplay,
@@ -1499,6 +1528,10 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   if (!gst_video_info_from_caps (&vinfo, caps))
     goto invalid_format;
 
+  if (self->gray_to_yuv444 && vinfo.finfo->format == GST_VIDEO_FORMAT_GRAY8)
+    gst_video_info_set_format (&vinfo, GST_VIDEO_FORMAT_Y444, vinfo.width,
+        vinfo.height / 3);
+
   self->last_width = GST_VIDEO_SINK_WIDTH (self);
   self->last_height = GST_VIDEO_SINK_HEIGHT (self);
   /* on the first set_caps self->vinfo is not initialized, yet. */
@@ -1510,7 +1543,7 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
 
   if (!gst_kms_sink_calculate_display_ratio (self, &vinfo,
           &GST_VIDEO_SINK_WIDTH (self), &GST_VIDEO_SINK_HEIGHT (self)))
-	 goto no_disp_ratio;
+    goto no_disp_ratio;
 
   if (GST_VIDEO_SINK_WIDTH (self) <= 0 || GST_VIDEO_SINK_HEIGHT (self) <= 0)
     goto invalid_size;
@@ -1535,7 +1568,7 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
         "configure mode setting as input is in alternate interlacing mode");
     if (!configure_mode_setting (self, &vinfo))
       goto modesetting_failed;
-  }  
+  }
 
   GST_OBJECT_LOCK (self);
   if (self->reconfigure) {
@@ -1648,7 +1681,7 @@ gst_kms_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
   struct drm_mode_create_dumb arg = { 0, };
   guint32 fmt;
   drmModeConnector *conn;
-  GstVideoAlignment align = {0, };
+  GstVideoAlignment align = { 0, };
 
   self = GST_KMS_SINK (bsink);
 
@@ -1664,34 +1697,35 @@ gst_kms_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
   if (((self->devname ? !strcmp (self->devname, "xlnx") : 0)
           && conn->connector_type == DRM_MODE_CONNECTOR_DisplayPort)
       || (self->bus_id ? strstr (self->bus_id, "zynqmp-display") : 0)) {
-        is_dp = TRUE;
-        fmt = gst_drm_format_from_video (GST_VIDEO_INFO_FORMAT (&vinfo));
-        arg.bpp = gst_drm_bpp_from_drm (fmt);
-        w = GST_VIDEO_INFO_WIDTH (&vinfo);
-        arg.width = gst_drm_width_from_drm (fmt, w);
-        h = GST_VIDEO_INFO_FIELD_HEIGHT (&vinfo);
-        arg.height = gst_drm_height_from_drm (fmt, h);
+    is_dp = TRUE;
+    fmt = gst_drm_format_from_video (GST_VIDEO_INFO_FORMAT (&vinfo));
+    arg.bpp = gst_drm_bpp_from_drm (fmt);
+    w = GST_VIDEO_INFO_WIDTH (&vinfo);
+    arg.width = gst_drm_width_from_drm (fmt, w);
+    h = GST_VIDEO_INFO_FIELD_HEIGHT (&vinfo);
+    arg.height = gst_drm_height_from_drm (fmt, h);
 
-        ret = drmIoctl (self->fd, DRM_IOCTL_MODE_CREATE_DUMB, &arg);
-        if (ret)
-          goto no_pool;
+    ret = drmIoctl (self->fd, DRM_IOCTL_MODE_CREATE_DUMB, &arg);
+    if (ret)
+      goto no_pool;
 
-        gst_video_alignment_reset (&align);
-        align.padding_top = 0;
-        align.padding_left = 0;
-        align.padding_right = get_padding_right (self, &vinfo, arg.pitch);
-        if (!arg.pitch || align.padding_right == -1) {
-          align.padding_right = 0;
-          for (i = 0; i < GST_VIDEO_INFO_N_PLANES (&vinfo); i++)
-            align.stride_align[i] = 255;  /* 256-byte alignment */
-        }
-        align.padding_bottom = 0;
-        gst_video_info_align (&vinfo, &align);
+    gst_video_alignment_reset (&align);
+    align.padding_top = 0;
+    align.padding_left = 0;
+    align.padding_right = get_padding_right (self, &vinfo, arg.pitch);
+    if (!arg.pitch || align.padding_right == -1) {
+      align.padding_right = 0;
+      for (i = 0; i < GST_VIDEO_INFO_N_PLANES (&vinfo); i++)
+        align.stride_align[i] = 255;    /* 256-byte alignment */
+    }
+    align.padding_bottom = 0;
+    gst_video_info_align (&vinfo, &align);
 
-        GST_INFO_OBJECT (self, "padding_left %u, padding_right %u", align.padding_left, align.padding_right);
+    GST_INFO_OBJECT (self, "padding_left %u, padding_right %u",
+        align.padding_left, align.padding_right);
   }
 
-  drmModeFreeConnector(conn);
+  drmModeFreeConnector (conn);
 
   /* Update with the size use for display */
   size = GST_VIDEO_INFO_SIZE (&vinfo);
@@ -1965,6 +1999,28 @@ gst_kms_sink_import_dmabuf (GstKMSSink * self, GstBuffer * inbuf,
 
   /* Update video info based on video meta */
   if (meta) {
+    /* Update YUV444 meta data from original GRAY8 frame */
+    if (self->gray_to_yuv444 && meta->format == GST_VIDEO_FORMAT_GRAY8) {
+      /* skip the meta info modification in case the original meta height and
+       * vinfo height are the same, not sure why the second frame is this case */
+      if (meta->height == 3 * GST_VIDEO_INFO_HEIGHT (&self->vinfo)) {
+        meta->format == GST_VIDEO_FORMAT_Y444;
+        meta->height = GST_VIDEO_INFO_HEIGHT (&self->vinfo);
+        meta->n_planes = 3;
+        meta->offset[0] = 0;
+        /* stride of vinfo for the first frame is not aligned, so recaculate the
+         * stride, instead of use stride from vinfo */
+        meta->stride[0] = meta->stride[0] + 255 & ~255;
+        meta->offset[1] = meta->offset[0] + meta->stride[0] * meta->height;
+        meta->stride[1] = meta->stride[0];
+        meta->offset[2] = meta->offset[1] + meta->stride[1] * meta->height;
+        meta->stride[2] = meta->stride[0];
+        GST_DEBUG_OBJECT (self,
+            "Meta data modified from GRAY to YUV444, width is %d, height is %d, planes is %d",
+            meta->width, meta->height, meta->n_planes);
+      }
+    }
+
     GST_VIDEO_INFO_WIDTH (&self->vinfo) = meta->width;
     GST_VIDEO_INFO_HEIGHT (&self->vinfo) = meta->height;
 
@@ -2550,6 +2606,9 @@ gst_kms_sink_set_property (GObject * object, guint prop_id,
     case PROP_FORCE_NTSC_TV:
       sink->force_ntsc_tv = g_value_get_boolean (value);
       break;
+    case PROP_GRAY_TO_YUV444:
+      sink->gray_to_yuv444 = g_value_get_boolean (value);
+      break;
     case PROP_DRAW_ROI:
       sink->draw_roi = g_value_get_boolean (value);
       break;
@@ -2620,6 +2679,9 @@ gst_kms_sink_get_property (GObject * object, guint prop_id,
       break;
     case PROP_FORCE_NTSC_TV:
       g_value_set_boolean (value, sink->force_ntsc_tv);
+      break;
+    case PROP_GRAY_TO_YUV444:
+      g_value_set_boolean (value, sink->gray_to_yuv444);
       break;
     case PROP_DRAW_ROI:
       g_value_set_boolean (value, sink->draw_roi);
@@ -2852,6 +2914,16 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
       g_param_spec_boolean ("force-ntsc-tv",
       "Convert NTSC DV content to NTSC TV D1 display",
       "When enabled, NTSC DV (720x480i) content is displayed at NTSC TV D1 (720x486i) resolution",
+      FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
+
+  /**
+   * kmssink: gray-to-y444:
+   *
+   * Convert GRAY (grayscale 1920x3240) video to YUV444 (planar 4:4:4 1920x1080) display.
+   */
+  g_properties[PROP_GRAY_TO_YUV444] =
+      g_param_spec_boolean ("gray-to-y444", "gray to yuv444",
+      "Convert GRAY (grayscale 1920x3240) video to YUV444 (planar 4:4:4 1920x1080) display",
       FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
 
   /**
