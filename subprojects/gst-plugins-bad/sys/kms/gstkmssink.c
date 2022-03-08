@@ -1834,9 +1834,14 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   if (!gst_video_info_from_caps (&vinfo, caps))
     goto invalid_format;
 
-  if (self->gray_to_yuv444 && vinfo.finfo->format == GST_VIDEO_FORMAT_GRAY8)
-    gst_video_info_set_format (&vinfo, GST_VIDEO_FORMAT_Y444, vinfo.width,
-        vinfo.height / 3);
+  if (self->gray_to_yuv444) {
+    if (vinfo.finfo->format == GST_VIDEO_FORMAT_GRAY8)
+      gst_video_info_set_format (&vinfo, GST_VIDEO_FORMAT_Y444, vinfo.width,
+          vinfo.height / 3);
+    else if (vinfo.finfo->format == GST_VIDEO_FORMAT_GRAY10_LE32)
+      gst_video_info_set_format (&vinfo, GST_VIDEO_FORMAT_Y444_10LE32,
+          vinfo.width, vinfo.height / 3);
+  }
 
   /* on the first set_caps self->vinfo is not initialized, yet. */
   if (self->vinfo.finfo->format != GST_VIDEO_FORMAT_UNKNOWN)
@@ -2306,12 +2311,16 @@ gst_kms_sink_import_dmabuf (GstKMSSink * self, GstBuffer * inbuf,
 
   /* Update video info based on video meta */
   if (meta) {
-    /* Update YUV444 meta data from original GRAY8 frame */
-    if (self->gray_to_yuv444 && meta->format == GST_VIDEO_FORMAT_GRAY8) {
+    /* Update YUV444 meta data from original GRAY8/GRAY10 frame */
+    if (self->gray_to_yuv444 && (meta->format == GST_VIDEO_FORMAT_GRAY8 ||
+            meta->format == GST_VIDEO_FORMAT_GRAY10_LE32)) {
       /* skip the meta info modification in case the original meta height and
        * vinfo height are the same, not sure why the second frame is this case */
       if (meta->height == 3 * GST_VIDEO_INFO_HEIGHT (&self->vinfo)) {
-        meta->format == GST_VIDEO_FORMAT_Y444;
+        if (meta->format == GST_VIDEO_FORMAT_GRAY8)
+          meta->format == GST_VIDEO_FORMAT_Y444;
+        else if (meta->format == GST_VIDEO_FORMAT_GRAY10_LE32)
+          meta->format == GST_VIDEO_FORMAT_Y444_10LE32;
         meta->height = GST_VIDEO_INFO_HEIGHT (&self->vinfo);
         meta->n_planes = 3;
         meta->offset[0] = 0;
