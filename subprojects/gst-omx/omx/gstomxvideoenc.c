@@ -344,6 +344,7 @@ enum
   PROP_UNIFORM_SLICE_TYPE,
   PROP_INPUT_CROP,
   PROP_HLG_SDR_COMPATIBLE,
+  PROP_IS_YUV444,
 };
 
 /* FIXME: Better defaults */
@@ -394,6 +395,7 @@ enum
 #define GST_OMX_VIDEO_ENC_INPUT_CROP_WIDTH_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_INPUT_CROP_HEIGHT_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_HLG_SDR_COMPATIBLE_DEFAULT (FALSE)
+#define GST_OMX_VIDEO_ENC_IS_YUV444_DEFAULT (FALSE)
 
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
@@ -718,6 +720,13 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
       g_param_spec_boolean ("hlg-sdr-compatible", "HLG SDR compatible mode",
           "If enabled and input caps contain HLG colorimetry, insert BT2020 EOTF and ATC SEI instead",
           GST_OMX_VIDEO_ENC_HLG_SDR_COMPATIBLE_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_IS_YUV444,
+      g_param_spec_boolean ("y444-to-gray", "YUV444 format",
+          "Enable/Disable YUV format manipulation to Y8",
+          GST_OMX_VIDEO_ENC_IS_YUV444_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
 #endif
@@ -1556,8 +1565,7 @@ gst_omx_video_enc_open (GstVideoEncoder * encoder)
   self->enc_out_port = gst_omx_component_add_port (self->enc, out_port_index);
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-  if(self->use_out_port_pool)
-  {
+  if (self->use_out_port_pool) {
     GST_DEBUG_OBJECT (self, "Configure encoder output to export dmabuf");
     gst_omx_port_set_dmabuf (self->enc_out_port, TRUE);
   }
@@ -1981,6 +1989,9 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
     case PROP_HLG_SDR_COMPATIBLE:
       self->hlg_sdr_compatible = g_value_get_boolean (value);
       break;
+    case PROP_IS_YUV444:
+      self->is_yuv444 = g_value_get_boolean (value);
+      break;
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -2097,6 +2108,9 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
     case PROP_HLG_SDR_COMPATIBLE:
       g_value_set_boolean (value, self->hlg_sdr_compatible);
       break;
+    case PROP_IS_YUV444:
+      g_value_set_boolean (value, self->is_yuv444);
+      break;
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -2201,6 +2215,11 @@ get_chroma_info_from_input (GstOMXVideoEnc * self, const gchar ** chroma_format,
       *chroma_format = "4:2:2";
       *bit_depth_luma = *bit_depth_chroma = 10;
       break;
+    case GST_VIDEO_FORMAT_Y444:
+      *chroma_format = "4:0:0";
+      *bit_depth_luma = 8;
+      *bit_depth_chroma = 0;
+      break;
     default:
       return FALSE;
   }
@@ -2269,9 +2288,10 @@ gst_omx_video_enc_handle_output_frame (GstOMXVideoEnc * self, GstOMXPort * port,
 
   if (buf->omx_buf->nFlags & OMX_BUFFERFLAG_DATACORRUPT) {
     if ((buf->omx_buf->nFlags & OMX_BUFFERFLAG_ENDOFFRAME))
-      flow_ret = gst_video_encoder_finish_frame (GST_VIDEO_ENCODER (self), frame);
+      flow_ret =
+          gst_video_encoder_finish_frame (GST_VIDEO_ENCODER (self), frame);
     else
-       gst_video_codec_frame_unref (frame);
+      gst_video_codec_frame_unref (frame);
 
     GST_DEBUG_OBJECT (self, "Buffer with data coppupt, dropping it");
     buf->omx_buf->nFlags = 0;
@@ -2422,7 +2442,9 @@ gst_omx_video_enc_ensure_nb_out_buffers (GstOMXVideoEnc * self)
   /* If dowstream tell us how many buffers it needs allocate as many extra buffers so we won't starve
    * if it keeps them downstream (like when using dynamic mode). */
   if (self->nb_downstream_buffers)
-    extra = self->use_out_port_pool ? MAX(self->nb_downstream_buffers, 8) : self->nb_downstream_buffers;
+    extra =
+        self->use_out_port_pool ? MAX (self->nb_downstream_buffers,
+        8) : self->nb_downstream_buffers;
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   if (g_getenv ("ENC_EXTRA_OP_BUFFERS") != NULL)
     extra += atoi (g_getenv ("ENC_EXTRA_OP_BUFFERS"));
@@ -2650,15 +2672,14 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
   }
 
   if ((buf->omx_buf->nFlags & OMX_BUFFERFLAG_DATACORRUPT) &&
-      (buf->omx_buf->nFlags & OMX_BUFFERFLAG_ENDOFFRAME) &&
-      (self->xlnx_ll)) {
+      (buf->omx_buf->nFlags & OMX_BUFFERFLAG_ENDOFFRAME) && (self->xlnx_ll)) {
     GST_DEBUG_OBJECT (self, "Send reset SyncIP slot event to upstream");
     GstEvent *event;
     event = gst_event_new_custom (GST_EVENT_CUSTOM_UPSTREAM,
-                    gst_structure_new ("xlnx-ll-reset-slot", NULL, NULL));
+        gst_structure_new ("xlnx-ll-reset-slot", NULL, NULL));
 
     gst_pad_push_event (GST_VIDEO_ENCODER_SINK_PAD (self), event);
-    g_usleep(100000);
+    g_usleep (100000);
   }
 
   GST_DEBUG_OBJECT (self, "Handling buffer: 0x%08x (%s) %" G_GUINT64_FORMAT,
@@ -3140,7 +3161,7 @@ check_input_alignment (GstOMXVideoEnc * self, GstMapInfo * map)
 {
   OMX_PARAM_PORTDEFINITIONTYPE *port_def = &self->enc_in_port->port_def;
 
-  if (map->size != port_def->nBufferSize) {
+  if ((map->size != port_def->nBufferSize) && (self->is_yuv444 == 0)) {
     GST_DEBUG_OBJECT (self,
         "input buffer has wrong size/stride (%" G_GSIZE_FORMAT
         " expected: %u), can't use dynamic allocation",
@@ -3698,6 +3719,9 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
       case GST_VIDEO_FORMAT_GRAY8:
         port_def.format.video.eColorFormat = OMX_COLOR_FormatL8;
         break;
+      case GST_VIDEO_FORMAT_Y444:
+        port_def.format.video.eColorFormat = OMX_COLOR_FormatL8;
+        break;
       default:
         GST_ERROR_OBJECT (self, "Unsupported format %s",
             gst_video_format_to_string (info->finfo->format));
@@ -3707,6 +3731,8 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   } else {
     for (l = negotiation_map; l; l = l->next) {
       GstOMXVideoNegotiationMap *m = l->data;
+      if (m->format == GST_VIDEO_FORMAT_GRAY8 && self->is_yuv444 == 1)
+        m->format = GST_VIDEO_FORMAT_Y444;
 
       if (m->format == info->finfo->format) {
         port_def.format.video.eColorFormat = m->type;
@@ -3721,6 +3747,9 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   port_def.format.video.nFrameHeight = GST_VIDEO_INFO_FIELD_HEIGHT (info);
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  if (self->is_yuv444) {
+    port_def.format.video.nFrameHeight = 3 * GST_VIDEO_INFO_FIELD_HEIGHT (info);
+  }
   if (!gst_omx_video_enc_set_interlacing_parameters (self, info))
     return FALSE;
   if (!gst_omx_video_enc_set_output_crop (self, info))
@@ -4126,6 +4155,25 @@ gst_omx_video_enc_fill_buffer (GstOMXVideoEnc * self, GstBuffer * inbuf,
   GST_LOG_OBJECT (self, "Mismatched strides - copying line-by-line");
 
   switch (info->finfo->format) {
+    case GST_VIDEO_FORMAT_Y444:
+      if ((gst_buffer_get_size (inbuf) <=
+              outbuf->omx_buf->nAllocLen - outbuf->omx_buf->nOffset) &&
+          (stride == port_def->format.video.nStride)) {
+        outbuf->omx_buf->nFilledLen = gst_buffer_get_size (inbuf);
+
+        GST_LOG_OBJECT (self, "Matched strides - direct copy %u bytes",
+            (guint) outbuf->omx_buf->nFilledLen);
+        gst_buffer_extract (inbuf, 0,
+            outbuf->omx_buf->pBuffer + outbuf->omx_buf->nOffset,
+            outbuf->omx_buf->nFilledLen);
+        ret = TRUE;
+        goto done;
+      } else {
+        GST_ERROR_OBJECT (self, "stride or output buffer size do not matched");
+        ret = FALSE;
+        goto done;
+      }
+      break;
     case GST_VIDEO_FORMAT_I420:{
       gint i, j, height, width;
       guint8 *src, *dest;
@@ -4994,6 +5042,7 @@ filter_supported_formats (GList * negotiation_map)
       case GST_VIDEO_FORMAT_NV16_10LE32:
       case GST_VIDEO_FORMAT_GRAY8:
       case GST_VIDEO_FORMAT_GRAY10_LE32:
+      case GST_VIDEO_FORMAT_Y444:
         cur = g_list_next (cur);
         continue;
       default:
@@ -5055,7 +5104,7 @@ static GstCaps *
 gst_omx_video_enc_getcaps (GstVideoEncoder * encoder, GstCaps * filter)
 {
   GstOMXVideoEnc *self = GST_OMX_VIDEO_ENC (encoder);
-  GList *negotiation_map = NULL;
+  GList *negotiation_map = NULL, *l;
   GstCaps *comp_supported_caps;
   GstCaps *ret;
 
@@ -5065,6 +5114,13 @@ gst_omx_video_enc_getcaps (GstVideoEncoder * encoder, GstCaps * filter)
   negotiation_map =
       gst_omx_video_get_supported_colorformats (self->enc_in_port,
       self->input_state);
+
+  for (l = negotiation_map; l; l = l->next) {
+    GstOMXVideoNegotiationMap *m = l->data;
+    if (m->format == GST_VIDEO_FORMAT_GRAY8 && self->is_yuv444 == 1) {
+      m->format = GST_VIDEO_FORMAT_Y444;
+    }
+  }
   negotiation_map = filter_supported_formats (negotiation_map);
 
   comp_supported_caps = gst_omx_video_get_caps_for_map (negotiation_map);
