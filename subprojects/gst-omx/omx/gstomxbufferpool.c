@@ -365,6 +365,7 @@ gst_omx_buffer_pool_alloc_buffer (GstBufferPool * bpool,
         case GST_VIDEO_FORMAT_GRAY10_LE32:
           break;
         case GST_VIDEO_FORMAT_Y444:
+        case GST_VIDEO_FORMAT_Y444_10LE32:
           stride[1] = nstride;
           offset[1] = offset[0] + (stride[0] * nheight / 3);
           stride[2] = nstride;

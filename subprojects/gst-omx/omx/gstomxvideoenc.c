@@ -2220,6 +2220,11 @@ get_chroma_info_from_input (GstOMXVideoEnc * self, const gchar ** chroma_format,
       *bit_depth_luma = 8;
       *bit_depth_chroma = 0;
       break;
+    case GST_VIDEO_FORMAT_Y444_10LE32:
+      *chroma_format = "4:0:0";
+      *bit_depth_luma = 10;
+      *bit_depth_chroma = 0;
+      break;
     default:
       return FALSE;
   }
@@ -3722,6 +3727,9 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
       case GST_VIDEO_FORMAT_Y444:
         port_def.format.video.eColorFormat = OMX_COLOR_FormatL8;
         break;
+      case GST_VIDEO_FORMAT_Y444_10LE32:
+        port_def.format.video.eColorFormat = OMX_COLOR_FormatL8;
+        break;
       default:
         GST_ERROR_OBJECT (self, "Unsupported format %s",
             gst_video_format_to_string (info->finfo->format));
@@ -3731,8 +3739,12 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   } else {
     for (l = negotiation_map; l; l = l->next) {
       GstOMXVideoNegotiationMap *m = l->data;
-      if (m->format == GST_VIDEO_FORMAT_GRAY8 && self->is_yuv444 == 1)
-        m->format = GST_VIDEO_FORMAT_Y444;
+      if (self->is_yuv444 == 1) {
+        if (m->format == GST_VIDEO_FORMAT_GRAY8)
+          m->format = GST_VIDEO_FORMAT_Y444;
+        else if (m->format == GST_VIDEO_FORMAT_GRAY10_LE32)
+          m->format = GST_VIDEO_FORMAT_Y444_10LE32;
+      }
 
       if (m->format == info->finfo->format) {
         port_def.format.video.eColorFormat = m->type;
@@ -5043,6 +5055,7 @@ filter_supported_formats (GList * negotiation_map)
       case GST_VIDEO_FORMAT_GRAY8:
       case GST_VIDEO_FORMAT_GRAY10_LE32:
       case GST_VIDEO_FORMAT_Y444:
+      case GST_VIDEO_FORMAT_Y444_10LE32:
         cur = g_list_next (cur);
         continue;
       default:
@@ -5117,8 +5130,11 @@ gst_omx_video_enc_getcaps (GstVideoEncoder * encoder, GstCaps * filter)
 
   for (l = negotiation_map; l; l = l->next) {
     GstOMXVideoNegotiationMap *m = l->data;
-    if (m->format == GST_VIDEO_FORMAT_GRAY8 && self->is_yuv444 == 1) {
-      m->format = GST_VIDEO_FORMAT_Y444;
+    if (self->is_yuv444 == 1) {
+      if (m->format == GST_VIDEO_FORMAT_GRAY8)
+        m->format = GST_VIDEO_FORMAT_Y444;
+      else if (m->format == GST_VIDEO_FORMAT_GRAY10_LE32)
+        m->format = GST_VIDEO_FORMAT_Y444_10LE32;
     }
   }
   negotiation_map = filter_supported_formats (negotiation_map);
