@@ -2506,6 +2506,11 @@ gst_kms_sink_copy_to_dumb_buffer (GstKMSSink * self, GstVideoInfo * vinfo,
   if (ret != GST_FLOW_OK)
     goto create_buffer_failed;
 
+  if (self->gray_to_yuv444) {
+    GstVideoMeta *meta = gst_buffer_get_video_meta (inbuf);
+    meta->format = vinfo->finfo->format;
+  }
+
   if (!gst_video_frame_map (&inframe, vinfo, inbuf, GST_MAP_READ))
     goto error_map_src_buffer;
 
