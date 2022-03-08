@@ -82,6 +82,16 @@
 #define ROI_RECT_COLOR_MAX                255
 
 #define GRAY_HEIGHT_MAX                   6480
+#ifndef DRM_FORMAT_Y8
+#define DRM_FORMAT_Y8		fourcc_code('G', 'R', 'E', 'Y') /* 8  Greyscale */
+#endif
+#ifndef DRM_FORMAT_Y10
+#define DRM_FORMAT_Y10		fourcc_code('Y', '1', '0', ' ') /* 10 Greyscale */
+#endif
+#ifndef DRM_FORMAT_X403
+#define DRM_FORMAT_X403		fourcc_code('X', '4', '0', '3') /* non-subsampled Cb:Cr plane 2:10:10:10 */
+#endif
+
 
 GST_DEBUG_CATEGORY_STATIC (gst_kms_sink_debug);
 GST_DEBUG_CATEGORY_STATIC (CAT_PERFORMANCE);
@@ -729,6 +739,12 @@ ensure_allowed_caps (GstKMSSink * self, drmModeConnector * conn,
       mode = &conn->modes[i];
 
     for (j = 0; j < plane->count_formats; j++) {
+      if (self->gray_to_yuv444) {
+        if (plane->formats[j] == DRM_FORMAT_YUV444)
+          plane->formats[j] = DRM_FORMAT_Y8;
+        if (plane->formats[j] == DRM_FORMAT_X403)
+          plane->formats[j] = DRM_FORMAT_Y10;
+      }
       fmt = gst_video_format_from_drm (plane->formats[j]);
       if (fmt == GST_VIDEO_FORMAT_UNKNOWN) {
         GST_INFO_OBJECT (self, "ignoring format %" GST_FOURCC_FORMAT,
@@ -748,6 +764,9 @@ ensure_allowed_caps (GstKMSSink * self, drmModeConnector * conn,
         if (interlaced)
           /* Expose the frame height in caps, not the field */
           height *= 2;
+
+        if (self->gray_to_yuv444)
+          height = 3 * height;
 
         caps = gst_caps_new_simple ("video/x-raw",
             "format", G_TYPE_STRING, format,
@@ -1522,6 +1541,7 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
 {
   GstKMSSink *self;
   GstVideoInfo vinfo;
+  gint fps_n, fps_d;
 
   self = GST_KMS_SINK (bsink);
 
@@ -1529,12 +1549,17 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
     goto invalid_format;
 
   if (self->gray_to_yuv444) {
+    fps_n = vinfo.fps_n;
+    fps_d = vinfo.fps_d;
     if (vinfo.finfo->format == GST_VIDEO_FORMAT_GRAY8)
       gst_video_info_set_format (&vinfo, GST_VIDEO_FORMAT_Y444, vinfo.width,
           vinfo.height / 3);
     else if (vinfo.finfo->format == GST_VIDEO_FORMAT_GRAY10_LE32)
       gst_video_info_set_format (&vinfo, GST_VIDEO_FORMAT_Y444_10LE32,
           vinfo.width, vinfo.height / 3);
+
+    vinfo.fps_n = fps_n;
+    vinfo.fps_d = fps_d;
   }
 
   self->last_width = GST_VIDEO_SINK_WIDTH (self);
