@@ -134,7 +134,7 @@ gst_omx_h264_utils_get_level_from_str (const gchar * level)
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   } else if (g_str_equal (level, "5.2")) {
     return (OMX_VIDEO_AVCLEVELTYPE) OMX_ALG_VIDEO_AVCLevel52;
-  } else if (g_str_equal (level, "6.0")) {
+  } else if (g_str_equal (level, "6")) {
     return (OMX_VIDEO_AVCLEVELTYPE) OMX_ALG_VIDEO_AVCLevel60;
   } else if (g_str_equal (level, "6.1")) {
     return (OMX_VIDEO_AVCLEVELTYPE) OMX_ALG_VIDEO_AVCLevel61;
