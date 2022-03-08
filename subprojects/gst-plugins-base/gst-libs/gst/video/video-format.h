@@ -142,6 +142,7 @@ G_BEGIN_DECLS
  * @GST_VIDEO_FORMAT_BGRA64_BE: reverse RGB with alpha channel last, 16 bits per channel
  * @GST_VIDEO_FORMAT_ABGR64_LE: reverse RGB with alpha channel first, 16 bits per channel
  * @GST_VIDEO_FORMAT_ABGR64_BE: reverse RGB with alpha channel first, 16 bits per channel
+ * @GST_VIDEO_FORMAT_Y444_10LE32: 10-bit variant of @GST_VIDEO_FORMAT_Y444, packed into 32bit words (MSB 2 bits padding) (Since: 1.18)
  *
  * Enum value describing the most common video formats.
  *
@@ -370,6 +371,7 @@ typedef enum {
    * Since: 1.20
    */
   GST_VIDEO_FORMAT_ABGR64_BE,
+ GST_VIDEO_FORMAT_Y444_10LE32,
 } GstVideoFormat;
 
 #define GST_VIDEO_MAX_PLANES 4
@@ -746,7 +748,7 @@ gconstpointer  gst_video_format_get_palette          (GstVideoFormat format, gsi
     "P010_10BE, P010_10LE, NV12_10LE32, NV12_10LE40, Y444, RGBP, GBR, BGRP, NV24, xBGR, BGRx, " \
     "xRGB, RGBx, BGR, IYU2, v308, RGB, Y42B, NV61, NV16, VYUY, UYVY, YVYU, YUY2, I420, " \
     "YV12, NV21, NV12, NV12_64Z32, NV12_4L4, NV12_32L32, Y41B, IYU1, YVU9, YUV9, RGB16, " \
-    "BGR16, RGB15, BGR15, RGB8P, GRAY16_BE, GRAY16_LE, GRAY10_LE32, GRAY8 }"
+    "BGR16, RGB15, BGR15, RGB8P, GRAY16_BE, GRAY16_LE, GRAY10_LE32, GRAY8, Y444_10LE32 }"
 #elif G_BYTE_ORDER == G_LITTLE_ENDIAN
 #define GST_VIDEO_FORMATS_ALL "{ ABGR64_LE, BGRA64_LE, AYUV64, ARGB64_LE, ARGB64, " \
     "RGBA64_LE, ABGR64_BE, BGRA64_BE, ARGB64_BE, RGBA64_BE, GBRA_12LE, GBRA_12BE, Y412_LE, " \
@@ -759,7 +761,7 @@ gconstpointer  gst_video_format_get_palette          (GstVideoFormat format, gsi
     "P010_10LE, NV12_10LE32, NV12_10LE40, P010_10BE, Y444, RGBP, GBR, BGRP, NV24, xBGR, BGRx, " \
     "xRGB, RGBx, BGR, IYU2, v308, RGB, Y42B, NV61, NV16, VYUY, UYVY, YVYU, YUY2, I420, " \
     "YV12, NV21, NV12, NV12_64Z32, NV12_4L4, NV12_32L32, Y41B, IYU1, YVU9, YUV9, RGB16, " \
-    "BGR16, RGB15, BGR15, RGB8P, GRAY16_LE, GRAY16_BE, GRAY10_LE32, GRAY8 }"
+    "BGR16, RGB15, BGR15, RGB8P, GRAY16_LE, GRAY16_BE, GRAY10_LE32, GRAY8, Y444_10LE32 }"
 #endif
 
 GST_VIDEO_API

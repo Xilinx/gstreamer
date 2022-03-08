@@ -91,8 +91,8 @@ struct _GstVideoCodecState
 
   GstCaps *allocation_caps;
 
-  GstVideoMasteringDisplayInfo *mastering_display_info;
-  GstVideoContentLightLevel *content_light_level;
+  struct _GstVideoMasteringDisplayInfo *mastering_display_info;
+  struct _GstVideoContentLightLevel *content_light_level;
 
   /*< private >*/
   gpointer padding[GST_PADDING_LARGE - 3];
