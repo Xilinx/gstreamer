@@ -74,6 +74,7 @@ static const struct
 
   /* YUV 4:4:4 */
   DEF_FMT (NV24, NV24),
+  DEF_FMT (YUV444, Y444),
 
   /* 32bits/p RGB opaque */
   DEF_FMT (XRGB8888, BGRx),
@@ -146,6 +147,7 @@ gst_drm_bpp_from_drm (guint32 drmfmt)
     case DRM_FORMAT_YUV420:
     case DRM_FORMAT_YVU420:
     case DRM_FORMAT_YUV422:
+    case DRM_FORMAT_YUV444:
     case DRM_FORMAT_NV12:
     case DRM_FORMAT_NV21:
     case DRM_FORMAT_NV16:
@@ -243,6 +245,7 @@ gst_drm_height_from_drm (guint32 drmfmt, guint32 height)
 #endif
       ret = height * 2;
       break;
+    case DRM_FORMAT_YUV444:
     case DRM_FORMAT_NV24:
       ret = height * 3;
       break;
