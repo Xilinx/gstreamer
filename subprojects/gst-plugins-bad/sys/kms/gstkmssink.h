@@ -117,6 +117,7 @@ struct _GstKMSSink {
   gboolean skip_vsync;
 
   gboolean force_ntsc_tv;
+  gboolean gray_to_yuv444;
 
   /* roi data */
   gboolean draw_roi;
