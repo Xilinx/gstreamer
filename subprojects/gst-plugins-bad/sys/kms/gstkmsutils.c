@@ -47,6 +47,10 @@
 #define DRM_FORMAT_XV20		fourcc_code('X', 'V', '2', '0') /* 2x1 subsampled Cr:Cb plane 2:10:10:10 */
 #endif
 
+#ifndef DRM_FORMAT_X403
+#define DRM_FORMAT_X403		fourcc_code('X', '4', '0', '3') /* non-subsampled Cb:Cr plane 2:10:10:10 */
+#endif
+
 /* *INDENT-OFF* */
 static const struct
 {
@@ -68,6 +72,7 @@ static const struct
 
   DEF_FMT (Y8, GRAY8),
   DEF_FMT (Y10, GRAY10_LE32),
+  DEF_FMT (X403, Y444_10LE32),
 
   /* 16bits/c YUV 4:2:0 */
   DEF_FMT (P010, P010_10LE),
@@ -177,6 +182,7 @@ gst_drm_bpp_from_drm (guint32 drmfmt)
     case DRM_FORMAT_RGB888:
       bpp = 24;
       break;
+    case DRM_FORMAT_X403:
     default:
       bpp = 32;
       break;
@@ -244,6 +250,7 @@ gst_drm_height_from_drm (guint32 drmfmt, guint32 height)
       ret = height * 2;
       break;
     case DRM_FORMAT_YUV444:
+    case DRM_FORMAT_X403:
     case DRM_FORMAT_NV24:
       ret = height * 3;
       break;
