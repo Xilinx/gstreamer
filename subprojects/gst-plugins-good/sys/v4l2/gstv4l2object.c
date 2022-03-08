@@ -171,6 +171,9 @@ static const GstV4L2FormatDesc gst_v4l2_formats[] = {
   {V4L2_PIX_FMT_XV15, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_XV20, TRUE, GST_V4L2_RAW},
 
+  /* three planes -- one Y, one Cr, one  Cb  */
+  {V4L2_PIX_FMT_X403, TRUE, GST_V4L2_RAW},
+
   /* Bayer formats - see http://www.siliconimaging.com/RGB%20Bayer.htm */
   {V4L2_PIX_FMT_SBGGR8, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_SGBRG8, TRUE, GST_V4L2_RAW},
@@ -1150,6 +1153,7 @@ gst_v4l2_object_format_get_rank (const struct v4l2_fmtdesc *fmt)
     case V4L2_PIX_FMT_NV12M_10BE_8L128:
     case V4L2_PIX_FMT_XV15:
     case V4L2_PIX_FMT_XV20:
+    case V4L2_PIX_FMT_X403:
       rank = YUV_ODD_BASE_RANK;
       break;
 
@@ -1490,6 +1494,9 @@ gst_v4l2_object_v4l2fourcc_to_video_format (guint32 fourcc)
     case V4L2_PIX_FMT_XV20:
       format = GST_VIDEO_FORMAT_NV16_10LE32;
       break;
+    case V4L2_PIX_FMT_X403:
+      format = GST_VIDEO_FORMAT_Y444_10LE32;
+      break;
     default:
       format = GST_VIDEO_FORMAT_UNKNOWN;
       break;
@@ -1639,7 +1646,8 @@ gst_v4l2_object_v4l2fourcc_to_bare_struct (guint32 fourcc)
     case V4L2_PIX_FMT_YVYU:
     case V4L2_PIX_FMT_YUV411P:
     case V4L2_PIX_FMT_XV15:
-    case V4L2_PIX_FMT_XV20:{
+    case V4L2_PIX_FMT_XV20:
+    case V4L2_PIX_FMT_X403:{
       GstVideoFormat format;
       format = gst_v4l2_object_v4l2fourcc_to_video_format (fourcc);
       if (format != GST_VIDEO_FORMAT_UNKNOWN)
@@ -1927,6 +1935,9 @@ gst_v4l2_object_get_caps_info (GstV4l2Object * v4l2object, GstCaps * caps,
         break;
       case GST_VIDEO_FORMAT_Y444:
         fourcc = V4L2_PIX_FMT_YUV444P;
+        break;
+      case GST_VIDEO_FORMAT_Y444_10LE32:
+        fourcc = V4L2_PIX_FMT_X403;
         break;
       case GST_VIDEO_FORMAT_NV12_64Z32:
         fourcc_nc = V4L2_PIX_FMT_NV12MT;
