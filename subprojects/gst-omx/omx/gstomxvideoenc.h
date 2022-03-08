@@ -118,6 +118,7 @@ struct _GstOMXVideoEnc
   guint32 input_crop_width;
   guint32 input_crop_height;
   gboolean hlg_sdr_compatible;
+  gboolean is_yuv444;
 #endif
 
   /* for HDR10 support */
