@@ -134,6 +134,7 @@ enum
   PROP_DISPLAY_WIDTH,
   PROP_DISPLAY_HEIGHT,
   PROP_HOLD_EXTRA_SAMPLE,
+  PROP_DO_TIMESTAMP,
   PROP_CONNECTOR_PROPS,
   PROP_PLANE_PROPS,
   PROP_FD,
@@ -1249,6 +1250,87 @@ gst_kms_sink_update_plane_properties (GstKMSSink * self)
   iter.obj_type_str = "plane";
 
   gst_kms_sink_update_properties (&iter, self->plane_props);
+}
+
+static void
+gst_kms_sink_get_times (GstBaseSink * bsink, GstBuffer * buffer,
+    GstClockTime * start, GstClockTime * end)
+{
+  GstKMSSink *self;
+  GstClockTime timestamp, duration;
+  GstClockTimeDiff vblank_diff = 0, vblank_drift = 0;
+  GstClockTimeDiff ts_diff = 0, ts_drift = 0;
+
+  self = GST_KMS_SINK (bsink);
+  timestamp = GST_BUFFER_PTS (buffer);
+  if (GST_CLOCK_TIME_IS_VALID (timestamp))
+    *start = timestamp;
+  else
+    return;
+
+  if (self->last_ts == timestamp || !self->do_timestamp) {
+    GST_TRACE_OBJECT (self,
+        "self->last_ts: %" GST_TIME_FORMAT " self->do_timestamp %d",
+        GST_TIME_ARGS (self->last_ts), self->do_timestamp);
+    goto done;
+  }
+
+  GST_TRACE_OBJECT (self,
+      "original ts :%" GST_TIME_FORMAT " last_orig_ts :%" GST_TIME_FORMAT
+      " last_ts :%" GST_TIME_FORMAT, GST_TIME_ARGS (timestamp),
+      GST_TIME_ARGS (self->last_orig_ts), GST_TIME_ARGS (self->last_ts));
+
+  if (GST_CLOCK_TIME_IS_VALID (self->prev_last_vblank)
+      && GST_CLOCK_TIME_IS_VALID (self->last_ts)) {
+    vblank_diff = GST_CLOCK_DIFF (self->prev_last_vblank, self->last_vblank);
+    vblank_drift =
+        ABS (GST_CLOCK_DIFF (GST_BUFFER_DURATION (buffer), vblank_diff));
+    ts_diff = GST_CLOCK_DIFF (self->last_orig_ts, timestamp);
+    ts_drift = ABS (GST_CLOCK_DIFF (GST_BUFFER_DURATION (buffer), ts_diff));
+    GST_TRACE_OBJECT (self, "vblank_diff: %" GST_TIME_FORMAT
+        ", vblank_drift: %" GST_TIME_FORMAT ", ts_diff :%" GST_TIME_FORMAT
+        ", ts_drift %" GST_TIME_FORMAT, GST_TIME_ARGS (vblank_diff),
+        GST_TIME_ARGS (vblank_drift), GST_TIME_ARGS (ts_diff),
+        GST_TIME_ARGS (ts_drift));
+
+    if (ts_drift < 2 * GST_MSECOND && vblank_drift < 2 * GST_MSECOND) {
+      *start = self->last_ts + vblank_diff;
+      *end = *start + duration;
+      GST_DEBUG_OBJECT (self, "got start: %" GST_TIME_FORMAT
+          ", adjusted: %" GST_TIME_FORMAT ", delta %" GST_TIME_FORMAT,
+          GST_TIME_ARGS (timestamp), GST_TIME_ARGS (*start),
+          GST_TIME_ARGS ((GST_CLOCK_DIFF (timestamp, *start))));
+    } else {
+      if (ts_drift > 2 * GST_MSECOND) {
+        self->prev_last_vblank = GST_CLOCK_TIME_NONE;
+        self->last_vblank = GST_CLOCK_TIME_NONE;
+        GST_DEBUG_OBJECT (self, "Need resyncing as packet loss happen");
+      }
+      *start = self->last_ts + ts_diff;
+      *end = *start + duration;
+      GST_DEBUG_OBJECT (self, "got start: %" GST_TIME_FORMAT
+          ", gap found, adjusted : to %" GST_TIME_FORMAT " as per ts, delta %"
+          GST_TIME_FORMAT ", ts_diff %" GST_TIME_FORMAT "vblank_diff %"
+          GST_TIME_FORMAT ", ts_drift %" GST_TIME_FORMAT ", vsync_drift %"
+          GST_TIME_FORMAT, GST_TIME_ARGS (timestamp), GST_TIME_ARGS (*start),
+          GST_TIME_ARGS ((GST_CLOCK_DIFF (timestamp, *start))),
+          GST_TIME_ARGS (ts_diff), GST_TIME_ARGS (vblank_diff),
+          GST_TIME_ARGS (ts_drift), GST_TIME_ARGS (vblank_drift));
+    }
+  }
+
+  GST_BUFFER_PTS (buffer) = *start;
+
+  self->last_orig_ts = timestamp;
+  self->last_ts = *start;
+done:
+  duration = GST_BUFFER_DURATION (buffer);
+  if (GST_CLOCK_TIME_IS_VALID (duration)) {
+    *end = *start + duration;
+  }
+  GST_LOG_OBJECT (self, "got times start: %" GST_TIME_FORMAT
+      ", stop: %" GST_TIME_FORMAT, GST_TIME_ARGS (*start),
+      GST_TIME_ARGS (*end));
 }
 
 static gboolean
@@ -2900,6 +2982,8 @@ sync_frame:
   }
 
   if (clock) {
+    if (GST_CLOCK_TIME_IS_VALID (self->last_vblank))
+      self->prev_last_vblank = self->last_vblank;
     self->last_vblank = gst_clock_get_time (clock);
     gst_object_unref (clock);
   }
@@ -3094,6 +3178,9 @@ gst_kms_sink_set_property (GObject * object, guint prop_id,
     case PROP_HOLD_EXTRA_SAMPLE:
       sink->hold_extra_sample = g_value_get_boolean (value);
       break;
+    case PROP_DO_TIMESTAMP:
+      sink->do_timestamp = g_value_get_boolean (value);
+      break;
     case PROP_CONNECTOR_PROPS:{
       const GstStructure *s = gst_value_get_structure (value);
 
@@ -3192,6 +3279,9 @@ gst_kms_sink_get_property (GObject * object, guint prop_id,
     case PROP_HOLD_EXTRA_SAMPLE:
       g_value_set_boolean (value, sink->hold_extra_sample);
       break;
+    case PROP_DO_TIMESTAMP:
+      g_value_set_boolean (value, sink->do_timestamp);
+      break;
     case PROP_CONNECTOR_PROPS:
       gst_value_set_structure (value, sink->connector_props);
       break;
@@ -3254,6 +3344,9 @@ gst_kms_sink_init (GstKMSSink * sink)
   sink->plane_id = -1;
   sink->can_scale = TRUE;
   sink->last_vblank = GST_CLOCK_TIME_NONE;
+  sink->prev_last_vblank = GST_CLOCK_TIME_NONE;
+  sink->last_ts = GST_CLOCK_TIME_NONE;
+  sink->last_orig_ts = GST_CLOCK_TIME_NONE;
   gst_poll_fd_init (&sink->pollfd);
   sink->poll = gst_poll_new (TRUE);
   gst_video_info_init (&sink->vinfo);
@@ -3296,6 +3389,7 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
 
   basesink_class->start = GST_DEBUG_FUNCPTR (gst_kms_sink_start);
   basesink_class->stop = GST_DEBUG_FUNCPTR (gst_kms_sink_stop);
+  basesink_class->get_times = GST_DEBUG_FUNCPTR (gst_kms_sink_get_times);
   basesink_class->set_caps = GST_DEBUG_FUNCPTR (gst_kms_sink_set_caps);
   basesink_class->get_caps = GST_DEBUG_FUNCPTR (gst_kms_sink_get_caps);
   basesink_class->propose_allocation = gst_kms_sink_propose_allocation;
@@ -3429,6 +3523,23 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
       g_param_spec_boolean ("hold-extra-sample",
       "Hold extra sample",
       "When enabled, the sink will keep references to last two buffers", FALSE,
+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
+
+  /**
+   * kmssink: do-timestamp:
+   *
+   * If there is no clock recovery hardware present, there is
+   * a high possibility of clock drift between the display clock
+   * and the one used by upstream. To avoid it or minimize it's impact
+   * we change the buffer PTS as per vsync interval when this is enabled.
+   *
+   * FIXME: This is only supported and tested with non-live usecases.
+   *
+   */
+  g_properties[PROP_DO_TIMESTAMP] =
+      g_param_spec_boolean ("do-timestamp",
+      "Do timestamp",
+      "Do Timestamping as per vsync interval", FALSE,
       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
 
   /**
