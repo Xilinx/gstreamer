@@ -2512,6 +2512,7 @@ gst_kms_sink_fix_field_inversion (GstKMSSink * self, GstBuffer * buffer)
 
   self->buffer_id = fb_id;
 
+  GST_OBJECT_LOCK (self);
   if (!gst_kms_sink_sync (self)) {
     GST_ERROR_OBJECT (self,
         "Repeating buffer for correcting field inversion failed");
@@ -2520,6 +2521,7 @@ gst_kms_sink_fix_field_inversion (GstKMSSink * self, GstBuffer * buffer)
         "Corrected field inversion by repeating buffer with self->buffer_id = %d, self->crtc_id = %d self->fd %x flags = %x",
         self->buffer_id, self->crtc_id, self->fd, flags_local);
   }
+  GST_OBJECT_UNLOCK (self);
 }
 
 static void
@@ -2576,6 +2578,8 @@ gst_kms_sink_avoid_field_inversion (GstKMSSink * self, GstClock * clock)
       GST_DEBUG_OBJECT (self,
           "Repeating buffer %d as vblank was about to miss since pred_vsync was %"
           G_GUINT64_FORMAT, i + 1, pred_vsync_time);
+
+      GST_OBJECT_LOCK (self);
       if (!gst_kms_sink_sync (self)) {
         GST_DEBUG_OBJECT (self, "Repeating buffer failed");
       } else {
@@ -2583,6 +2587,7 @@ gst_kms_sink_avoid_field_inversion (GstKMSSink * self, GstClock * clock)
             "Repeated buffer with self->buffer_id = %d, self->crtc_id = %d self->fd %x flags = %x i = %d",
             self->buffer_id, self->crtc_id, self->fd, flags_local, i);
       }
+      GST_OBJECT_UNLOCK (self);
     }
   }
 }
