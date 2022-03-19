@@ -948,6 +948,33 @@ gst_kms_sink_update_plane_properties (GstKMSSink * self)
   gst_kms_sink_update_properties (&iter, self->plane_props);
 }
 
+
+static void
+gst_kms_sink_get_next_vsync_time (GstKMSSink * self, GstClock * clock,
+    GstClockTimeDiff * pred_vsync_time)
+{
+  GstClockTime time;
+  GstClockTimeDiff vblank_diff;
+
+  /* Predicted vsync time is when next vsync will come, calculate it from
+   * last_vblank time-stamp */
+  time = gst_clock_get_time (clock);
+  if (GST_CLOCK_TIME_IS_VALID (self->last_vblank)
+      && GST_BUFFER_DURATION_IS_VALID (self->last_buffer)) {
+    vblank_diff = GST_CLOCK_DIFF (self->last_vblank, time);
+    if (vblank_diff < GST_BUFFER_DURATION (self->last_buffer))
+      *pred_vsync_time =
+          GST_CLOCK_DIFF (vblank_diff, GST_BUFFER_DURATION (self->last_buffer));
+    else
+      *pred_vsync_time = 0;
+  } else {
+    *pred_vsync_time = 0;
+  }
+  GST_DEBUG_OBJECT (self, "got current time: %" GST_TIME_FORMAT
+      ", next vsync in %" G_GUINT64_FORMAT, GST_TIME_ARGS (time),
+      *pred_vsync_time);
+}
+
 static void
 gst_kms_sink_get_times (GstBaseSink * bsink, GstBuffer * buffer,
     GstClockTime * start, GstClockTime * end)
@@ -2403,20 +2430,7 @@ xlnx_ll_synchronize (GstKMSSink * self, GstBuffer * buffer, GstClock * clock)
   time = gst_clock_get_time (clock);
   diff = GST_CLOCK_DIFF (meta->timestamp, time);
 
-  /* Predicted vblank time is when next vblank will come, calculate it from
-   * last_vblank time-stamp */
-  if (GST_CLOCK_TIME_IS_VALID (self->last_vblank)
-      && GST_BUFFER_DURATION_IS_VALID (buffer)) {
-    vblank_diff = GST_CLOCK_DIFF (self->last_vblank, time);
-    if (vblank_diff < GST_BUFFER_DURATION (buffer))
-      pred_vblank_time =
-          GST_CLOCK_DIFF (vblank_diff, GST_BUFFER_DURATION (buffer));
-    else
-      pred_vblank_time = 0;
-  } else {
-    pred_vblank_time = 0;
-  }
-
+  gst_kms_sink_get_next_vsync_time (self, clock, &pred_vblank_time);
   wait_time = diff + pred_vblank_time;
 
   GST_LOG_OBJECT (self,
@@ -2557,15 +2571,14 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
     video_height = src.h = self->last_height;
   }
 
-  if (self->xlnx_ll) {
-    clock = gst_element_get_clock (GST_ELEMENT_CAST (self));
-    if (!clock) {
-      GST_DEBUG_OBJECT (self, "no clock set yet");
-      goto bail;
-    }
+  clock = gst_element_get_clock (GST_ELEMENT_CAST (self));
+  if (!clock) {
+    GST_DEBUG_OBJECT (self, "no clock set yet");
+    goto bail;
+   }
 
+  if (self->xlnx_ll)
     xlnx_ll_synchronize (self, buffer, clock);
-  }
 
   if (!buffer)
     return GST_FLOW_ERROR;
