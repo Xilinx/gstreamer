@@ -68,6 +68,7 @@ struct _GstKMSSink
   gint crtc_id;
   gint plane_id;
   gint primary_plane_id;
+  guint error_correction_margin;
   guint pipe;
 
   /* crtc data */
@@ -88,6 +89,7 @@ struct _GstKMSSink
   gboolean avoid_field_inversion;
   gboolean fix_field_inversion;
   gboolean adjust_latency;
+  gboolean limit_error_recovery;
   GstStructure *connector_props;
   GstStructure *plane_props;
   gboolean fullscreen_enabled;
