@@ -92,7 +92,7 @@ struct _GstKMSSink
   GstStructure *connector_props;
   GstStructure *plane_props;
   gboolean fullscreen_enabled;
-
+  gboolean is_last_err_corrected;
   GstVideoInfo vinfo;
   GstVideoInfo vinfo_crtc;
   GstCaps *allowed_caps;
@@ -126,6 +126,7 @@ struct _GstKMSSink
   GstClockTime prev_last_vblank;
   GstClockTime last_ts;
   GstClockTime last_orig_ts;
+  GstClockTime last_err_corrected_ts;
 
   gboolean force_ntsc_tv;
   gboolean gray_to_yuv444;
