@@ -72,6 +72,7 @@
 #define GST_PLUGIN_NAME "kmssink"
 #define GST_PLUGIN_DESC "Video sink using the Linux kernel mode setting API"
 #define OMX_ALG_GST_EVENT_INSERT_PREFIX_SEI "omx-alg/sei-parsed"
+#define VSYNC_GAP_USEC 2500
 
 #ifndef DRM_MODE_FB_ALTERNATE_TOP
 #  define DRM_MODE_FB_ALTERNATE_TOP       (1<<2)        /* for alternate top field */
@@ -135,6 +136,7 @@ enum
   PROP_DISPLAY_HEIGHT,
   PROP_HOLD_EXTRA_SAMPLE,
   PROP_DO_TIMESTAMP,
+  PROP_AVOID_FIELD_INVERSION,
   PROP_CONNECTOR_PROPS,
   PROP_PLANE_PROPS,
   PROP_FD,
@@ -1254,32 +1256,6 @@ gst_kms_sink_update_plane_properties (GstKMSSink * self)
 
 
 static void
-gst_kms_sink_get_next_vsync_time (GstKMSSink * self, GstClock * clock,
-    GstClockTimeDiff * pred_vsync_time)
-{
-  GstClockTime time;
-  GstClockTimeDiff vblank_diff;
-
-  /* Predicted vsync time is when next vsync will come, calculate it from
-   * last_vblank time-stamp */
-  time = gst_clock_get_time (clock);
-  if (GST_CLOCK_TIME_IS_VALID (self->last_vblank)
-      && GST_BUFFER_DURATION_IS_VALID (self->last_buffer)) {
-    vblank_diff = GST_CLOCK_DIFF (self->last_vblank, time);
-    if (vblank_diff < GST_BUFFER_DURATION (self->last_buffer))
-      *pred_vsync_time =
-          GST_CLOCK_DIFF (vblank_diff, GST_BUFFER_DURATION (self->last_buffer));
-    else
-      *pred_vsync_time = 0;
-  } else {
-    *pred_vsync_time = 0;
-  }
-  GST_DEBUG_OBJECT (self, "got current time: %" GST_TIME_FORMAT
-      ", next vsync in %" G_GUINT64_FORMAT, GST_TIME_ARGS (time),
-      *pred_vsync_time);
-}
-
-static void
 gst_kms_sink_get_times (GstBaseSink * bsink, GstBuffer * buffer,
     GstClockTime * start, GstClockTime * end)
 {
@@ -1484,6 +1460,9 @@ retry_find_plane:
   GST_OBJECT_UNLOCK (self);
 
   self->buffer_id = crtc->buffer_id;
+
+  if (self->avoid_field_inversion)
+    self->hold_extra_sample = TRUE;
 
   self->mm_width = conn->mmWidth;
   self->mm_height = conn->mmHeight;
@@ -2715,6 +2694,32 @@ done:
 }
 
 static void
+gst_kms_sink_get_next_vsync_time (GstKMSSink * self, GstClock * clock,
+    GstClockTimeDiff * pred_vsync_time)
+{
+  GstClockTime time;
+  GstClockTimeDiff vblank_diff;
+
+  /* Predicted vsync time is when next vsync will come, calculate it from
+   * last_vblank time-stamp */
+  time = gst_clock_get_time (clock);
+  if (GST_CLOCK_TIME_IS_VALID (self->last_vblank)
+      && GST_BUFFER_DURATION_IS_VALID (self->last_buffer)) {
+    vblank_diff = GST_CLOCK_DIFF (self->last_vblank, time);
+    if (vblank_diff < GST_BUFFER_DURATION (self->last_buffer))
+      *pred_vsync_time =
+          GST_CLOCK_DIFF (vblank_diff, GST_BUFFER_DURATION (self->last_buffer));
+    else
+      *pred_vsync_time = 0;
+  } else {
+    *pred_vsync_time = 0;
+  }
+  GST_DEBUG_OBJECT (self, "got current time: %" GST_TIME_FORMAT
+      ", next vsync in %" G_GUINT64_FORMAT, GST_TIME_ARGS (time),
+      *pred_vsync_time);
+}
+
+static void
 xlnx_ll_synchronize (GstKMSSink * self, GstBuffer * buffer, GstClock * clock)
 {
   GstReferenceTimestampMeta *meta;
@@ -2767,6 +2772,72 @@ xlnx_ll_synchronize (GstKMSSink * self, GstBuffer * buffer, GstClock * clock)
     clock_id = gst_clock_new_single_shot_id (clock, time);
     gst_clock_id_wait (clock_id, NULL);
     gst_clock_id_unref (clock_id);
+  }
+}
+
+
+static void
+gst_kms_sink_avoid_field_inversion (GstKMSSink * self, GstClock * clock)
+{
+  guint32 flags_local = 0, i = 0;
+  GstBuffer *buf = NULL;
+  GstClockTimeDiff pred_vsync_time;
+  GstMemory *mem;
+  guint32 fb_id;
+
+  gst_kms_sink_get_next_vsync_time (self, clock, &pred_vsync_time);
+  if (pred_vsync_time != 0 && pred_vsync_time < VSYNC_GAP_USEC * GST_USECOND) {
+    for (i = 0; i < 2; i++) {
+      if (GST_BUFFER_FLAG_IS_SET (self->previous_last_buffer,
+              GST_VIDEO_BUFFER_FLAG_ONEFIELD) && !i) {
+        buf = self->previous_last_buffer;
+        if (GST_BUFFER_FLAG_IS_SET (buf, GST_VIDEO_BUFFER_FLAG_TFF)) {
+          GST_DEBUG_OBJECT (self,
+              "Received TOP field, repeating previous last buffer");
+          flags_local |= DRM_MODE_FB_ALTERNATE_TOP;
+        } else {
+          GST_DEBUG_OBJECT (self,
+              "Received BOTTOM field, repeating previous last buffer");
+          flags_local |= DRM_MODE_FB_ALTERNATE_BOTTOM;
+        }
+      } else {
+        buf = self->last_buffer;
+        if (GST_BUFFER_FLAG_IS_SET (buf, GST_VIDEO_BUFFER_FLAG_TFF)) {
+          GST_DEBUG_OBJECT (self, "Received TOP field, repeating last buffer");
+          flags_local |= DRM_MODE_FB_ALTERNATE_TOP;
+        } else {
+          GST_DEBUG_OBJECT (self,
+              "Received BOTTOM field changing to bottom, repeating last buffer");
+          flags_local |= DRM_MODE_FB_ALTERNATE_BOTTOM;
+        }
+      }
+      mem = gst_buffer_peek_memory (buf, 0);
+      if (!gst_kms_memory_add_fb (mem, &self->vinfo, flags_local)) {
+        GST_DEBUG_OBJECT (self, "Failed to get buffer object for buffer  %d",
+            i + 1);
+        return;
+      }
+
+      fb_id = gst_kms_memory_get_fb_id (mem);
+      if (fb_id == 0) {
+        GST_DEBUG_OBJECT (self, "Failed to get fb id  for buffer %d", i + 1);
+        return;
+      }
+
+      self->buffer_id = fb_id;
+
+      GST_DEBUG_OBJECT (self, "displaying repeat fb %d", fb_id);
+      GST_DEBUG_OBJECT (self,
+          "Repeating buffer %d as vblank was about to miss since pred_vsync was %"
+          G_GUINT64_FORMAT, i + 1, pred_vsync_time);
+      if (!gst_kms_sink_sync (self)) {
+        GST_DEBUG_OBJECT (self, "Repeating buffer failed");
+      } else {
+        GST_DEBUG_OBJECT (self,
+            "Repeated buffer with self->buffer_id = %d, self->crtc_id = %d self->fd %x flags = %x i = %d",
+            self->buffer_id, self->crtc_id, self->fd, flags_local, i);
+      }
+    }
   }
 }
 
@@ -2891,6 +2962,10 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
 
   if (!buffer)
     return GST_FLOW_ERROR;
+
+  if (self->last_buffer && GST_VIDEO_INFO_INTERLACE_MODE (&self->last_vinfo)
+      && self->prev_last_vblank && self->avoid_field_inversion)
+    gst_kms_sink_avoid_field_inversion (self, clock);
 
   if (GST_BUFFER_FLAG_IS_SET (buffer, GST_VIDEO_BUFFER_FLAG_ONEFIELD)) {
     if (GST_BUFFER_FLAG_IS_SET (buffer, GST_VIDEO_BUFFER_FLAG_TFF)) {
@@ -3194,6 +3269,9 @@ gst_kms_sink_set_property (GObject * object, guint prop_id,
     case PROP_DO_TIMESTAMP:
       sink->do_timestamp = g_value_get_boolean (value);
       break;
+    case PROP_AVOID_FIELD_INVERSION:
+      sink->avoid_field_inversion = g_value_get_boolean (value);
+      break;
     case PROP_CONNECTOR_PROPS:{
       const GstStructure *s = gst_value_get_structure (value);
 
@@ -3294,6 +3372,9 @@ gst_kms_sink_get_property (GObject * object, guint prop_id,
       break;
     case PROP_DO_TIMESTAMP:
       g_value_set_boolean (value, sink->do_timestamp);
+      break;
+    case PROP_AVOID_FIELD_INVERSION:
+      g_value_set_boolean (value, sink->avoid_field_inversion);
       break;
     case PROP_CONNECTOR_PROPS:
       gst_value_set_structure (value, sink->connector_props);
@@ -3553,6 +3634,23 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
       g_param_spec_boolean ("do-timestamp",
       "Do timestamp",
       "Do Timestamping as per vsync interval", FALSE,
+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
+
+  /**
+   * kmssink: avoid-field-inversion:
+   *
+   * If display clock running faster than rate at which input is coming,
+   * at some point it's highly likely that we fail to submit buffer
+   * before vsync, and in case of alternate interlace mode it may cause
+   * field inversion problem as display will repeat previous field with
+   * invert polarity. To avoid this, kmssink predicts the next vblank and
+   * if we are too close to vblank, we repeat previous pair before submitting
+   * next field.
+   */
+  g_properties[PROP_AVOID_FIELD_INVERSION] =
+      g_param_spec_boolean ("avoid-field-inversion",
+      "Avoid field inversion",
+      "Predict and avoid field inversion by repeating previous pair", FALSE,
       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
 
   /**
