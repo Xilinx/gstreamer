@@ -29,7 +29,6 @@
 #include <gst/video/gstvideosink.h>
 
 G_BEGIN_DECLS
-
 #define GST_TYPE_KMS_SINK \
   (gst_kms_sink_get_type())
 #define GST_KMS_SINK(obj) \
@@ -40,7 +39,6 @@ G_BEGIN_DECLS
   (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_KMS_SINK))
 #define GST_IS_KMS_SINK_CLASS(klass) \
   (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_KMS_SINK))
-
 typedef struct _GstKMSSink GstKMSSink;
 typedef struct _GstKMSSinkClass GstKMSSinkClass;
 
@@ -59,10 +57,11 @@ typedef struct
   roi_coordinate *coordinate_param;
 } roi_params;
 
-struct _GstKMSSink {
+struct _GstKMSSink
+{
   GstVideoSink videosink;
 
-  /*< private >*/
+  /*< private > */
   gint fd;
   gint conn_id;
   gint crtc_id;
@@ -84,6 +83,7 @@ struct _GstKMSSink {
   gboolean modesetting_enabled;
   gboolean restore_crtc;
   gboolean hold_extra_sample;
+  gboolean do_timestamp;
   GstStructure *connector_props;
   GstStructure *plane_props;
   gboolean fullscreen_enabled;
@@ -117,6 +117,10 @@ struct _GstKMSSink {
   gboolean xlnx_ll;
   /* timestamp of last vblank */
   GstClockTime last_vblank;
+  /* timestamp of previous to last vblank */
+  GstClockTime prev_last_vblank;
+  GstClockTime last_ts;
+  GstClockTime last_orig_ts;
 
   gboolean force_ntsc_tv;
   gboolean gray_to_yuv444;
