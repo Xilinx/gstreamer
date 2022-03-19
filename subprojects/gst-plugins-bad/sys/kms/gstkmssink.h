@@ -114,6 +114,10 @@ struct _GstKMSSink {
   GstVideoRectangle pending_rect;
   gboolean reconfigure;
 
+  gboolean xlnx_ll;
+  /* timestamp of last vblank */
+  GstClockTime last_vblank;
+
   gboolean force_ntsc_tv;
   gboolean gray_to_yuv444;
 

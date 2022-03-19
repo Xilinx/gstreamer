@@ -969,6 +969,8 @@ gst_kms_sink_start (GstBaseSink * bsink)
   pres = NULL;
   plane = NULL;
 
+  self->xlnx_ll = FALSE;
+
   if (self->devname || self->bus_id)
     self->fd = drmOpen (self->devname, self->bus_id);
   else
@@ -1607,6 +1609,18 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
     self->render_rect = self->pending_rect;
   }
   GST_OBJECT_UNLOCK (self);
+
+  {
+    GstCapsFeatures *features;
+
+    features = gst_caps_get_features (caps, 0);
+    if (features
+        && gst_caps_features_contains (features,
+            GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
+      GST_DEBUG_OBJECT (self, "Input uses XLNX-LowLatency");
+      self->xlnx_ll = TRUE;
+    }
+  }
 
   gst_kms_sink_hdr_set_metadata (self, caps);
 
@@ -2282,6 +2296,75 @@ done:
   return buf;
 }
 
+static void
+xlnx_ll_synchronize (GstKMSSink * self, GstBuffer * buffer, GstClock * clock)
+{
+  GstReferenceTimestampMeta *meta;
+  static GstCaps *caps = NULL;
+  GstClockTime time;
+  GstClockTimeDiff diff;
+  GstClockTimeDiff vblank_diff;
+  GstClockTimeDiff pred_vblank_time;
+  GstClockTimeDiff wait_time;
+
+  if (G_UNLIKELY (!caps)) {
+    caps = gst_caps_new_empty_simple ("timestamp/x-xlnx-ll-decoder-out");
+    GST_MINI_OBJECT_FLAG_SET (caps, GST_MINI_OBJECT_FLAG_MAY_BE_LEAKED);
+  }
+
+  meta = gst_buffer_get_reference_timestamp_meta (buffer, caps);
+  if (!meta) {
+    GST_DEBUG_OBJECT (self, "no decoder out meta defined");
+    return;
+  }
+
+  time = gst_clock_get_time (clock);
+  diff = GST_CLOCK_DIFF (meta->timestamp, time);
+
+  /* Predicted vblank time is when next vblank will come, calculate it from
+   * last_vblank time-stamp */
+  if (GST_CLOCK_TIME_IS_VALID (self->last_vblank)
+      && GST_BUFFER_DURATION_IS_VALID (buffer)) {
+    vblank_diff = GST_CLOCK_DIFF (self->last_vblank, time);
+    if (vblank_diff < GST_BUFFER_DURATION (buffer))
+      pred_vblank_time =
+          GST_CLOCK_DIFF (vblank_diff, GST_BUFFER_DURATION (buffer));
+    else
+      pred_vblank_time = 0;
+  } else {
+    pred_vblank_time = 0;
+  }
+
+  wait_time = diff + pred_vblank_time;
+
+  GST_LOG_OBJECT (self,
+      "meta: %" GST_TIME_FORMAT " clock: %" GST_TIME_FORMAT
+      " diff: %" GST_TIME_FORMAT " frame_time: %" GST_TIME_FORMAT
+      " pred_vblank_time: %" GST_TIME_FORMAT, GST_TIME_ARGS (meta->timestamp),
+      GST_TIME_ARGS (time), GST_TIME_ARGS (diff),
+      GST_TIME_ARGS (GST_BUFFER_DURATION (buffer)),
+      GST_TIME_ARGS (pred_vblank_time));
+
+  /* Make sure decoder has enough time (half frame duration) to write the buffer
+   * before passing to display */
+  if (GST_BUFFER_DURATION_IS_VALID (buffer)
+      && wait_time < GST_BUFFER_DURATION (buffer) / 2) {
+    /* We didn't wait enough */
+    GstClockID clock_id;
+    GstClockTimeDiff delta;
+
+    delta = GST_BUFFER_DURATION (buffer) / 2 - wait_time;
+    time += delta;
+
+    GST_LOG_OBJECT (self, "need to wait extra %" GST_TIME_FORMAT,
+        GST_TIME_ARGS (delta));
+
+    clock_id = gst_clock_new_single_shot_id (clock, time);
+    gst_clock_id_wait (clock_id, NULL);
+    gst_clock_id_unref (clock_id);
+  }
+}
+
 static gboolean
 handle_sei_info (GstKMSSink * self, GstEvent * event)
 {
@@ -2373,6 +2456,7 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
   GstVideoRectangle dst = { 0, };
   GstVideoRectangle result;
   GstFlowReturn res;
+  GstClock *clock = NULL;
   guint32 flags = 0;
 
   self = GST_KMS_SINK (vsink);
@@ -2389,6 +2473,16 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
     vinfo = &self->last_vinfo;
     video_width = src.w = self->last_width;
     video_height = src.h = self->last_height;
+  }
+
+  if (self->xlnx_ll) {
+    clock = gst_element_get_clock (GST_ELEMENT_CAST (self));
+    if (!clock) {
+      GST_DEBUG_OBJECT (self, "no clock set yet");
+      goto bail;
+    }
+
+    xlnx_ll_synchronize (self, buffer, clock);
   }
 
   if (!buffer)
@@ -2490,6 +2584,11 @@ sync_frame:
   if (!gst_kms_sink_sync (self)) {
     GST_OBJECT_UNLOCK (self);
     goto bail;
+  }
+
+  if (clock) {
+    self->last_vblank = gst_clock_get_time (clock);
+    gst_object_unref (clock);
   }
 
   /* Save the rendered buffer and its metadata in case a redraw is needed */
@@ -2781,6 +2880,7 @@ gst_kms_sink_init (GstKMSSink * sink)
   sink->conn_id = -1;
   sink->plane_id = -1;
   sink->can_scale = TRUE;
+  sink->last_vblank = GST_CLOCK_TIME_NONE;
   gst_poll_fd_init (&sink->pollfd);
   sink->poll = gst_poll_new (TRUE);
   gst_video_info_init (&sink->vinfo);
