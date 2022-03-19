@@ -137,6 +137,7 @@ enum
   PROP_HOLD_EXTRA_SAMPLE,
   PROP_DO_TIMESTAMP,
   PROP_AVOID_FIELD_INVERSION,
+  PROP_ADJUST_LATENCY,
   PROP_CONNECTOR_PROPS,
   PROP_PLANE_PROPS,
   PROP_FD,
@@ -1479,6 +1480,7 @@ retry_find_plane:
       GST_DEBUG_OBJECT (self, "Fix field inversion and hold extra sample set");
     }
   }
+
   self->mm_width = conn->mmWidth;
   self->mm_height = conn->mmHeight;
 
@@ -1580,6 +1582,7 @@ primary_plane_failed:
         ("Could not find primary plane for crtc"), (NULL));
     goto bail;
   }
+
 allowed_caps_failed:
   {
     GST_ELEMENT_ERROR (self, RESOURCE, SETTINGS,
@@ -3004,6 +3007,7 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
   GstClock *clock = NULL;
   guint32 flags = 0;
   gboolean err = FALSE;
+  GstClockTime start = GST_CLOCK_TIME_NONE, end = GST_CLOCK_TIME_NONE;
 
   self = GST_KMS_SINK (vsink);
 
@@ -3035,8 +3039,24 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
 
   if (GST_VIDEO_INFO_INTERLACE_MODE (&self->last_vinfo)) {
     if (self->last_buffer && self->prev_last_vblank
-        && self->avoid_field_inversion)
+        && self->avoid_field_inversion) {
+
+      start = gst_clock_get_time (clock);
       gst_kms_sink_avoid_field_inversion (self, clock);
+      end = gst_clock_get_time (clock);
+
+      if (self->adjust_latency) {
+        gst_base_sink_set_processing_deadline (GST_BASE_SINK (self),
+            gst_base_sink_get_processing_deadline (GST_BASE_SINK (self)) +
+            GST_CLOCK_DIFF (start, end));
+        GST_DEBUG_OBJECT (self,
+            "Recovery time to avoid inversion : %" GST_TIME_FORMAT
+            " Set processing deadline to : %" GST_TIME_FORMAT,
+            GST_TIME_ARGS (GST_CLOCK_DIFF (start, end)),
+            GST_TIME_ARGS (gst_base_sink_get_processing_deadline (GST_BASE_SINK
+                    (self))));
+      }
+    }
 
     if (self->fix_field_inversion && self->previous_last_buffer) {
       err = find_property_value_for_plane_id (self->fd,
@@ -3044,7 +3064,22 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
       if (err == 1) {
         GST_WARNING_OBJECT (self,
             "Error bit is set we are in inversion mode as fid_err = %d", err);
+
+        start = gst_clock_get_time (clock);
         gst_kms_sink_fix_field_inversion (self, buffer);
+        end = gst_clock_get_time (clock);
+
+        if (self->adjust_latency) {
+          gst_base_sink_set_processing_deadline (GST_BASE_SINK (self),
+              gst_base_sink_get_processing_deadline (GST_BASE_SINK (self)) +
+              GST_CLOCK_DIFF (start, end));
+          GST_DEBUG_OBJECT (self,
+              "Recovery time to fix inversion : %" GST_TIME_FORMAT
+              " Set processing deadline to : %" GST_TIME_FORMAT,
+              GST_TIME_ARGS (GST_CLOCK_DIFF (start, end)),
+              GST_TIME_ARGS (gst_base_sink_get_processing_deadline
+                  (GST_BASE_SINK (self))));
+        }
       }
     }
   }
@@ -3354,6 +3389,9 @@ gst_kms_sink_set_property (GObject * object, guint prop_id,
     case PROP_AVOID_FIELD_INVERSION:
       sink->avoid_field_inversion = g_value_get_boolean (value);
       break;
+    case PROP_ADJUST_LATENCY:
+      sink->adjust_latency = g_value_get_boolean (value);
+      break;
     case PROP_CONNECTOR_PROPS:{
       const GstStructure *s = gst_value_get_structure (value);
 
@@ -3457,6 +3495,9 @@ gst_kms_sink_get_property (GObject * object, guint prop_id,
       break;
     case PROP_AVOID_FIELD_INVERSION:
       g_value_set_boolean (value, sink->avoid_field_inversion);
+      break;
+    case PROP_ADJUST_LATENCY:
+      g_value_set_boolean (value, sink->adjust_latency);
       break;
     case PROP_CONNECTOR_PROPS:
       gst_value_set_structure (value, sink->connector_props);
@@ -3733,6 +3774,19 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
       g_param_spec_boolean ("avoid-field-inversion",
       "Avoid field inversion",
       "Predict and avoid field inversion by repeating previous pair", FALSE,
+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
+
+  /**
+   * kmssink: adjust-latency:
+   *
+   * Adjust latency by increasing the processing deadline to compensate
+   * time taken for any preprocessing or correction done in kmssink
+   * before displaying the buffer.
+   */
+  g_properties[PROP_ADJUST_LATENCY] =
+      g_param_spec_boolean ("adjust-latency",
+      "Adjust latency",
+      "Adjust latency to compensate any preprocessing done", FALSE,
       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
 
   /**

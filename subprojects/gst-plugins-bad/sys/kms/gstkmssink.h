@@ -87,6 +87,7 @@ struct _GstKMSSink
   gboolean do_timestamp;
   gboolean avoid_field_inversion;
   gboolean fix_field_inversion;
+  gboolean adjust_latency;
   GstStructure *connector_props;
   GstStructure *plane_props;
   gboolean fullscreen_enabled;
