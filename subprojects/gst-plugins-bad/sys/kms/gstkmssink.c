@@ -1562,8 +1562,6 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
     vinfo.fps_d = fps_d;
   }
 
-  self->last_width = GST_VIDEO_SINK_WIDTH (self);
-  self->last_height = GST_VIDEO_SINK_HEIGHT (self);
   /* on the first set_caps self->vinfo is not initialized, yet. */
   if (self->vinfo.finfo->format != GST_VIDEO_FORMAT_UNKNOWN)
     self->last_vinfo = self->vinfo;
@@ -2442,8 +2440,8 @@ retry_set_plane:
     src.w = crop->width;
     src.h = crop->height;
   } else {
-    src.w = GST_VIDEO_INFO_WIDTH (vinfo);
-    src.h = GST_VIDEO_INFO_HEIGHT (vinfo);
+    src.w = video_width;
+    src.h = video_height;
   }
 
   /* handle out of screen case */
