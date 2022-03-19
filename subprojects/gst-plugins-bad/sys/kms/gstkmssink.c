@@ -1829,12 +1829,11 @@ out:
   return TRUE;
 }
 
-static void
-gst_kms_sink_hdr_set_metadata (GstKMSSink * self, GstCaps * caps)
+static gint
+gst_kms_sink_hdr_set_metadata (GstKMSSink * self, GstCaps * caps, guint32 * id)
 {
 #ifdef HAVE_HDR_OUTPUT_METADATA
-  guint32 id;
-  gint ret;
+  gint ret = 0;
   GstVideoMasteringDisplayInfo minfo;
   GstVideoContentLightLevel cinfo;
   struct hdr_metadata_infoframe *hdr_infoframe;
@@ -1912,33 +1911,30 @@ gst_kms_sink_hdr_set_metadata (GstKMSSink * self, GstCaps * caps)
 #ifdef HAVE_GEN_HDR_OUTPUT_METADATA
   ret =
       drmModeCreatePropertyBlob (self->fd, &hdr_metadata,
-      sizeof (struct gen_hdr_output_metadata), &id);
+      sizeof (struct gen_hdr_output_metadata), id);
 #else
   ret =
       drmModeCreatePropertyBlob (self->fd, hdr_infoframe,
-      sizeof (struct hdr_metadata_infoframe), &id);
+      sizeof (struct hdr_metadata_infoframe), id);
 #endif
-  if (ret)
+  if (ret) {
     GST_WARNING_OBJECT (self, "drmModeCreatePropertyBlob failed: %s (%d)",
         strerror (-ret), ret);
+  } else {
+    if (!self->connector_props)
+      self->connector_props =
+          gst_structure_new ("connector-props", prop_name,
+          G_TYPE_INT64, *id, NULL);
+    else
+      gst_structure_set (self->connector_props, prop_name,
+          G_TYPE_INT64, *id, NULL);
+  }
 
-  if (!self->connector_props)
-    self->connector_props =
-        gst_structure_new ("connector-props", prop_name,
-        G_TYPE_INT64, id, NULL);
-  else
-    gst_structure_set (self->connector_props, prop_name,
-        G_TYPE_INT64, id, NULL);
-
-  gst_kms_sink_update_connector_properties (self);
-  ret = drmModeDestroyPropertyBlob (self->fd, id);
-  if (ret)
-    GST_WARNING_OBJECT (self, "drmModeDestroyPropertyBlob failed: %s (%d)",
-        strerror (-ret), ret);
 #ifndef HAVE_GEN_HDR_OUTPUT_METADATA
   g_free (hdr_infoframe);
 #endif
 
+  return ret;
 #endif /* HAVE_HDR_OUTPUT_METADATA */
 }
 
@@ -1948,6 +1944,8 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   GstKMSSink *self;
   GstVideoInfo vinfo;
   gint fps_n, fps_d;
+  guint32 hdr_id;
+  gint ret = 0;
 
   self = GST_KMS_SINK (bsink);
 
@@ -2027,7 +2025,14 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
     }
   }
 
-  gst_kms_sink_hdr_set_metadata (self, caps);
+  ret = gst_kms_sink_hdr_set_metadata (self, caps, &hdr_id);
+
+  if (!ret) {
+    ret = drmModeDestroyPropertyBlob (self->fd, hdr_id);
+    if (ret)
+      GST_WARNING_OBJECT (self, "drmModeDestroyPropertyBlob failed: %s (%d)",
+          strerror (-ret), ret);
+  }
 
   GST_DEBUG_OBJECT (self, "negotiated caps = %" GST_PTR_FORMAT, caps);
 
