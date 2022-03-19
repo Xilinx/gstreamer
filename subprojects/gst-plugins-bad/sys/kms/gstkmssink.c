@@ -1483,9 +1483,6 @@ retry_find_plane:
   g_object_notify_by_pspec (G_OBJECT (self), g_properties[PROP_DISPLAY_WIDTH]);
   g_object_notify_by_pspec (G_OBJECT (self), g_properties[PROP_DISPLAY_HEIGHT]);
 
-  gst_kms_sink_update_connector_properties (self);
-  gst_kms_sink_update_plane_properties (self);
-
   ret = TRUE;
 
 bail:
@@ -2026,6 +2023,9 @@ gst_kms_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   }
 
   ret = gst_kms_sink_hdr_set_metadata (self, caps, &hdr_id);
+
+  gst_kms_sink_update_connector_properties (self);
+  gst_kms_sink_update_plane_properties (self);
 
   if (!ret) {
     ret = drmModeDestroyPropertyBlob (self->fd, hdr_id);
