@@ -128,6 +128,7 @@ enum
   PROP_CAN_SCALE,
   PROP_DISPLAY_WIDTH,
   PROP_DISPLAY_HEIGHT,
+  PROP_HOLD_EXTRA_SAMPLE,
   PROP_CONNECTOR_PROPS,
   PROP_PLANE_PROPS,
   PROP_FULLSCREEN_OVERLAY,
@@ -1196,6 +1197,8 @@ gst_kms_sink_stop (GstBaseSink * bsink)
   }
 
   gst_buffer_replace (&self->last_buffer, NULL);
+  if (self->hold_extra_sample)
+    gst_buffer_replace (&self->previous_last_buffer, NULL);
   gst_caps_replace (&self->allowed_caps, NULL);
   gst_object_replace ((GstObject **) & self->pool, NULL);
   gst_object_replace ((GstObject **) & self->allocator, NULL);
@@ -1779,7 +1782,11 @@ gst_kms_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
   }
 
   /* we need at least 2 buffer because we hold on to the last one */
-  gst_query_add_allocation_pool (query, pool, size, 2, 0);
+  if (!self->hold_extra_sample)
+    gst_query_add_allocation_pool (query, pool, size, 2, 0);
+  else
+    gst_query_add_allocation_pool (query, pool, size, 3, 0);
+
   if (pool)
     gst_object_unref (pool);
 
@@ -2487,10 +2494,19 @@ sync_frame:
 
   /* Save the rendered buffer and its metadata in case a redraw is needed */
   if (buffer != self->last_buffer) {
+    if (self->hold_extra_sample)
+      gst_buffer_replace (&self->previous_last_buffer, self->last_buffer);
     gst_buffer_replace (&self->last_buffer, buffer);
     self->last_width = GST_VIDEO_SINK_WIDTH (self);
     self->last_height = GST_VIDEO_SINK_HEIGHT (self);
     self->last_vinfo = self->vinfo;
+  } else {
+    if (self->hold_extra_sample) {
+      gst_buffer_unref (self->previous_last_buffer);
+      self->hold_extra_sample = FALSE;
+    } else {
+      gst_buffer_unref (self->last_buffer);
+    }
   }
 
   /* For fullscreen_enabled, tmp_kmsmem is used just to set CRTC mode */
@@ -2617,6 +2633,9 @@ gst_kms_sink_set_property (GObject * object, guint prop_id,
     case PROP_CAN_SCALE:
       sink->can_scale = g_value_get_boolean (value);
       break;
+    case PROP_HOLD_EXTRA_SAMPLE:
+      sink->hold_extra_sample = g_value_get_boolean (value);
+      break;
     case PROP_CONNECTOR_PROPS:{
       const GstStructure *s = gst_value_get_structure (value);
 
@@ -2705,6 +2724,9 @@ gst_kms_sink_get_property (GObject * object, guint prop_id,
       GST_OBJECT_LOCK (sink);
       g_value_set_int (value, sink->vdisplay);
       GST_OBJECT_UNLOCK (sink);
+      break;
+    case PROP_HOLD_EXTRA_SAMPLE:
+      g_value_set_boolean (value, sink->hold_extra_sample);
       break;
     case PROP_CONNECTOR_PROPS:
       gst_value_set_structure (value, sink->connector_props);
@@ -2903,6 +2925,26 @@ gst_kms_sink_class_init (GstKMSSinkClass * klass)
       g_param_spec_int ("display-height", "Display Height",
       "Height of the display surface in pixels", 0, G_MAXINT, 0,
       G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+
+  /**
+   * kmssink: hold-extra-sample:
+   *
+   * Xilinx Video IP's like mixer, framebuffer read work in
+   * asynchronous mode of operation where register settings
+   * for next frame can be programmed at any time rather
+   * than waiting first for an interrupt. Due to this newly
+   * programmed settings don't become active until currently
+   * processed frame completes leading to one frame delay
+   * between programming and actual writing of data to memory.
+   *
+   * Set this property for above scenario so that kmssink doesn't
+   * release the buffer which is yet to be consumed by Video ip.
+   */
+  g_properties[PROP_HOLD_EXTRA_SAMPLE] =
+      g_param_spec_boolean ("hold-extra-sample",
+      "Hold extra sample",
+      "When enabled, the sink will keep references to last two buffers", FALSE,
+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
 
   /**
    * kmssink:connector-properties:
