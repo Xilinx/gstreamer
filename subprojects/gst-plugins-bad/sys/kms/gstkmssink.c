@@ -1159,9 +1159,18 @@ retry_find_plane:
 
   self->buffer_id = crtc->buffer_id;
 
-  if (self->avoid_field_inversion)
+  if (self->avoid_field_inversion) {
     self->hold_extra_sample = TRUE;
+    GST_DEBUG_OBJECT (self, "Avoid field inversion and hold extra sample set");
+  }
 
+  if (self->primary_plane_id != -1) {
+    if (find_property_value_for_plane_id (self->fd,
+            self->primary_plane_id, "fid_err") != -1) {
+      self->fix_field_inversion = TRUE;
+      GST_DEBUG_OBJECT (self, "Fix field inversion and hold extra sample set");
+    }
+  }
   self->mm_width = conn->mmWidth;
   self->mm_height = conn->mmHeight;
 
@@ -2720,12 +2729,14 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
         && self->avoid_field_inversion)
       gst_kms_sink_avoid_field_inversion (self, clock);
 
-    if (((err = find_property_value_for_plane_id (self->fd,
-                    self->primary_plane_id, "fid_err")) == 1)
-        && self->previous_last_buffer) {
-      GST_WARNING_OBJECT (self,
-          "Error bit is set we are in inversion mode as fid_err = %d", err);
-      gst_kms_sink_fix_field_inversion (self, buffer);
+    if (self->fix_field_inversion && self->previous_last_buffer) {
+      err = find_property_value_for_plane_id (self->fd,
+          self->primary_plane_id, "fid_err");
+      if (err == 1) {
+        GST_WARNING_OBJECT (self,
+            "Error bit is set we are in inversion mode as fid_err = %d", err);
+        gst_kms_sink_fix_field_inversion (self, buffer);
+      }
     }
   }
 
