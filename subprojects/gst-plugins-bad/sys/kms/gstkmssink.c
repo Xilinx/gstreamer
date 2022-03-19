@@ -2782,6 +2782,49 @@ xlnx_ll_synchronize (GstKMSSink * self, GstBuffer * buffer, GstClock * clock)
   }
 }
 
+static void
+gst_kms_sink_fix_field_inversion (GstKMSSink * self, GstBuffer * buffer)
+{
+  guint32 flags_local = 0;
+  GstBuffer *buf = NULL;
+  GstMemory *mem;
+  guint32 fb_id, old_fb_id;
+
+  old_fb_id = self->buffer_id;
+  GST_DEBUG_OBJECT (self,
+      "Repeating last buffer and then sending current buffer to achieve resync");
+
+  if (GST_BUFFER_FLAG_IS_SET (buffer, GST_VIDEO_BUFFER_FLAG_ONEFIELD)) {
+    buf = self->previous_last_buffer;
+    if (GST_BUFFER_FLAG_IS_SET (buffer, GST_VIDEO_BUFFER_FLAG_TFF))
+      flags_local |= DRM_MODE_FB_ALTERNATE_BOTTOM;
+    else
+      flags_local |= DRM_MODE_FB_ALTERNATE_TOP;
+  }
+  mem = gst_buffer_peek_memory (buf, 0);
+  if (!gst_kms_memory_add_fb (mem, &self->vinfo, flags_local)) {
+    GST_ERROR_OBJECT (self, "Failed to get buffer object handle");
+    return;
+  }
+
+  fb_id = gst_kms_memory_get_fb_id (mem);
+
+  if (fb_id == 0) {
+    GST_ERROR_OBJECT (self, "Failed to get fb id for previous buffer");
+    return;
+  }
+
+  self->buffer_id = fb_id;
+
+  if (!gst_kms_sink_sync (self)) {
+    GST_ERROR_OBJECT (self,
+        "Repeating buffer for correcting field inversion failed");
+  } else {
+    GST_DEBUG_OBJECT (self,
+        "Corrected field inversion by repeating buffer with self->buffer_id = %d, self->crtc_id = %d self->fd %x flags = %x",
+        self->buffer_id, self->crtc_id, self->fd, flags_local);
+  }
+}
 
 static void
 gst_kms_sink_avoid_field_inversion (GstKMSSink * self, GstClock * clock)
@@ -2941,6 +2984,7 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
   GstFlowReturn res;
   GstClock *clock = NULL;
   guint32 flags = 0;
+  gboolean err = FALSE;
 
   self = GST_KMS_SINK (vsink);
 
@@ -2970,9 +3014,19 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
   if (!buffer)
     return GST_FLOW_ERROR;
 
-  if (self->last_buffer && GST_VIDEO_INFO_INTERLACE_MODE (&self->last_vinfo)
-      && self->prev_last_vblank && self->avoid_field_inversion)
-    gst_kms_sink_avoid_field_inversion (self, clock);
+  if (GST_VIDEO_INFO_INTERLACE_MODE (&self->last_vinfo)) {
+    if (self->last_buffer && self->prev_last_vblank
+        && self->avoid_field_inversion)
+      gst_kms_sink_avoid_field_inversion (self, clock);
+
+    if (((err = find_property_value_for_plane_id (self->fd,
+                    self->primary_plane_id, "fid_err")) == 1)
+        && self->previous_last_buffer) {
+      GST_WARNING_OBJECT (self,
+          "Error bit is set we are in inversion mode as fid_err = %d", err);
+      gst_kms_sink_fix_field_inversion (self, buffer);
+    }
+  }
 
   if (GST_BUFFER_FLAG_IS_SET (buffer, GST_VIDEO_BUFFER_FLAG_ONEFIELD)) {
     if (GST_BUFFER_FLAG_IS_SET (buffer, GST_VIDEO_BUFFER_FLAG_TFF)) {
