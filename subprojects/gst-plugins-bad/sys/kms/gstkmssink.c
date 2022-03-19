@@ -1479,6 +1479,7 @@ retry_find_plane:
     if (find_property_value_for_plane_id (self->fd,
             self->primary_plane_id, "fid_err") != -1) {
       self->fix_field_inversion = TRUE;
+      self->hold_extra_sample = TRUE;
       GST_DEBUG_OBJECT (self, "Fix field inversion and hold extra sample set");
     }
   }
