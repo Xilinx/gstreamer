@@ -3009,7 +3009,8 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
   GstClock *clock = NULL;
   guint32 flags = 0;
   gboolean err = FALSE;
-  GstClockTime start = GST_CLOCK_TIME_NONE, end = GST_CLOCK_TIME_NONE;
+  GstClockTime start = GST_CLOCK_TIME_NONE, end = GST_CLOCK_TIME_NONE, timestamp = GST_CLOCK_TIME_NONE;
+  GstClockTimeDiff ts_diff = GST_CLOCK_TIME_NONE, ts_drift = GST_CLOCK_TIME_NONE;
 
   self = GST_KMS_SINK (vsink);
 
@@ -3061,8 +3062,29 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
     }
 
     if (self->fix_field_inversion && self->previous_last_buffer) {
+      if (self->is_last_err_corrected) {
+        self->is_last_err_corrected = FALSE;
+
+        timestamp = GST_BUFFER_PTS (buffer);
+        if (GST_CLOCK_TIME_IS_VALID (timestamp)
+            && GST_CLOCK_TIME_IS_VALID (self->last_err_corrected_ts)) {
+          ts_diff = GST_CLOCK_DIFF (self->last_err_corrected_ts, timestamp);
+          ts_drift =
+              ABS (GST_CLOCK_DIFF (GST_BUFFER_DURATION (buffer), ts_diff));
+          self->last_err_corrected_ts = GST_CLOCK_TIME_NONE;
+          if (ts_drift > 2 * GST_MSECOND
+              && ts_drift < (GST_BUFFER_DURATION (buffer) + 2 * GST_MSECOND)) {
+            GST_DEBUG_OBJECT (self,
+                "Dropping buffer as ts_drift: %" GST_TIME_FORMAT " timestamp  %"
+                GST_TIME_FORMAT, GST_TIME_ARGS (ts_drift),
+                GST_TIME_ARGS (timestamp));
+            goto done;
+          }
+        }
+      }
       err = find_property_value_for_plane_id (self->fd,
           self->primary_plane_id, "fid_err");
+
       if (err == 1) {
         GST_WARNING_OBJECT (self,
             "Error bit is set we are in inversion mode as fid_err = %d", err);
@@ -3072,6 +3094,11 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
           gst_kms_sink_fix_field_inversion (self, buffer);
           end = gst_clock_get_time (clock);
 
+          GST_DEBUG_OBJECT (self,
+              "Setting last_err_corrected_ts to  timestamp  %" GST_TIME_FORMAT,
+              GST_TIME_ARGS (GST_BUFFER_PTS (buffer)));
+          self->is_last_err_corrected = TRUE;
+          self->last_err_corrected_ts = GST_BUFFER_PTS (buffer);
           if (self->limit_error_recovery) {
             self->error_correction_margin =
                 ((gint) GST_VIDEO_INFO_FPS_N (vinfo) /
@@ -3227,6 +3254,7 @@ sync_frame:
     g_clear_pointer (&self->tmp_kmsmem, gst_memory_unref);
 
   GST_OBJECT_UNLOCK (self);
+done:
   res = GST_FLOW_OK;
 
 bail:
@@ -3583,6 +3611,7 @@ gst_kms_sink_init (GstKMSSink * sink)
   sink->prev_last_vblank = GST_CLOCK_TIME_NONE;
   sink->last_ts = GST_CLOCK_TIME_NONE;
   sink->last_orig_ts = GST_CLOCK_TIME_NONE;
+  sink->last_err_corrected_ts = GST_CLOCK_TIME_NONE;
   gst_poll_fd_init (&sink->pollfd);
   sink->poll = gst_poll_new (TRUE);
   gst_video_info_init (&sink->vinfo);
