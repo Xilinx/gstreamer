@@ -115,6 +115,10 @@ struct _GstKMSSink {
   GstVideoRectangle pending_rect;
   gboolean reconfigure;
 
+  gboolean xlnx_ll;
+  /* timestamp of last vblank */
+  GstClockTime last_vblank;
+
   gboolean is_internal_fd;
   gboolean skip_vsync;
 
