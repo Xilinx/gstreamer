@@ -1749,7 +1749,9 @@ gst_v4l2src_create (GstPushSrc * src, GstBuffer ** buf)
   GstClockTime delay;
   GstMessage *qos_msg;
   gboolean half_frame;
+  GstV4l2BufferPool *pool = GST_V4L2_BUFFER_POOL_CAST (obj->pool);
 
+start:
   do {
     ret = GST_BASE_SRC_CLASS (parent_class)->alloc (GST_BASE_SRC (src), 0,
         obj->info.size, buf);
@@ -1796,6 +1798,22 @@ gst_v4l2src_create (GstPushSrc * src, GstBuffer ** buf)
 
   timestamp = GST_BUFFER_TIMESTAMP (*buf);
   duration = obj->duration;
+
+  if (v4l2src->ctrl_time == 0
+      && (GST_VIDEO_INFO_INTERLACE_MODE (&pool->caps_info) ==
+          GST_VIDEO_INTERLACE_MODE_ALTERNATE)) {
+    if ((GST_VIDEO_INFO_FIELD_ORDER (&pool->caps_info) ==
+            GST_VIDEO_FIELD_ORDER_BOTTOM_FIELD_FIRST)
+        && (GST_VIDEO_BUFFER_IS_TOP_FIELD (*buf)) ||
+        ((GST_VIDEO_INFO_FIELD_ORDER (&pool->caps_info) ==
+                GST_VIDEO_FIELD_ORDER_TOP_FIELD_FIRST)
+            && (GST_VIDEO_BUFFER_IS_BOTTOM_FIELD (*buf)))) {
+      GST_WARNING_OBJECT (v4l2src, " Received inverted field, dropping");
+      gst_buffer_replace (buf, NULL);
+      v4l2src->ctrl_time = 1;
+      goto start;
+    }
+  }
 
   /* timestamps, LOCK to get clock and base time. */
   /* FIXME: element clock and base_time is rarely changing */
