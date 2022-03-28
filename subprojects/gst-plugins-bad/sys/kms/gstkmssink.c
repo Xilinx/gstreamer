@@ -927,6 +927,7 @@ configure_mode_setting (GstKMSSink * self, GstVideoInfo * vinfo)
   self->render_rect.y = 0;
   self->render_rect.w = self->hdisplay;
   self->render_rect.h = self->vdisplay;
+  self->buffer_id = fb_id;
   GST_OBJECT_UNLOCK (self);
 
   if (err)
@@ -3016,6 +3017,18 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
   self = GST_KMS_SINK (vsink);
 
   res = GST_FLOW_ERROR;
+
+  /* Skip first vsync to maintain adequate and
+   * constant gap between page_flip/set_plane and vsync*/
+  if (!self->last_buffer) {
+    GST_OBJECT_LOCK (self);
+    if (!gst_kms_sink_sync (self)) {
+      GST_DEBUG_OBJECT (self, "Failed to skip first vsync");
+    } else {
+      GST_DEBUG_OBJECT (self, "Skipped first vsync");
+    }
+    GST_OBJECT_UNLOCK (self);
+  }
 
   if (buf) {
     buffer = gst_kms_sink_get_input_buffer (self, buf);
