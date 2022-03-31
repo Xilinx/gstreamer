@@ -3018,16 +3018,18 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
 
   res = GST_FLOW_ERROR;
 
-  /* Skip first vsync to maintain adequate and
-   * constant gap between page_flip/set_plane and vsync*/
-  if (!self->last_buffer) {
-    GST_OBJECT_LOCK (self);
-    if (!gst_kms_sink_sync (self)) {
-      GST_DEBUG_OBJECT (self, "Failed to skip first vsync");
-    } else {
-      GST_DEBUG_OBJECT (self, "Skipped first vsync");
+  if (GST_VIDEO_INFO_INTERLACE_MODE (&self->last_vinfo)) {
+    /* Skip first vsync to maintain adequate and
+     * constant gap between page_flip/set_plane and vsync*/
+    if (!self->last_buffer) {
+      GST_OBJECT_LOCK (self);
+      if (!gst_kms_sink_sync (self)) {
+        GST_DEBUG_OBJECT (self, "Failed to skip first vsync");
+      } else {
+        GST_DEBUG_OBJECT (self, "Skipped first vsync");
+      }
+      GST_OBJECT_UNLOCK (self);
     }
-    GST_OBJECT_UNLOCK (self);
   }
 
   if (buf) {
