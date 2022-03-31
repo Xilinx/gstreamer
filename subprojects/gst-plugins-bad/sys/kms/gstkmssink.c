@@ -2735,19 +2735,25 @@ gst_kms_sink_show_frame (GstVideoSink * vsink, GstBuffer * buf)
     video_height = src.h = self->last_height;
   }
 
-  clock = gst_element_get_clock (GST_ELEMENT_CAST (self));
-  if (!clock) {
-    GST_DEBUG_OBJECT (self, "no clock set yet");
-    goto bail;
-  }
-
-  if (self->xlnx_ll)
+  if (self->xlnx_ll) {
+    clock = gst_element_get_clock (GST_ELEMENT_CAST (self));
+    if (!clock) {
+      GST_DEBUG_OBJECT (self, "no clock set yet");
+      goto bail;
+    }
     xlnx_ll_synchronize (self, buffer, clock);
+  }
 
   if (!buffer)
     return GST_FLOW_ERROR;
 
   if (GST_VIDEO_INFO_INTERLACE_MODE (&self->last_vinfo)) {
+    clock = gst_element_get_clock (GST_ELEMENT_CAST (self));
+    if (!clock) {
+      GST_DEBUG_OBJECT (self, "no clock set yet");
+      goto bail;
+    }
+
     if (self->last_buffer && self->prev_last_vblank
         && self->avoid_field_inversion) {
 
