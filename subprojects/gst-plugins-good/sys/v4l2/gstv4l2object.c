@@ -3817,6 +3817,9 @@ gst_v4l2_object_set_format_full (GstV4l2Object * v4l2object, GstCaps * caps,
           "LOG 100, 316 transfer functions not supported");
       /* FIXME No known sensible default, maybe AdobeRGB ? */
       break;
+    case GST_VIDEO_TRANSFER_ARIB_STD_B67:
+      transfer = V4L2_XFER_FUNC_HLG;
+      break;
     case GST_VIDEO_TRANSFER_UNKNOWN:
       /* We let the driver pick a default one */
       break;

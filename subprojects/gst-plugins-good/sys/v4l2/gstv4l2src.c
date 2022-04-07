@@ -1561,6 +1561,7 @@ gst_v4l2src_create (GstPushSrc * src, GstBuffer ** buf)
   GstMessage *qos_msg;
   gboolean half_frame;
 
+  GstV4l2BufferPool *pool = GST_V4L2_BUFFER_POOL_CAST (obj->pool);
 start:
   do {
     ret = GST_BASE_SRC_CLASS (parent_class)->alloc (GST_BASE_SRC (src), 0,
