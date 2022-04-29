@@ -783,28 +783,51 @@ set_avc_intra_period (GstOMXH264Enc * self)
 static gboolean
 set_alg_decoding_refresh (GstOMXH264Enc * self)
 {
-  OMX_ALG_VIDEO_PARAM_INSTANTANEOUS_DECODING_REFRESH config_idr;
   OMX_ERRORTYPE err;
 
-  GST_OMX_INIT_STRUCT (&config_idr);
-  config_idr.nPortIndex = GST_OMX_VIDEO_ENC (self)->enc_out_port->index;
+  if (GST_OMX_VIDEO_ENC (self)->gdr_mode == OMX_ALG_GDR_HORIZONTAL ||
+      GST_OMX_VIDEO_ENC (self)->gdr_mode == OMX_ALG_GDR_VERTICAL) {
+    OMX_ALG_VIDEO_PARAM_RECOVERY_POINT config_rp;
+    GST_OMX_INIT_STRUCT (&config_rp);
+    config_rp.nPortIndex = GST_OMX_VIDEO_ENC (self)->enc_out_port->index;
 
-  GST_DEBUG_OBJECT (self, "nIDRPeriod:%u",
-      (guint) config_idr.nInstantaneousDecodingRefreshFrequency);
+    GST_DEBUG_OBJECT (self, "nIDRPeriod:%u",
+        (guint) config_rp.nRecoveryPointFrequency);
 
-  config_idr.nInstantaneousDecodingRefreshFrequency = self->periodicty_idr;
+    config_rp.nRecoveryPointFrequency = self->periodicty_idr;
 
-  err =
-      gst_omx_component_set_parameter (GST_OMX_VIDEO_ENC (self)->enc,
-      (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoInstantaneousDecodingRefresh,
-      &config_idr);
-  if (err != OMX_ErrorNone) {
-    GST_ERROR_OBJECT (self,
-        "can't set OMX_IndexConfigVideoAVCIntraPeriod %s (0x%08x)",
-        gst_omx_error_to_string (err), err);
-    return FALSE;
+    err =
+        gst_omx_component_set_parameter (GST_OMX_VIDEO_ENC (self)->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoRecoveryPoint,
+        &config_rp);
+    if (err != OMX_ErrorNone) {
+      GST_ERROR_OBJECT (self,
+          "can't set OMX_ALG_IndexParamVideoRecoveryPoint %s (0x%08x)",
+          gst_omx_error_to_string (err), err);
+      return FALSE;
+    }
   }
+  else {
+    OMX_ALG_VIDEO_PARAM_INSTANTANEOUS_DECODING_REFRESH config_idr;
+    GST_OMX_INIT_STRUCT (&config_idr);
+    config_idr.nPortIndex = GST_OMX_VIDEO_ENC (self)->enc_out_port->index;
 
+    GST_DEBUG_OBJECT (self, "nIDRPeriod:%u",
+        (guint) config_idr.nInstantaneousDecodingRefreshFrequency);
+
+    config_idr.nInstantaneousDecodingRefreshFrequency = self->periodicty_idr;
+
+    err =
+        gst_omx_component_set_parameter (GST_OMX_VIDEO_ENC (self)->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoInstantaneousDecodingRefresh,
+        &config_idr);
+    if (err != OMX_ErrorNone) {
+      GST_ERROR_OBJECT (self,
+          "can't set OMX_ALG_IndexParamVideoInstantaneousDecodingRefresh %s (0x%08x)",
+          gst_omx_error_to_string (err), err);
+      return FALSE;
+    }
+  }
   return TRUE;
 }
 #endif
