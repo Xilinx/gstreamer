@@ -51,6 +51,9 @@ typedef enum
 #define DEFAULT_LOOP_FILTER_MODE -1
 #define DEFAULT_FORCE_INTRA_MODE FORCE_INTRA_DISABLED
 #define DEFAULT_QP_MODE 0
+#define DEFAULT_GOP_MODE OMX_ALG_GOP_MODE_DEFAULT
+#define DEFAULT_GDR_MODE OMX_ALG_GDR_OFF
+#define DEFAULT_IDR_FREQ (0xffffffff)
 
 #define DYNAMIC_BITRATE_STR "BR"
 #define DYNAMIC_GOP_LENGTH_STR "GL"
@@ -122,7 +125,10 @@ typedef struct
   guint framerate;
   guint control_rate;
   guint gop_length;
+  guint gop_mode;
   guint b_frames;
+  guint gdr_mode;
+  guint idr_freq;
   guint max_bitrate;
   guint target_bitrate;
   guint long_term_freq;
@@ -630,7 +636,7 @@ main (int argc, char *argv[])
     {"framerate", 'f', 0, G_OPTION_ARG_INT, &enc.framerate, "Video Framerate",
         NULL},
     {"control-rate", 'c', 0, G_OPTION_ARG_INT, &enc.control_rate,
-        "Rate Control Mode of the Encoder, 1: VBR, 2: CBR", NULL},
+        "Rate Control Mode of the Encoder, 1: VBR, 2: CBR, 2130706433: Low Latency", NULL},
     {"b-frames", 'b', 0, G_OPTION_ARG_INT, &enc.b_frames,
         "Num B-frames between consequetive P-frames", NULL},
     {"target-bitrate", 'r', 0, G_OPTION_ARG_INT, &enc.target_bitrate,
@@ -639,6 +645,12 @@ main (int argc, char *argv[])
         "Max-Bitrate setting in Kbps", NULL},
     {"gop-length", 'g', 0, G_OPTION_ARG_INT, &enc.gop_length,
         "Gop-Length setting of the Encoder", NULL},
+    {"gop-mode", 's', 0, G_OPTION_ARG_INT, &enc.gop_mode,
+            "GOP Mode setting of the Encoder, 0: Basic, 1: Basic-B, 5: Low-Delay-P", NULL},
+    {"gdr-mode", 'v', 0, G_OPTION_ARG_INT, &enc.gdr_mode,
+            "GDR Mode setting of the Encoder, 0: Disabled, 1: Vertical, 2: Horizontal", NULL},
+    {"idr-freq", 'a', 0, G_OPTION_ARG_INT, &enc.idr_freq,
+            "IDR Periodicity setting of the Encoder", NULL},
     {"output-filename", 'o', 0, G_OPTION_ARG_FILENAME, &enc.output_filename,
         "Output filename", NULL},
     {"input-filename", 'i', 0, G_OPTION_ARG_FILENAME, &enc.input_filename,
@@ -693,7 +705,10 @@ main (int argc, char *argv[])
   enc.framerate = DEFAULT_ENCODER_FRAM_ERATE;
   enc.control_rate = DEFAULT_ENCODER_CONTROL_RATE;
   enc.gop_length = DEFAULT_ENCODER_GOP_LENGTH;
+  enc.gop_mode = DEFAULT_GOP_MODE;
   enc.b_frames = DEFAULT_ENCODER_B_FRAMES;
+  enc.gdr_mode = DEFAULT_GDR_MODE;
+  enc.idr_freq = DEFAULT_IDR_FREQ;
   enc.target_bitrate = DEFAULT_ENCODER_TARGET_BITRATE;
   enc.max_bitrate = DEFAULT_ENCODER_TARGET_BITRATE;
   enc.long_term_ref = DEFAULT_LONGTERM_REF;
@@ -775,7 +790,8 @@ main (int argc, char *argv[])
       "b-frames", enc.b_frames, "control-rate", enc.control_rate, "gop-length",
       enc.gop_length, "long-term-ref", enc.long_term_ref, "long-term-freq",
       enc.long_term_freq, "loop-filter-mode", enc.loop_filter_mode, "qp-mode",
-      enc.qp_mode, NULL);
+      enc.qp_mode, "gop-mode", enc.gop_mode, "gdr-mode", enc.gdr_mode,
+	  "periodicity-idr", enc.idr_freq, NULL);
 
   /* set Encoder src caps */
   if (!g_strcmp0 (enc.type, "avc"))
