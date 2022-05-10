@@ -51,8 +51,7 @@ struct _App
   GstElement *appsrc, *encoder, *filesink;
 
   gboolean is_eos;
-  GQueue *buf_queue;
-  GMutex queue_lock;
+  GAsyncQueue *buf_queue;
   GMainLoop *loop;
 };
 
@@ -104,9 +103,7 @@ on_new_sample_from_sink (GstElement * elt, App * app)
   mem = gst_buffer_peek_memory (buffer, 0);
   if (mem && gst_is_dmabuf_memory (mem)) {
     /* buffer ref required because we will unref sample */
-    g_mutex_lock (&app->queue_lock);
-    g_queue_push_tail (app->buf_queue, gst_buffer_ref (buffer));
-    g_mutex_unlock (&app->queue_lock);
+    g_async_queue_push (app->buf_queue, gst_buffer_ref (buffer));
   } else {
     g_print ("\nPulled non-dmabuf. Exiting...\n");
     return GST_FLOW_EOS;
@@ -130,9 +127,8 @@ feed_data (GstElement * appsrc, guint size, App * app)
   GstBuffer *buffer;
   GstFlowReturn ret;
 
-  g_mutex_lock (&app->queue_lock);
-  buffer = g_queue_pop_head (app->buf_queue);
-  g_mutex_unlock (&app->queue_lock);
+  buffer = app->is_eos ? g_async_queue_try_pop (app->buf_queue) :
+      g_async_queue_pop (app->buf_queue);
 
   if (buffer) {
     /* read any amount of data */
@@ -275,8 +271,7 @@ main (int argc, char *argv[])
 
   app.is_eos = FALSE;
   app.loop = g_main_loop_new (NULL, FALSE);
-  app.buf_queue = g_queue_new ();
-  g_mutex_init (&app.queue_lock);
+  app.buf_queue = g_async_queue_new ();
 
   if (!g_strcmp0 (config.enc_type, "hevc")) {
     datasrc_pipeline_str =
@@ -360,8 +355,7 @@ main (int argc, char *argv[])
   gst_object_unref (datasrc_bus);
   gst_object_unref (datasink_bus);
   g_main_loop_unref (app.loop);
-  g_queue_clear (app.buf_queue);
-  g_mutex_clear (&app.queue_lock);
+  g_async_queue_unref (app.buf_queue);
 
   g_print ("Exiting application...\n");
 
