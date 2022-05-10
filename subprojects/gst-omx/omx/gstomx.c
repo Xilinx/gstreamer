@@ -505,7 +505,8 @@ gst_omx_component_handle_messages (GstOMXComponent * comp)
 
           /* Assume output port has index 1, which it is with our OMX stack */
           port = gst_omx_component_get_port (comp, 1);
-          if (!port)
+          if (!port || !msg->content.sei_parsed.payload
+              || !msg->content.sei_parsed.payload_size)
             break;
 
           buf = gst_buffer_new_wrapped (msg->content.sei_parsed.payload,
