@@ -1691,7 +1691,7 @@ gst_xlnx_abr_scaler_chain (GstPad * pad, GstObject * parent, GstBuffer * inbuf)
 
   fret =
       gst_v4l2_buffer_pool_process (GST_V4L2_BUFFER_POOL_CAST
-      (srcpad->v4l2output->pool), &inbuf);
+      (srcpad->v4l2output->pool), &inbuf, NULL);
   if (G_UNLIKELY (fret != GST_FLOW_OK))
     goto error;
 

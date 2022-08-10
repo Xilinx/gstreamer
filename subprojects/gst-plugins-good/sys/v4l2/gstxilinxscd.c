@@ -765,7 +765,7 @@ gst_xilinx_scd_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
     }
   }
 
-  ret = gst_v4l2_buffer_pool_process (GST_V4L2_BUFFER_POOL (bpool), &buf);
+  ret = gst_v4l2_buffer_pool_process (GST_V4L2_BUFFER_POOL (bpool), &buf, NULL);
   if (G_UNLIKELY (ret != GST_FLOW_OK))
     return ret;
 
