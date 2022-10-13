@@ -3872,7 +3872,7 @@ gst_omx_error_to_string (OMX_ERRORTYPE err)
     case OMX_ALG_ErrorChannelResourceUnavailable:
       return
           "Component doesn't have enough hardware resources available to process the channel";
-    case OMX_ALG_ErrorChannelResourceFragmented:
+    case OMX_ALG_ErrorChannelLoadDistribution:
       return
           "Component has enough hardware resources available but they are used by the other channels in a way that make it impossible for the new channel to access these resources";
 #endif
