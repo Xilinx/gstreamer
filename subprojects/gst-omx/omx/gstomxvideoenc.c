@@ -3162,7 +3162,11 @@ check_input_alignment (GstOMXVideoEnc * self, GstMapInfo * map)
 {
   OMX_PARAM_PORTDEFINITIONTYPE *port_def = &self->enc_in_port->port_def;
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   if ((map->size != port_def->nBufferSize) && (self->is_yuv444 == 0)) {
+#else
+  if (map->size != port_def->nBufferSize) {
+#endif
     GST_DEBUG_OBJECT (self,
         "input buffer has wrong size/stride (%" G_GSIZE_FORMAT
         " expected: %u), can't use dynamic allocation",
@@ -3735,12 +3739,14 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   } else {
     for (l = negotiation_map; l; l = l->next) {
       GstOMXVideoNegotiationMap *m = l->data;
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
       if (self->is_yuv444 == 1) {
         if (m->format == GST_VIDEO_FORMAT_GRAY8)
           m->format = GST_VIDEO_FORMAT_Y444;
         if (m->format == GST_VIDEO_FORMAT_GRAY10_LE32)
           m->format = GST_VIDEO_FORMAT_Y444_10LE32;
       }
+#endif
 
       if (m->format == info->finfo->format) {
         port_def.format.video.eColorFormat = m->type;
@@ -3917,8 +3923,8 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
 #endif
   }
 
-  if (self->hlg_sdr_compatible) {
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  if (self->hlg_sdr_compatible) {
     if (cinfo.transfer == GST_VIDEO_TRANSFER_ARIB_STD_B67) {
       OMX_ALG_VIDEO_PARAM_ALTERNATIVE_TRANSFER_CHARACTERISTICS_SEI
           atc_sei_param;
@@ -3947,10 +3953,8 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
       GST_DEBUG_OBJECT (self,
           "HLG SDR compatible mode enabled but don't have HLG colorimetry. Ignoring HLG SDR compatible mode");
     }
-#else
-    GST_DEBUG_OBJECT (self, "Enabling ATC is not implemented for this target");
-#endif
   }
+#endif
 
   self->downstream_flow_ret = GST_FLOW_OK;
   return TRUE;
@@ -4620,8 +4624,12 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
       }
     }
 #endif
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
     if ((self->has_mcdv_sei || self->has_cll_sei || self->hlg_sdr_compatible)
         && starting) {
+#else
+    if ((self->has_mcdv_sei || self->has_cll_sei) && starting) {
+#endif
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
       OMX_ALG_VIDEO_CONFIG_HIGH_DYNAMIC_RANGE_SEI hdr_sei_config;
       OMX_ERRORTYPE err;
@@ -5124,6 +5132,7 @@ gst_omx_video_enc_getcaps (GstVideoEncoder * encoder, GstCaps * filter)
       gst_omx_video_get_supported_colorformats (self->enc_in_port,
       self->input_state);
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   for (l = negotiation_map; l; l = l->next) {
     GstOMXVideoNegotiationMap *m = l->data;
     if (self->is_yuv444 == 1) {
@@ -5133,6 +5142,7 @@ gst_omx_video_enc_getcaps (GstVideoEncoder * encoder, GstCaps * filter)
         m->format = GST_VIDEO_FORMAT_Y444_10LE32;
     }
   }
+#endif
   negotiation_map = filter_supported_formats (negotiation_map);
 
   comp_supported_caps = gst_omx_video_get_caps_for_map (negotiation_map);
