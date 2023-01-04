@@ -2456,6 +2456,8 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
       && (decoder->input_segment.flags & GST_SEEK_FLAG_TRICKMODE_KEY_UNITS))
     ret = gst_video_decoder_drain_out (decoder, FALSE);
 
+  if (priv->current_frame == NULL)
+    priv->current_frame = gst_video_decoder_new_frame (decoder);
 
   if (!priv->packetized)
     gst_video_decoder_add_buffer_info (decoder, buf);
@@ -2480,18 +2482,19 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
         priv->current_frame = NULL;
       }
     }
-    if (priv->current_frame != NULL)
-      frame = priv->current_frame;
-    else
-      frame = gst_video_decoder_new_frame (decoder);
-    priv->current_frame = NULL;
+    frame = priv->current_frame;
 
+    frame->abidata.ABI.num_subframes++;
     if (gst_video_decoder_get_subframe_mode (decoder)) {
-      frame->abidata.ABI.num_subframes++; 	    
       /* End the frame if the marker flag is set */
-      if (!GST_BUFFER_FLAG_IS_SET (buf, GST_VIDEO_BUFFER_FLAG_MARKER))
+      if (!GST_BUFFER_FLAG_IS_SET (buf, GST_VIDEO_BUFFER_FLAG_MARKER)
+          && (decoder->input_segment.rate > 0.0))
         priv->current_frame = gst_video_codec_frame_ref (frame);
-    } 
+      else
+        priv->current_frame = NULL;
+    } else {
+      priv->current_frame = frame;
+    }
 
     if (!GST_BUFFER_FLAG_IS_SET (buf, GST_BUFFER_FLAG_DELTA_UNIT)) {
       was_keyframe = TRUE;
@@ -2508,6 +2511,8 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
       priv->parse_gather = g_list_prepend (priv->parse_gather, frame);
     } else {
       ret = gst_video_decoder_decode_frame (decoder, frame);
+      if (!gst_video_decoder_get_subframe_mode (decoder))
+        priv->current_frame = NULL;
     }
     /* If in trick mode and it was a keyframe, drain decoder to avoid extra
      * latency. Only do this for forwards playback as reverse playback handles
