@@ -496,8 +496,8 @@ gst_omx_allocator_allocate (GstOMXAllocator * allocator, gint index,
     {
       gint fd = GPOINTER_TO_INT (omx_buf->omx_buf->pBuffer);
       mem->foreign_mem =
-          gst_dmabuf_allocator_alloc (allocator->foreign_allocator, fd,
-          omx_buf->omx_buf->nAllocLen);
+          gst_dmabuf_allocator_alloc_with_flags (allocator->foreign_allocator, fd,
+              omx_buf->omx_buf->nAllocLen, GST_FD_MEMORY_FLAG_DONT_CLOSE);
       gst_mini_object_set_qdata (GST_MINI_OBJECT (mem->foreign_mem),
           GST_OMX_MEMORY_QUARK, mem, NULL);
       install_mem_dispose (mem);
