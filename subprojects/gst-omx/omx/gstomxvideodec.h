@@ -100,12 +100,15 @@ struct _GstOMXVideoDec
   gboolean xlnx_ll;
 
   /* properties */
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
   guint32 internal_entropy_buffers;
   gboolean low_latency;
   gboolean split_input;
   gint32 output_position_x;
   gint32 output_position_y;
+#ifdef USE_OMX_TARGET_VERSAL
+  gchar *device;
+#endif
 #endif
 };
 
