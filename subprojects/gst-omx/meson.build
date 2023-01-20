@@ -217,6 +217,15 @@ elif omx_target == 'zynqultrascaleplus'
   if not have_allegro_header
     error ('Need Allegro OMX headers to build for Zynq UltraScale+. Use -Dheader_path option to specify the path of those headers.')
   endif
+elif omx_target == 'versal'
+  cdata.set('USE_OMX_TARGET_VERSAL', 1)
+  have_allegro_header = cc.has_header (
+      'OMX_Allegro.h',
+      args : gst_omx_args,
+      include_directories : [omx_inc])
+  if not have_allegro_header
+    error ('Need Allegro OMX headers to build for Versal. Use -Dheader_path option to specify the path of those headers.')
+  endif
 elif omx_target == 'tizonia'
   if omx_header_path != ''
     warning('Ignoring -Dheader_path because path is in tizilheaders.pc')

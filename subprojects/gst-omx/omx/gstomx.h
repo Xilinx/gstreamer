@@ -228,7 +228,7 @@ typedef enum {
   GST_OMX_ACQUIRE_BUFFER_ERROR,
   /* No buffer is currently available (used when calling gst_omx_port_acquire_buffer() in not waiting mode) */
   GST_OMX_ACQUIRE_BUFFER_NO_AVAILABLE,
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
   GST_OMX_ACQUIRE_BUFFER_RESOLUTION_CHANGE,
 #endif
 } GstOMXAcquireBufferReturn;
@@ -246,7 +246,11 @@ struct _GstOMXCore {
   OMX_ERRORTYPE (*init) (void);
   OMX_ERRORTYPE (*deinit) (void);
   OMX_ERRORTYPE (*get_handle) (OMX_HANDLETYPE * handle,
+#if defined(USE_OMX_TARGET_VERSAL)
+      OMX_STRING name, OMX_PTR data, OMX_CALLBACKTYPE * callbacks, OMX_ALG_COREINDEXTYPE nCoreParamIndex, OMX_PTR pSettings);
+#else
       OMX_STRING name, OMX_PTR data, OMX_CALLBACKTYPE * callbacks);
+#endif
   OMX_ERRORTYPE (*free_handle) (OMX_HANDLETYPE handle);
   OMX_ERRORTYPE (*setup_tunnel) (OMX_HANDLETYPE output, OMX_U32 outport, OMX_HANDLETYPE input, OMX_U32 inport);
 };
@@ -259,7 +263,7 @@ typedef enum {
   GST_OMX_MESSAGE_PORT_SETTINGS_CHANGED,
   GST_OMX_MESSAGE_BUFFER_FLAG,
   GST_OMX_MESSAGE_BUFFER_DONE,
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
   GST_OMX_MESSAGE_SEI_PARSED,
   GST_OMX_MESSAGE_ALG_RESOLUTION_CHANGED,
 #endif
@@ -313,7 +317,7 @@ struct _GstOMXMessage {
       OMX_BUFFERHEADERTYPE *buffer;
       OMX_BOOL empty;
     } buffer_done;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
     struct {
       gboolean prefix;
       OMX_U32 payload_type;
@@ -353,7 +357,7 @@ struct _GstOMXPort {
    * what actually changed in the port definition. */
   OMX_PARAM_PORTDEFINITIONTYPE old_port_def;
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
   /* If TRUE, OMX notified a resolution change which should be resolved
    * before handling the next upcoming buffer. */
   gboolean resolution_changed;

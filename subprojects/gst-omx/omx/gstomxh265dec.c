@@ -60,7 +60,7 @@ G_DEFINE_TYPE_WITH_CODE (GstOMXH265Dec, gst_omx_h265_dec,
 /* The Zynq MPSoC supports decoding subframes though we want "au" to be the
  * default, so we keep it prepended. This is the only way that it works with
  * rtph265depay. */
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
 #define SINK_CAPS MAKE_CAPS ("au") ";" MAKE_CAPS ("nal");
 #else
 #define SINK_CAPS MAKE_CAPS ("au")

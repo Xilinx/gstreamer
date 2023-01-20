@@ -34,7 +34,7 @@ typedef struct
 static const H265ProfileMapping h265_profiles[] = {
   {"main", OMX_VIDEO_HEVCProfileMain},
   {"main-10", OMX_VIDEO_HEVCProfileMain10},
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
   {"main-still-picture",
       (OMX_VIDEO_HEVCPROFILETYPE) OMX_ALG_VIDEO_HEVCProfileMainStill},
   /* Format range extensions profiles (A.3.5) */

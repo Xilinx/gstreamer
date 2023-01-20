@@ -82,7 +82,7 @@ gst_omx_video_get_format_from_omx (OMX_COLOR_FORMATTYPE omx_colorformat)
     case OMX_COLOR_Format24bitBGR888:
       format = GST_VIDEO_FORMAT_BGR;
       break;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
       /* Formats defined in extensions have their own enum so disable to -Wswitch warning */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wswitch"
@@ -358,7 +358,7 @@ gst_omx_video_get_port_padding (GstOMXPort * port, GstVideoInfo * info_orig,
   return TRUE;
 }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
 
 gboolean
 gst_omx_video_port_support_resolution (GstOMXPort * port, guint width,
