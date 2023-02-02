@@ -369,7 +369,7 @@ gst_omx_video_dec_init (GstOMXVideoDec * self)
   self->output_position_x = GST_OMX_VIDEO_DEC_OUTPUT_POSITION_X_DEFAULT;
   self->output_position_y = GST_OMX_VIDEO_DEC_OUTPUT_POSITION_Y_DEFAULT;
 #ifdef USE_OMX_TARGET_VERSAL
-  self->device = GST_OMX_VIDEO_DEC_DEVICE_DEFAULT;
+  self->device = g_strdup (GST_OMX_VIDEO_DEC_DEVICE_DEFAULT);
 #endif
 #endif
 
