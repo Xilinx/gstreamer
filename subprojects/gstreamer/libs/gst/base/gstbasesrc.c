@@ -3237,6 +3237,12 @@ gst_base_src_decide_allocation_default (GstBaseSrc * basesrc, GstQuery * query)
   if (gst_query_get_n_allocation_pools (query) > 0) {
     gst_query_parse_nth_allocation_pool (query, 0, &pool, &size, &min, &max);
 
+    if (basesrc->blocksize != size && (size > 0))
+    {
+       GST_DEBUG_OBJECT (basesrc, "basesrc changing blocksize %d to %d\n", basesrc->blocksize, size);
+       basesrc->blocksize = size;
+    }
+
     if (pool == NULL) {
       /* no pool, we can make our own */
       GST_DEBUG_OBJECT (basesrc, "no pool, making new pool");
