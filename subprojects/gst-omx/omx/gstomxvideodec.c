@@ -484,11 +484,13 @@ gst_omx_video_dec_open (GstVideoDecoder * decoder)
 
   GST_DEBUG_OBJECT (self, "Opening decoder");
 
+  g_mutex_lock (&(klass->mutex));
   self->dec =
       gst_omx_component_new (GST_OBJECT_CAST (self), klass->cdata.core_name,
       klass->cdata.component_name, klass->cdata.component_role,
       klass->cdata.hacks);
   self->started = FALSE;
+  g_mutex_unlock (&(klass->mutex));
 
   if (!self->dec)
     return FALSE;

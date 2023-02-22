@@ -120,6 +120,7 @@ struct _GstOMXVideoDecClass
 
   GstOMXClassData cdata;
 
+  GMutex mutex;
   gboolean (*is_format_change) (GstOMXVideoDec * self, GstOMXPort * port, GstVideoCodecState * state);
   gboolean (*set_format)       (GstOMXVideoDec * self, GstOMXPort * port, GstVideoCodecState * state);
 };
