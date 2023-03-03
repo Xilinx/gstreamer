@@ -3779,6 +3779,9 @@ static const GGetTypeFunction types[] = {
 #if defined(HAVE_HEVC) && defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS)
       , gst_omx_h265_enc_get_type, gst_omx_h265_dec_get_type
 #endif
+#if defined(HAVE_HEVC) && defined(USE_OMX_TARGET_VERSAL)
+      , gst_omx_h265_dec_get_type
+#endif
 };
 
 struct TypeOffest
