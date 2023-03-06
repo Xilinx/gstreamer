@@ -160,12 +160,24 @@ gst_kms_buffer_pool_alloc_buffer (GstBufferPool * pool, GstBuffer ** buffer,
   gst_buffer_append_memory (*buffer, mem);
 
   if (priv->add_videometa) {
+    GstVideoMeta *meta;
+    GstVideoAlignment align;
+    GstStructure *config = gst_buffer_pool_get_config (pool);
     GST_DEBUG_OBJECT (pool, "adding GstVideoMeta");
 
-    gst_buffer_add_video_meta_full (*buffer, GST_VIDEO_FRAME_FLAG_NONE,
+    meta = gst_buffer_add_video_meta_full (*buffer, GST_VIDEO_FRAME_FLAG_NONE,
         GST_VIDEO_INFO_FORMAT (info),
         GST_VIDEO_INFO_WIDTH (info), GST_VIDEO_INFO_HEIGHT (info),
         GST_VIDEO_INFO_N_PLANES (info), info->offset, info->stride);
+    config = gst_buffer_pool_get_config (pool);
+    gst_video_alignment_reset (&align);
+    if (gst_buffer_pool_config_get_video_alignment (config, &align)) {
+      /* Set Alignment info in GstVideoMeta */
+      gst_video_meta_set_alignment (meta, align);
+    }
+    if (config) {
+      gst_structure_free (config);
+    }
   }
 
   return GST_FLOW_OK;
