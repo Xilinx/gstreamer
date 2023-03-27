@@ -2470,6 +2470,10 @@ gst_h265_parse_update_src_caps (GstH265Parse * h265parse, GstCaps * caps)
       if (profile != NULL)
         gst_caps_set_simple (caps, "profile", G_TYPE_STRING, profile, NULL);
 
+      if (sps->profile_tier_level.interlaced_source_flag)
+        gst_caps_set_simple (caps, "interlace-mode", G_TYPE_STRING,
+            "interleaved", NULL);
+
       tier = get_tier_string (sps->profile_tier_level.tier_flag);
       if (tier != NULL)
         gst_caps_set_simple (caps, "tier", G_TYPE_STRING, tier, NULL);
