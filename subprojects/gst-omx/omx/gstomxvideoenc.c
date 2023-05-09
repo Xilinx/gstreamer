@@ -301,6 +301,13 @@ static GstFlowReturn gst_omx_video_enc_handle_output_frame (GstOMXVideoEnc *
     self, GstOMXPort * port, GstBuffer * outbuf, GstOMXBuffer * buf,
     GstVideoCodecFrame * frame);
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+static GstFlowReturn
+gst_omx_video_enc_zynqmp_pre_push (GstVideoEncoder * encoder,
+    GstVideoCodecFrame * frame);
+#endif
+
+
 static gboolean gst_omx_video_enc_sink_event (GstVideoEncoder * encoder,
     GstEvent * event);
 
@@ -752,12 +759,17 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
   video_encoder_class->decide_allocation =
       GST_DEBUG_FUNCPTR (gst_omx_video_enc_decide_allocation);
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+  video_encoder_class->pre_push = gst_omx_video_enc_zynqmp_pre_push;
+#endif
+
   klass->cdata.type = GST_OMX_COMPONENT_TYPE_FILTER;
   klass->cdata.default_sink_template_caps =
       GST_VIDEO_CAPS_MAKE (GST_OMX_VIDEO_ENC_SUPPORTED_FORMATS);
 
   klass->handle_output_frame =
       GST_DEBUG_FUNCPTR (gst_omx_video_enc_handle_output_frame);
+
 }
 
 static void
@@ -2344,43 +2356,6 @@ gst_omx_video_enc_handle_output_frame (GstOMXVideoEnc * self, GstOMXPort * port,
         gst_util_uint64_scale (GST_OMX_GET_TICKS (buf->omx_buf->nTimeStamp),
         GST_SECOND, OMX_TICKS_PER_SECOND);
 
-    if (frame->system_frame_number == 0 && self->xlnx_ll) {
-      GstClockTime latency = GST_CLOCK_TIME_NONE;
-
-      if (!GST_CLOCK_TIME_IS_VALID (self->xlnx_ll_start))
-        self->xlnx_ll_start =
-            GST_ELEMENT (self)->base_time +
-            gst_segment_to_running_time (&GST_VIDEO_ENCODER_INPUT_SEGMENT
-            (self), GST_FORMAT_TIME, frame->pts);
-
-      if (!GST_CLOCK_TIME_IS_VALID (self->xlnx_ll_end)) {
-        GstClock *clock = NULL;
-        clock = gst_element_get_clock (GST_ELEMENT_CAST (self));
-        if (G_UNLIKELY (!clock)) {
-          GST_ERROR_OBJECT (self,
-              "no clock set, can't predict xlnx-ll first frame ts");
-        } else {
-          self->xlnx_ll_end = gst_clock_get_time (clock);
-          gst_video_encoder_get_latency (GST_VIDEO_ENCODER (self), &latency,
-              NULL);
-          frame->pts =
-              gst_segment_position_from_running_time
-              (&GST_VIDEO_ENCODER_INPUT_SEGMENT (self), GST_FORMAT_TIME,
-              gst_segment_to_running_time (&GST_VIDEO_ENCODER_INPUT_SEGMENT
-                  (self), GST_FORMAT_TIME,
-                  frame->pts) + (GST_CLOCK_DIFF (self->xlnx_ll_start,
-                      self->xlnx_ll_end) - latency));
-          GST_DEBUG_OBJECT (self,
-              "xlnx_ll_start: %" GST_TIME_FORMAT " xlnx_ll_end: %"
-              GST_TIME_FORMAT " latency: %" GST_TIME_FORMAT
-              " updated frame->pts : %" GST_TIME_FORMAT,
-              GST_TIME_ARGS (self->xlnx_ll_start),
-              GST_TIME_ARGS (self->xlnx_ll_end), GST_TIME_ARGS (latency),
-              GST_TIME_ARGS (frame->pts));
-        }
-      }
-    }
-
     if (buf->omx_buf->nTickCount != 0)
       GST_BUFFER_DURATION (outbuf) =
           gst_util_uint64_scale (buf->omx_buf->nTickCount, GST_SECOND,
@@ -2431,6 +2406,67 @@ gst_omx_video_enc_handle_output_frame (GstOMXVideoEnc * self, GstOMXPort * port,
 
   return flow_ret;
 }
+
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+static GstFlowReturn
+gst_omx_video_enc_zynqmp_pre_push (GstVideoEncoder * encoder,
+    GstVideoCodecFrame * frame)
+{
+  GstOMXVideoEnc *self = GST_OMX_VIDEO_ENC (encoder);
+
+  if (frame->system_frame_number == 0 && self->xlnx_ll) {
+    GstClockTime latency = GST_CLOCK_TIME_NONE;
+
+    if (!GST_CLOCK_TIME_IS_VALID (self->xlnx_ll_start))
+      self->xlnx_ll_start =
+          GST_ELEMENT (self)->base_time +
+          gst_segment_to_running_time (&GST_VIDEO_ENCODER_INPUT_SEGMENT
+              (self), GST_FORMAT_TIME, GST_BUFFER_PTS (frame->output_buffer));
+
+    if (!GST_CLOCK_TIME_IS_VALID (self->xlnx_ll_end)) {
+      GstClock *clock = NULL;
+      clock = gst_element_get_clock (GST_ELEMENT_CAST (self));
+      if (G_UNLIKELY (!clock)) {
+        GST_ERROR_OBJECT (self,
+            "no clock set, can't predict xlnx-ll first frame ts");
+      } else {
+        GstClockTime orig_pts = GST_BUFFER_PTS (frame->output_buffer);
+
+        self->xlnx_ll_end = gst_clock_get_time (clock);
+        gst_video_encoder_get_latency (GST_VIDEO_ENCODER (self), &latency,
+            NULL);
+        GST_BUFFER_PTS (frame->output_buffer) =
+            gst_segment_position_from_running_time
+            (&GST_VIDEO_ENCODER_INPUT_SEGMENT (self), GST_FORMAT_TIME,
+                gst_segment_to_running_time (&GST_VIDEO_ENCODER_INPUT_SEGMENT
+                    (self), GST_FORMAT_TIME,
+                    GST_BUFFER_PTS (frame->output_buffer)) +
+                (GST_CLOCK_DIFF (self->xlnx_ll_start,
+                    self->xlnx_ll_end) - latency));
+
+
+        if (GST_BUFFER_DTS_IS_VALID (frame->output_buffer)) {
+          GstClockTimeDiff diff = GST_BUFFER_PTS (frame->output_buffer) -
+              orig_pts;
+          GST_BUFFER_DTS (frame->output_buffer) += diff;
+        }
+
+        GST_DEBUG_OBJECT (self,
+            "xlnx_ll_start: %" GST_TIME_FORMAT " xlnx_ll_end: %"
+            GST_TIME_FORMAT " latency: %" GST_TIME_FORMAT
+            " updated-pts: %" GST_TIME_FORMAT " updated-dts: %"
+            GST_TIME_FORMAT,
+            GST_TIME_ARGS (self->xlnx_ll_start),
+            GST_TIME_ARGS (self->xlnx_ll_end), GST_TIME_ARGS (latency),
+            GST_TIME_ARGS (GST_BUFFER_PTS (frame->output_buffer)),
+            GST_TIME_ARGS (GST_BUFFER_DTS (frame->output_buffer)));
+      }
+    }
+  }
+
+  return GST_FLOW_OK;
+}
+#endif
 
 static gboolean
 gst_omx_video_enc_ensure_nb_out_buffers (GstOMXVideoEnc * self)
@@ -2854,9 +2890,11 @@ gst_omx_video_enc_start (GstVideoEncoder * encoder)
   self->nb_upstream_buffers = 0;
   self->nb_downstream_buffers = 0;
   self->in_pool_used = FALSE;
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   self->xlnx_ll = FALSE;
   self->xlnx_ll_start = GST_CLOCK_TIME_NONE;
   self->xlnx_ll_end = GST_CLOCK_TIME_NONE;
+#endif
 
   return TRUE;
 }
