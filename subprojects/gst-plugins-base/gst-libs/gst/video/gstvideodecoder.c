@@ -3601,7 +3601,10 @@ gst_video_decoder_finish_frame (GstVideoDecoder * decoder,
 
   if (decoder->priv->xlnx_ll && early_decoded_frame) {
     GST_LOG_OBJECT (decoder,
-        "restore current_frame after frame is released in xlnx-ll mode");
+        "restore current_frame after frame %d is released in xlnx-ll mode",
+      early_decoded_frame->system_frame_number);
+    GST_VIDEO_CODEC_FRAME_FLAG_SET (early_decoded_frame,
+        GST_VIDEO_CODEC_FRAME_FLAG_XLNX_ALREADY_PUSHED);
     decoder->priv->current_frame =
         gst_video_codec_frame_ref (early_decoded_frame);
     decoder->priv->current_frame->events = NULL;
@@ -4095,6 +4098,17 @@ gst_video_decoder_decode_frame (GstVideoDecoder * decoder,
   ret = decoder_class->handle_frame (decoder, frame);
   if (ret != GST_FLOW_OK)
     GST_DEBUG_OBJECT (decoder, "flow error %s", gst_flow_get_name (ret));
+  if (g_queue_find (&priv->frames, frame) &&
+      GST_VIDEO_CODEC_FRAME_FLAG_IS_SET (frame,
+          GST_VIDEO_CODEC_FRAME_FLAG_XLNX_ALREADY_PUSHED)
+      && GST_BUFFER_FLAG_IS_SET (frame->input_buffer,
+          GST_BUFFER_FLAG_MARKER)) {
+    /* Release it if it's already been pushed */
+    GST_DEBUG_OBJECT (decoder, "Release already pushed frame %d with marker",
+        frame->system_frame_number);
+    gst_video_codec_frame_ref (frame);
+    gst_video_decoder_release_frame (decoder, frame);
+  }
 
   /* the frame has either been added to parse_gather or sent to
      handle frame so there is no need to unref it */
