@@ -2479,7 +2479,7 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
         GST_INFO_OBJECT (decoder,
             "Create new frame as buf with new PTS received");
         gst_video_codec_frame_unref (priv->current_frame);
-        priv->current_frame = NULL;
+        priv->current_frame = gst_video_decoder_new_frame (decoder);
       }
     }
     frame = priv->current_frame;
