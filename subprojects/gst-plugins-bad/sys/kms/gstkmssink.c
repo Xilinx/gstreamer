@@ -2954,9 +2954,8 @@ sync_frame:
     if (self->hold_extra_sample) {
       gst_buffer_unref (self->previous_last_buffer);
       self->hold_extra_sample = FALSE;
-    } else {
-      gst_buffer_unref (self->last_buffer);
     }
+    gst_buffer_unref (self->last_buffer);
   }
 
   /* For fullscreen_enabled, tmp_kmsmem is used just to set CRTC mode */
