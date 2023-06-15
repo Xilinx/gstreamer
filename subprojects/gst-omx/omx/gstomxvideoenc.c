@@ -309,6 +309,8 @@ gst_omx_video_enc_zynqmp_pre_push (GstVideoEncoder * encoder,
 static gboolean gst_omx_video_enc_sink_event (GstVideoEncoder * encoder,
     GstEvent * event);
 
+static gboolean gst_omx_video_enc_src_event (GstVideoEncoder * encoder,
+    GstEvent * event);
 enum
 {
   PROP_0,
@@ -750,6 +752,8 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
   video_encoder_class->getcaps = GST_DEBUG_FUNCPTR (gst_omx_video_enc_getcaps);
   video_encoder_class->sink_event =
       GST_DEBUG_FUNCPTR (gst_omx_video_enc_sink_event);
+  video_encoder_class->src_event =
+      GST_DEBUG_FUNCPTR (gst_omx_video_enc_src_event);
   video_encoder_class->decide_allocation =
       GST_DEBUG_FUNCPTR (gst_omx_video_enc_decide_allocation);
 
@@ -5383,6 +5387,54 @@ handle_sei_insertion (GstOMXVideoEnc * self, GstEvent * event)
   return TRUE;
 }
 #endif
+
+static gboolean
+gst_omx_video_enc_src_event (GstVideoEncoder * encoder, GstEvent * event)
+{
+  GstOMXVideoEnc *self = GST_OMX_VIDEO_ENC (encoder);
+
+  switch (GST_EVENT_TYPE (event)) {
+    case GST_EVENT_RECONFIGURE :
+    {
+      GstPad *src_pad = GST_VIDEO_ENCODER_SRC_PAD (encoder);
+      GstCaps *enc_curr_caps = gst_pad_get_current_caps (src_pad);
+      /* get the peer caps */
+      GstCaps *peer_caps = gst_pad_peer_query_caps (src_pad, enc_curr_caps);
+
+      if (enc_curr_caps)
+        gst_caps_unref (enc_curr_caps);
+      if (!gst_caps_is_empty(peer_caps))
+      {
+         if (peer_caps)
+           gst_caps_unref (peer_caps);
+         GST_DEBUG_OBJECT (self, "downstream caps are same, bypassing reconfigure event");
+         return TRUE;
+      }
+      else
+      {
+        if (peer_caps)
+          gst_caps_unref (peer_caps);
+          GstCaps *enc_curr_caps = gst_pad_query_caps (src_pad, NULL);
+          /* get the peer caps */
+          GstCaps *peer_caps = gst_pad_peer_query_caps (src_pad, enc_curr_caps);
+          GST_ERROR_OBJECT (self, "can not change encoder caps to %s", gst_caps_to_string(peer_caps));
+          GST_ELEMENT_ERROR (self, LIBRARY, FAILED, (NULL),
+              ("dynamic caps   is not currently supported in omxencoder"));
+          if (peer_caps)
+            gst_caps_unref (peer_caps);
+          if (enc_curr_caps)
+            gst_caps_unref (enc_curr_caps);
+          return FALSE;
+     }
+    }
+    default:
+      break;
+  }
+
+  return
+      GST_VIDEO_ENCODER_CLASS (gst_omx_video_enc_parent_class)->src_event
+      (encoder, event);
+}
 
 static gboolean
 gst_omx_video_enc_sink_event (GstVideoEncoder * encoder, GstEvent * event)
