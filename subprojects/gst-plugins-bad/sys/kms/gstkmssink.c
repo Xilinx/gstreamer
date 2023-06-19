@@ -1411,17 +1411,13 @@ gst_kms_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
 
     s = gst_structure_copy (gst_caps_get_structure (caps, 0));
     gst_structure_set (s, "width", G_TYPE_INT, self->pending_rect.w,
-        "height", G_TYPE_INT, self->pending_rect.h,
-        "pixel-aspect-ratio", GST_TYPE_FRACTION, dpy_par_n, dpy_par_d, NULL);
+        "height", G_TYPE_INT, self->pending_rect.h, NULL);
 
     gst_caps_append_structure (out_caps, s);
 
     out_caps = gst_caps_merge (out_caps, caps);
     caps = NULL;
 
-    /* enforce our display aspect ratio */
-    gst_caps_set_simple (out_caps, "pixel-aspect-ratio", GST_TYPE_FRACTION,
-        dpy_par_n, dpy_par_d, NULL);
   } else {
     out_caps = gst_caps_make_writable (caps);
     caps = NULL;
