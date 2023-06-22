@@ -446,7 +446,11 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
 
   g_object_class_install_property (gobject_class, PROP_TARGET_BITRATE,
       g_param_spec_uint ("target-bitrate", "Target Bitrate",
+#ifndef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
           "Target bitrate in bits per second (0xffffffff=component default)",
+#else
+          "Target bitrate in Kbps (0xffffffff=component default)",
+#endif
           0, G_MAXUINT, GST_OMX_VIDEO_ENC_TARGET_BITRATE_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_PLAYING));
@@ -552,7 +556,7 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
 
   g_object_class_install_property (gobject_class, PROP_MAX_BITRATE,
       g_param_spec_uint ("max-bitrate", "Max Bitrate",
-          "Max bitrate in bits per second, only used if control-rate=variable (0xffffffff=component default)",
+          "Max bitrate in Kbps, only used if control-rate=variable (0xffffffff=component default)",
           0, G_MAXUINT, GST_OMX_VIDEO_ENC_MAX_BITRATE_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
