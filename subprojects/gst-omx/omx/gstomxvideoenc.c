@@ -217,6 +217,8 @@ gst_omx_video_enc_roi_quality_type (void)
       {OMX_ALG_ROI_QUALITY_MEDIUM, "Delta QP of 0", "medium"},
       {OMX_ALG_ROI_QUALITY_LOW, "Delta QP of +5", "low"},
       {OMX_ALG_ROI_QUALITY_DONT_CARE, "Maximum delta QP value", "dont-care"},
+      {OMX_ALG_ROI_QUALITY_INTRA,
+          "Region all LCU encoded with intra prediction mode", "intra"},
       {0, NULL, NULL}
     };
 
