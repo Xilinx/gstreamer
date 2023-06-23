@@ -149,6 +149,7 @@ gst_drm_bpp_from_drm (guint32 drmfmt)
     case DRM_FORMAT_NV12:
     case DRM_FORMAT_NV21:
     case DRM_FORMAT_NV16:
+    case DRM_FORMAT_Y8:
     case DRM_FORMAT_NV61:
     case DRM_FORMAT_NV24:
       bpp = 8;
@@ -159,6 +160,7 @@ gst_drm_bpp_from_drm (guint32 drmfmt)
 #ifdef DRM_FORMAT_XV15
     case DRM_FORMAT_XV15:
     case DRM_FORMAT_XV20:
+    case DRM_FORMAT_Y10:
       /* One 32b macro pixel: three 10b pixels + 2b padding */
       bpp = 32;
       break;
