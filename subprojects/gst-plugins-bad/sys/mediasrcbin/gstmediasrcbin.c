@@ -38,6 +38,11 @@
 #define MEDIA_BUS_FMT_VYYUYY10_4X20            0x2101
 #endif
 
+#define PREFERED_CAPS_WIDTH                    3840
+#define PREFERED_CAPS_HEIGHT                   2160
+#define PREFERED_CAPS_FPS_NUMERATOR            120
+#define PREFERED_CAPS_FPS_DENOMINATOR          1
+
 G_DEFINE_TYPE (GstMediaSrcBinPad, gst_media_src_bin_pad, GST_TYPE_GHOST_PAD);
 
 static void
@@ -502,6 +507,31 @@ gst_media_src_bin_caps_remove_info (GstCaps * caps)
   return res;
 }
 
+static void
+gst_media_src_bin_fixate_caps (GstMediaSrcBin * bin, GstCaps * caps)
+{
+  GstStructure *s = NULL;
+  gint i, n;
+
+  n = gst_caps_get_size (caps);
+  GST_DEBUG_OBJECT (bin, "caps size is : %d", n);
+
+  for (i = 0; i < n; i++) {
+    s = gst_caps_get_structure (caps, i);
+
+    if (gst_structure_has_field (s, "width"))
+      gst_structure_fixate_field_nearest_int (s, "width", PREFERED_CAPS_WIDTH);
+
+    if (gst_structure_has_field (s, "height"))
+      gst_structure_fixate_field_nearest_int (s, "height",
+          PREFERED_CAPS_HEIGHT);
+
+    if (gst_structure_has_field (s, "framerate"))
+      gst_structure_fixate_field_nearest_fraction (s, "framerate",
+          PREFERED_CAPS_FPS_NUMERATOR, PREFERED_CAPS_FPS_DENOMINATOR);
+  }
+}
+
 static GstStateChangeReturn
 gst_media_src_bin_change_state (GstElement * element, GstStateChange transition)
 {
@@ -570,6 +600,12 @@ gst_media_src_bin_change_state (GstElement * element, GstStateChange transition)
         }
 
         GST_INFO_OBJECT (bin, "%s peer caps are %" GST_PTR_FORMAT,
+            GST_PAD_NAME (vnode_info->ghostpad), caps);
+
+        if (caps && !gst_caps_is_any (caps))
+          gst_media_src_bin_fixate_caps (bin, caps);
+
+        GST_INFO_OBJECT (bin, "%s fixated peer caps are %" GST_PTR_FORMAT,
             GST_PAD_NAME (vnode_info->ghostpad), caps);
 
         /* Remove colorimetry, chroma-site, interlace-mode and
