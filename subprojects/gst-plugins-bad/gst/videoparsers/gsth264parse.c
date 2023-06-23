@@ -1521,7 +1521,7 @@ gst_h264_parse_handle_frame (GstBaseParse * parse,
 
     GST_DEBUG_OBJECT (h264parse, "%p complete nal found. Off: %u, Size: %u",
         data, nalu.offset, nalu.size);
-
+#if 0
     if (!nonext) {
       /* expect at least 3 bytes start_code, and 1 bytes NALU header.
        * the length of the NALU payload can be zero.
@@ -1542,7 +1542,7 @@ gst_h264_parse_handle_frame (GstBaseParse * parse,
     } else if (nalu.type == GST_H264_NAL_AU_DELIMITER) {
       h264parse->prefix_off = -1;
     }
-
+#endif
     if (gst_h264_parse_collect_nal (h264parse, &nalu)) {
       h264parse->aud_needed = TRUE;
       /* complete current frame, if it exists.
@@ -1555,12 +1555,19 @@ gst_h264_parse_handle_frame (GstBaseParse * parse,
        *   first NAL unit of the AU as per H.264 Annex B.1.2
        * if all remaining data is part of the prefix -> do nothing
        */
+#if 0
       if (current_off > 0 && (h264parse->prefix_off != 0
               && h264parse->prefix_off != 1)) {
       nalu.size = 0;
       nalu.offset =
 	      h264parse->prefix_off > 1 ? h264parse->prefix_off : nalu.sc_offset;
       h264parse->marker = TRUE;
+#else
+      if (current_off > 0) {
+        nalu.size = 0;
+        nalu.offset = nalu.sc_offset;
+        h264parse->marker = TRUE;
+#endif
         break;
       }
     }
