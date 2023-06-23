@@ -224,7 +224,6 @@ gst_drm_height_from_drm (guint32 drmfmt, guint32 height)
   switch (drmfmt) {
     case DRM_FORMAT_YUV420:
     case DRM_FORMAT_YVU420:
-    case DRM_FORMAT_YUV422:
     case DRM_FORMAT_NV12:
     case DRM_FORMAT_NV21:
 #ifdef DRM_FORMAT_XV15
@@ -236,6 +235,7 @@ gst_drm_height_from_drm (guint32 drmfmt, guint32 height)
       break;
     case DRM_FORMAT_NV16:
     case DRM_FORMAT_NV61:
+    case DRM_FORMAT_YUV422:
 #ifdef DRM_FORMAT_XV20
     case DRM_FORMAT_XV20:
 #endif
