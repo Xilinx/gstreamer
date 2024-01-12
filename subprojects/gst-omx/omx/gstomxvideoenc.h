@@ -121,6 +121,7 @@ struct _GstOMXVideoEnc
   guint32 input_crop_height;
   gboolean hlg_sdr_compatible;
   gboolean is_yuv444;
+  gboolean disable_realtime;
 #endif
 
   /* for HDR10 support */

@@ -98,15 +98,17 @@ enum
   PROP_SPLIT_INPUT,
   PROP_OUTPUT_POSITION,
   PROP_DEVICE,
+  PROP_DISABLE_REALTIME,
 };
 
 #define GST_OMX_VIDEO_DEC_INTERNAL_ENTROPY_BUFFERS_DEFAULT (5)
 #define GST_OMX_VIDEO_DEC_LOW_LATENCY_DEFAULT              (FALSE)
-#define GST_OMX_VIDEO_DEC_LATENCY_MODE_DEFAULT          (0xffffffff)
+#define GST_OMX_VIDEO_DEC_LATENCY_MODE_DEFAULT             (0xffffffff)
 #define GST_OMX_VIDEO_DEC_SPLIT_INPUT_DEFAULT              (FALSE)
 #define GST_OMX_VIDEO_DEC_OUTPUT_POSITION_X_DEFAULT        (0)
 #define GST_OMX_VIDEO_DEC_OUTPUT_POSITION_Y_DEFAULT        (0)
 #define GST_OMX_VIDEO_DEC_DEVICE_DEFAULT                   ("/dev/allegroDecodeIP0")
+#define GST_OMX_VIDEO_DEC_DISABLE_REALTIME_DEFAULT         (FALSE)
 
 
 #if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
@@ -207,6 +209,9 @@ gst_omx_video_dec_set_property (GObject * object, guint prop_id,
 
       break;
     }
+    case PROP_DISABLE_REALTIME:
+      self->disable_realtime = g_value_get_boolean (value);
+      break;
 #ifdef USE_OMX_TARGET_VERSAL
     case PROP_DEVICE:
       self->device = g_strdup (g_value_get_string (value));
@@ -240,6 +245,9 @@ gst_omx_video_dec_get_property (GObject * object, guint prop_id,
       break;
     case PROP_SPLIT_INPUT:
       g_value_set_boolean (value, self->split_input);
+      break;
+    case PROP_DISABLE_REALTIME:
+      g_value_set_boolean (value, self->disable_realtime);
       break;
 #ifdef USE_OMX_TARGET_VERSAL
     case PROP_DEVICE:
@@ -307,6 +315,14 @@ gst_omx_video_dec_class_init (GstOMXVideoDecClass * klass)
               "Position coordinates x and y in output video buffer",
               0, G_MAXINT, 0, G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS),
           G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_DISABLE_REALTIME,
+      g_param_spec_boolean ("disable-realtime", "Disable resource allocation limit",
+          "Disable channel resource allocation limit verification",
+          GST_OMX_VIDEO_DEC_DISABLE_REALTIME_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
+
 #ifdef USE_OMX_TARGET_VERSAL
   g_object_class_install_property (gobject_class, PROP_DEVICE,
       g_param_spec_string ("device", "Device",
@@ -469,6 +485,23 @@ set_zynqultrascaleplus_props (GstOMXVideoDec * self)
           (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoOutputPosition, &point);
       CHECK_ERR ("output-position");
     }
+  }
+
+  {
+    OMX_ALG_VIDEO_PARAM_REALTIME realtime;
+
+    GST_OMX_INIT_STRUCT (&realtime);
+    realtime.nPortIndex = self->dec_out_port->index;
+    realtime.bDisableRealtime = self->disable_realtime;
+
+    GST_DEBUG_OBJECT (self, "setting disable realtime to %d",
+        self->disable_realtime);
+
+    err =
+        gst_omx_component_set_parameter (self->dec,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoRealtime,
+        &realtime);
+    CHECK_ERR ("realtime");
   }
 
   return TRUE;

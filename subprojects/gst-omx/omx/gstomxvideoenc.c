@@ -354,6 +354,7 @@ enum
   PROP_INPUT_CROP,
   PROP_HLG_SDR_COMPATIBLE,
   PROP_IS_YUV444,
+  PROP_DISABLE_REALTIME,
 };
 
 /* FIXME: Better defaults */
@@ -405,6 +406,7 @@ enum
 #define GST_OMX_VIDEO_ENC_INPUT_CROP_HEIGHT_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_HLG_SDR_COMPATIBLE_DEFAULT (FALSE)
 #define GST_OMX_VIDEO_ENC_IS_YUV444_DEFAULT (FALSE)
+#define GST_OMX_VIDEO_ENC_DISABLE_REALTIME_DEFAULT (FALSE)
 
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
@@ -736,6 +738,13 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
       g_param_spec_boolean ("y444-to-gray", "YUV444 format",
           "Enable/Disable YUV format manipulation to Y8",
           GST_OMX_VIDEO_ENC_IS_YUV444_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_DISABLE_REALTIME,
+      g_param_spec_boolean ("disable-realtime", "Disable resource allocation limit",
+          "Disable channel resource allocation limit verification",
+          GST_OMX_VIDEO_ENC_DISABLE_REALTIME_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
 #endif
@@ -1299,15 +1308,34 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
     GST_OMX_INIT_STRUCT (&prefetch_buffer);
     prefetch_buffer.nPortIndex = self->enc_out_port->index;
     prefetch_buffer.bEnablePrefetchBuffer = self->prefetch_buffer;
+    prefetch_buffer.bEnableReducedRange = self->is_yuv444;
 
-    GST_DEBUG_OBJECT (self, "setting prefetch buffer to %d",
-        self->prefetch_buffer);
+    GST_DEBUG_OBJECT (self,
+        "setting prefetch buffer to %d and reduced range to %d",
+        self->prefetch_buffer, self->is_yuv444);
 
     err =
         gst_omx_component_set_parameter (self->enc,
         (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoPrefetchBuffer,
         &prefetch_buffer);
     CHECK_ERR ("prefetch");
+  }
+
+  {
+    OMX_ALG_VIDEO_PARAM_REALTIME realtime;
+
+    GST_OMX_INIT_STRUCT (&realtime);
+    realtime.nPortIndex = self->enc_out_port->index;
+    realtime.bDisableRealtime = (self->is_yuv444 | self->disable_realtime);
+
+    GST_DEBUG_OBJECT (self, "setting disable realtime to %d",
+        realtime.bDisableRealtime);
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoRealtime,
+        &realtime);
+    CHECK_ERR ("realtime");
   }
 
   if (self->latency_mode != GST_OMX_VIDEO_ENC_LATENCY_MODE_DEFAULT) {
@@ -2008,6 +2036,9 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
     case PROP_IS_YUV444:
       self->is_yuv444 = g_value_get_boolean (value);
       break;
+    case PROP_DISABLE_REALTIME:
+      self->disable_realtime = g_value_get_boolean (value);
+      break;
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -2126,6 +2157,9 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
       break;
     case PROP_IS_YUV444:
       g_value_set_boolean (value, self->is_yuv444);
+      break;
+    case PROP_DISABLE_REALTIME:
+      g_value_set_boolean (value, self->disable_realtime);
       break;
 #endif
     default:
