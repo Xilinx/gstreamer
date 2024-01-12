@@ -106,6 +106,7 @@ struct _GstOMXVideoDec
   gboolean split_input;
   gint32 output_position_x;
   gint32 output_position_y;
+  gboolean disable_realtime;
 #ifdef USE_OMX_TARGET_VERSAL
   gchar *device;
 #endif
