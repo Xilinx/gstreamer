@@ -5210,7 +5210,13 @@ gst_v4l2_object_decide_allocation (GstV4l2Object * obj, GstQuery * query)
       own_min += 2;
       gst_v4l2_buffer_pool_copy_at_threshold (GST_V4L2_BUFFER_POOL (pool),
           TRUE);
-    } else {
+    }else if (V4L2_TYPE_IS_CAPTURE(obj->type) && (obj->mode == GST_V4L2_IO_DMABUF_IMPORT)) {
+      // since we reuse right index, so let's keep buffer number of downstream pool same with v4l2buffer pool
+      GST_DEBUG_OBJECT (pool, "got min: %d own_min: %d max: %d min_buffers:%d", min, own_min, max, obj->min_buffers);
+      own_min = (obj->min_buffers) + min + 1;
+      min = own_min;
+    }
+    else {
       gst_v4l2_buffer_pool_copy_at_threshold (GST_V4L2_BUFFER_POOL (pool),
           FALSE);
     }
