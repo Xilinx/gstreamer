@@ -2074,6 +2074,20 @@ omx_index_type_to_str (OMX_INDEXTYPE index)
       return "OMX_ALG_IndexParamVideoMasteringDisplayColourVolumeSEI";
     case OMX_ALG_IndexParamVideoContentLightLevelSEI:
       return "OMX_ALG_IndexParamVideoContentLightLevelSEI";
+    case OMX_ALG_IndexParamVideoUniformSliceType:
+      return "OMX_ALG_IndexParamVideoUniformSliceType";
+    case OMX_ALG_IndexParamVideoCrop:
+      return "OMX_ALG_IndexParamVideoCrop";
+    case OMX_ALG_IndexParamVideoOutputPosition:
+      return "OMX_ALG_IndexParamVideoOutputPosition";
+    case OMX_ALG_IndexParamVideoStartCodeBytesAlignment:
+      return "OMX_ALG_IndexParamVideoStartCodeBytesAlignment";
+    case OMX_ALG_IndexParamVideoRecoveryPoint:
+      return "OMX_ALG_IndexParamVideoRecoveryPoint";
+    case OMX_ALG_IndexParamVideoFullRange:
+      return "OMX_ALG_IndexParamVideoFullRange";
+    case OMX_ALG_IndexParamVideoRealtime:
+      return "OMX_ALG_IndexParamVideoRealtime";
     case OMX_ALG_IndexConfigVideoRegionOfInterestByValue:
       return "OMX_ALG_IndexConfigVideoRegionOfInterestByValue";
     case OMX_ALG_IndexConfigVideoColorPrimaries:
