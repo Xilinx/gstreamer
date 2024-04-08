@@ -49,7 +49,7 @@ struct _GstOMXH265Enc
 
   /* properties */
   guint32 interval_intraframes;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   guint32 periodicity_idr;
   guint32 b_frames;
   gboolean constrained_intra_prediction;

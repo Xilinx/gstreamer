@@ -32,7 +32,7 @@ typedef struct
 
 static const H264ProfileMapping h264_profiles[] = {
   {"baseline", OMX_VIDEO_AVCProfileBaseline},
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   {"constrained-baseline",
       (OMX_VIDEO_AVCPROFILETYPE) OMX_ALG_VIDEO_AVCProfileConstrainedBaseline},
 #else
@@ -42,7 +42,7 @@ static const H264ProfileMapping h264_profiles[] = {
   {"high", OMX_VIDEO_AVCProfileHigh},
   {"high-10", OMX_VIDEO_AVCProfileHigh10},
   {"high-4:2:2", OMX_VIDEO_AVCProfileHigh422},
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   {"progressive-high",
       (OMX_VIDEO_AVCPROFILETYPE) OMX_ALG_VIDEO_AVCProfileProgressiveHigh},
   {"constrained-high",
@@ -131,7 +131,7 @@ gst_omx_h264_utils_get_level_from_str (const gchar * level)
     return OMX_VIDEO_AVCLevel5;
   } else if (g_str_equal (level, "5.1")) {
     return OMX_VIDEO_AVCLevel51;
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   } else if (g_str_equal (level, "5.2")) {
     return (OMX_VIDEO_AVCLEVELTYPE) OMX_ALG_VIDEO_AVCLevel52;
   } else if (g_str_equal (level, "6")) {

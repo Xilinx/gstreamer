@@ -78,7 +78,7 @@ struct _GstOMXVideoEnc
   guint32 quant_p_frames;
   guint32 quant_b_frames;
   gboolean use_out_port_pool;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   guint32 qp_mode;
   guint32 min_qp;
   guint32 max_qp;
@@ -150,7 +150,7 @@ struct _GstOMXVideoEnc
   /* TRUE if encoder is receiving input using XLNX-LL */
   gboolean xlnx_ll;
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   GEnumClass *alg_roi_quality_enum_class;
 #endif
 };

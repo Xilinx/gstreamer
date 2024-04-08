@@ -57,7 +57,7 @@ gst_omx_video_enc_control_rate_get_type (void)
           "variable-skip-frames"},
       {OMX_Video_ControlRateConstantSkipFrames, "Constant Skip Frames",
           "constant-skip-frames"},
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
       {OMX_ALG_Video_ControlRateVariableCapped, "Capped Variable",
           "capped-variable"},
       {OMX_ALG_Video_ControlRateLowLatency, "Low Latency", "low-latency"},
@@ -71,7 +71,7 @@ gst_omx_video_enc_control_rate_get_type (void)
   return qtype;
 }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 #define GST_TYPE_OMX_VIDEO_ENC_QP_MODE (gst_omx_video_enc_qp_mode_get_type ())
 typedef enum
 {
@@ -301,7 +301,7 @@ static GstFlowReturn gst_omx_video_enc_handle_output_frame (GstOMXVideoEnc *
     self, GstOMXPort * port, GstBuffer * outbuf, GstOMXBuffer * buf,
     GstVideoCodecFrame * frame);
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 static GstFlowReturn
 gst_omx_video_enc_zynqmp_pre_push (GstVideoEncoder * encoder,
     GstVideoCodecFrame * frame);
@@ -450,7 +450,7 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
 
   g_object_class_install_property (gobject_class, PROP_TARGET_BITRATE,
       g_param_spec_uint ("target-bitrate", "Target Bitrate",
-#ifndef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if !defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) && !defined(USE_OMX_TARGET_VERSAL_GEN2)
           "Target bitrate in bits per second (0xffffffff=component default)",
 #else
           "Target bitrate in Kbps (0xffffffff=component default)",
@@ -487,7 +487,7 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   g_object_class_install_property (gobject_class, PROP_QP_MODE,
       g_param_spec_enum ("qp-mode", "QP mode",
           "QP control mode used by the VCU encoder",
@@ -734,6 +734,7 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
 
+#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   g_object_class_install_property (gobject_class, PROP_IS_YUV444,
       g_param_spec_boolean ("y444-to-gray", "YUV444 format",
           "Enable/Disable YUV format manipulation to Y8",
@@ -747,6 +748,7 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
           GST_OMX_VIDEO_ENC_DISABLE_REALTIME_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
+#endif
 #endif
 
   element_class->change_state =
@@ -772,7 +774,7 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
   video_encoder_class->decide_allocation =
       GST_DEBUG_FUNCPTR (gst_omx_video_enc_decide_allocation);
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   video_encoder_class->pre_push = gst_omx_video_enc_zynqmp_pre_push;
 #endif
 
@@ -794,7 +796,7 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->quant_p_frames = GST_OMX_VIDEO_ENC_QUANT_P_FRAMES_DEFAULT;
   self->quant_b_frames = GST_OMX_VIDEO_ENC_QUANT_B_FRAMES_DEFAULT;
   self->use_out_port_pool = GST_OMX_VIDEO_ENC_USE_OUT_PORT_POOL_DEFAULT;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   self->qp_mode = GST_OMX_VIDEO_ENC_QP_MODE_DEFAULT;
   self->min_qp = GST_OMX_VIDEO_ENC_MIN_QP_DEFAULT;
   self->max_qp = GST_OMX_VIDEO_ENC_MAX_QP_DEFAULT;
@@ -842,7 +844,7 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   g_mutex_init (&self->drain_lock);
   g_cond_init (&self->drain_cond);
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   self->alg_roi_quality_enum_class =
       g_type_class_ref (GST_TYPE_OMX_VIDEO_ENC_ROI_QUALITY);
 #endif
@@ -864,7 +866,7 @@ gst_omx_video_enc_set_color_primaries (GstOMXVideoEnc * self,
     GstVideoColorPrimaries primaries)
 {
   OMX_ERRORTYPE err = OMX_ErrorNone;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   OMX_ALG_VIDEO_PARAM_COLOR_PRIMARIES param;
 
   GST_OMX_INIT_STRUCT (&param);
@@ -928,7 +930,7 @@ gst_omx_video_enc_set_transfer_characteristics (GstOMXVideoEnc * self,
     GstVideoTransferFunction transfer)
 {
   OMX_ERRORTYPE err = OMX_ErrorNone;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   OMX_ALG_VIDEO_PARAM_TRANSFER_CHARACTERISTICS param;
 
   GST_OMX_INIT_STRUCT (&param);
@@ -986,7 +988,7 @@ gst_omx_video_enc_set_color_matrix (GstOMXVideoEnc * self,
     GstVideoColorMatrix matrix)
 {
   OMX_ERRORTYPE err = OMX_ErrorNone;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   OMX_ALG_VIDEO_PARAM_COLOR_MATRIX param;
 
   GST_OMX_INIT_STRUCT (&param);
@@ -1022,7 +1024,7 @@ gst_omx_video_enc_set_color_matrix (GstOMXVideoEnc * self,
   return TRUE;
 }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 static gboolean
 set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
 {
@@ -1608,7 +1610,7 @@ gst_omx_video_enc_open (GstVideoEncoder * encoder)
   self->enc_in_port = gst_omx_component_add_port (self->enc, in_port_index);
   self->enc_out_port = gst_omx_component_add_port (self->enc, out_port_index);
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   if (self->use_out_port_pool) {
     GST_DEBUG_OBJECT (self, "Configure encoder output to export dmabuf");
     gst_omx_port_set_dmabuf (self->enc_out_port, TRUE);
@@ -1669,7 +1671,7 @@ gst_omx_video_enc_open (GstVideoEncoder * encoder)
       }
     }
   }
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   if (!set_zynqultrascaleplus_props (self))
     return FALSE;
 #endif
@@ -1754,7 +1756,7 @@ gst_omx_video_enc_finalize (GObject * object)
   g_mutex_clear (&self->drain_lock);
   g_cond_clear (&self->drain_cond);
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   g_clear_pointer (&self->alg_roi_quality_enum_class, g_type_class_unref);
 #endif
 
@@ -1803,7 +1805,7 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
     case PROP_USE_OUT_PORT_POOL:
       self->use_out_port_pool = g_value_get_boolean (value);
       break;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     case PROP_QP_MODE:
       self->qp_mode = g_value_get_enum (value);
       break;
@@ -2073,7 +2075,7 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
     case PROP_USE_OUT_PORT_POOL:
       g_value_set_boolean (value, self->use_out_port_pool);
       break;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     case PROP_QP_MODE:
       g_value_set_enum (value, self->qp_mode);
       break;
@@ -2445,7 +2447,7 @@ gst_omx_video_enc_handle_output_frame (GstOMXVideoEnc * self, GstOMXPort * port,
   return flow_ret;
 }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 static GstFlowReturn
 gst_omx_video_enc_zynqmp_pre_push (GstVideoEncoder * encoder,
     GstVideoCodecFrame * frame)
@@ -2524,7 +2526,7 @@ gst_omx_video_enc_ensure_nb_out_buffers (GstOMXVideoEnc * self)
     extra =
         self->use_out_port_pool ? MAX (self->nb_downstream_buffers,
         8) : self->nb_downstream_buffers;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   if (g_getenv ("ENC_EXTRA_OP_BUFFERS") != NULL)
     extra += atoi (g_getenv ("ENC_EXTRA_OP_BUFFERS"));
 #endif
@@ -2589,7 +2591,7 @@ gst_omx_video_enc_pause_loop (GstOMXVideoEnc * self, GstFlowReturn flow_ret)
   g_mutex_unlock (&self->drain_lock);
 }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 static gboolean
 zynq_seamless_output_transition (GstOMXVideoEnc * self, GstOMXPort * port)
 {
@@ -2703,7 +2705,7 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
       if (err != OMX_ErrorNone)
         goto reconfigure_error;
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
       if (self->xlnx_ll && self->started && self->in_pool_used) {
         GstEvent *event;
 
@@ -2722,7 +2724,7 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
       return;
     }
   }
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   if (acq_return == GST_OMX_ACQUIRE_BUFFER_RESOLUTION_CHANGE) {
     GST_DEBUG_OBJECT (self,
         "Output resolution changed; use seamless transition");
@@ -2928,7 +2930,7 @@ gst_omx_video_enc_start (GstVideoEncoder * encoder)
   self->nb_upstream_buffers = 0;
   self->nb_downstream_buffers = 0;
   self->in_pool_used = FALSE;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   self->xlnx_ll = FALSE;
   self->xlnx_ll_start = GST_CLOCK_TIME_NONE;
   self->xlnx_ll_end = GST_CLOCK_TIME_NONE;
@@ -2973,7 +2975,7 @@ gst_omx_video_enc_stop (GstVideoEncoder * encoder)
   return TRUE;
 }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 static void
 gst_omx_video_enc_set_latency (GstOMXVideoEnc * self)
 {
@@ -3125,7 +3127,7 @@ gst_omx_video_enc_configure_input_buffer (GstOMXVideoEnc * self,
   switch (port_def.format.video.eColorFormat) {
     case OMX_COLOR_FormatYUV420Planar:
     case OMX_COLOR_FormatYUV420PackedPlanar:
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
       /* Formats defined in extensions have their own enum so disable to -Wswitch warning */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wswitch"
@@ -3147,7 +3149,7 @@ gst_omx_video_enc_configure_input_buffer (GstOMXVideoEnc * self,
       break;
 
     case OMX_COLOR_FormatL8:
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
       /* Formats defined in extensions have their own enum so disable to -Wswitch warning */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wswitch"
@@ -3159,7 +3161,7 @@ gst_omx_video_enc_configure_input_buffer (GstOMXVideoEnc * self,
       break;
 
     case OMX_COLOR_FormatYUV422SemiPlanar:
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
       /* Formats defined in extensions have their own enum so disable to -Wswitch warning */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wswitch"
@@ -3207,7 +3209,7 @@ gst_omx_video_enc_ensure_nb_in_buffers (GstOMXVideoEnc * self)
             self->nb_upstream_buffers))
       return FALSE;
   } else if ((klass->cdata.hacks & GST_OMX_HACK_ENSURE_BUFFER_COUNT_ACTUAL)) {
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     if (g_getenv ("ENC_EXTRA_IP_BUFFERS") != NULL)
       extra = atoi (g_getenv ("ENC_EXTRA_IP_BUFFERS"));
 #endif
@@ -3244,7 +3246,7 @@ check_input_alignment (GstOMXVideoEnc * self, GstMapInfo * map)
 {
   OMX_PARAM_PORTDEFINITIONTYPE *port_def = &self->enc_in_port->port_def;
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   if ((map->size != port_def->nBufferSize) && (self->is_yuv444 == 0)) {
 #else
   if (map->size != port_def->nBufferSize) {
@@ -3392,7 +3394,7 @@ gst_omx_video_enc_enable (GstOMXVideoEnc * self, GstBuffer * input)
         input);
     self->input_dmabuf = FALSE;
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     if (gst_is_dmabuf_memory (gst_buffer_peek_memory (input, 0))) {
       if (self->input_allocation ==
           GST_OMX_BUFFER_ALLOCATION_USE_BUFFER_DYNAMIC) {
@@ -3523,7 +3525,7 @@ gst_omx_video_enc_framerate_changed (GstOMXVideoEnc * self,
   return FALSE;
 }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 /* returns TRUE if only the resolution changed and that resolution could be
  * updated using OMX_ALG_VIDEO_CONFIG_NOTIFY_RESOLUTION_CHANGE */
 static gboolean
@@ -3731,7 +3733,7 @@ gst_omx_video_enc_set_input_crop (GstOMXVideoEnc * self, GstVideoInfo * info)
 
   return TRUE;
 }
-#endif // USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#endif // USE_OMX_TARGET_ZYNQ_USCALE_PLUS or USE_OMX_TARGET_VERSAL_GEN2
 
 static gboolean
 gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
@@ -3766,7 +3768,7 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
     if (gst_omx_video_enc_framerate_changed (self, state))
       return TRUE;
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     if (gst_omx_video_enc_resolution_changed (self, state))
       return TRUE;
 #endif
@@ -3821,7 +3823,7 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   } else {
     for (l = negotiation_map; l; l = l->next) {
       GstOMXVideoNegotiationMap *m = l->data;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS)
       if (self->is_yuv444 == 1) {
         if (m->format == GST_VIDEO_FORMAT_GRAY8)
           m->format = GST_VIDEO_FORMAT_Y444;
@@ -3842,10 +3844,12 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   port_def.format.video.nFrameWidth = info->width;
   port_def.format.video.nFrameHeight = GST_VIDEO_INFO_FIELD_HEIGHT (info);
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS)
   if (self->is_yuv444) {
     port_def.format.video.nFrameHeight = 3 * GST_VIDEO_INFO_FIELD_HEIGHT (info);
   }
+#endif
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   if (!gst_omx_video_enc_set_interlacing_parameters (self, info))
     return FALSE;
   if (!gst_omx_video_enc_set_output_crop (self, info))
@@ -3939,7 +3943,7 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   if (!gst_omx_video_enc_set_color_matrix (self, cinfo.matrix))
     return FALSE;
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   gst_omx_video_enc_set_latency (self);
 
   {
@@ -3959,7 +3963,7 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   if ((self->has_mcdv_sei =
           gst_video_mastering_display_info_from_caps (&self->minfo,
               state->caps))) {
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     OMX_ALG_VIDEO_PARAM_MASTERING_DISPLAY_COLOUR_VOLUME_SEI mdcv_sei_param;
     OMX_ERRORTYPE err;
 
@@ -3985,7 +3989,7 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
   if ((self->has_cll_sei =
           gst_video_content_light_level_from_caps (&self->linfo,
               state->caps))) {
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     OMX_ALG_VIDEO_PARAM_CONTENT_LIGHT_LEVEL_SEI cll_sei_param;
     OMX_ERRORTYPE err;
 
@@ -4007,7 +4011,7 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
 #endif
   }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   if (self->hlg_sdr_compatible) {
     if (cinfo.transfer == GST_VIDEO_TRANSFER_ARIB_STD_B67) {
       OMX_ALG_VIDEO_PARAM_ALTERNATIVE_TRANSFER_CHARACTERISTICS_SEI
@@ -4179,7 +4183,7 @@ gst_omx_video_enc_fill_buffer (GstOMXVideoEnc * self, GstBuffer * inbuf,
   GstVideoMeta *meta = gst_buffer_get_video_meta (inbuf);
   gint stride = meta ? meta->stride[0] : info->stride[0];
 
-#ifndef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if !defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) && !defined(USE_OMX_TARGET_VERSAL_GEN2)
   //HACK: Seen that the change of resolution in OMX stack is async
   //we might receive buffers which are still having the previous resolution
   if (info->width != port_def->format.video.nFrameWidth ||
@@ -4251,6 +4255,7 @@ gst_omx_video_enc_fill_buffer (GstOMXVideoEnc * self, GstBuffer * inbuf,
   GST_LOG_OBJECT (self, "Mismatched strides - copying line-by-line");
 
   switch (info->finfo->format) {
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS)
     case GST_VIDEO_FORMAT_Y444:
       if ((gst_buffer_get_size (inbuf) <=
               outbuf->omx_buf->nAllocLen - outbuf->omx_buf->nOffset) &&
@@ -4270,6 +4275,7 @@ gst_omx_video_enc_fill_buffer (GstOMXVideoEnc * self, GstBuffer * inbuf,
         goto done;
       }
       break;
+#endif
     case GST_VIDEO_FORMAT_I420:{
       gint i, j, height, width;
       guint8 *src, *dest;
@@ -4370,7 +4376,7 @@ done:
   return ret;
 }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 static void
 handle_roi_metadata (GstOMXVideoEnc * self, GstBuffer * input)
 {
@@ -4471,7 +4477,7 @@ handle_roi_metadata (GstOMXVideoEnc * self, GstBuffer * input)
 }
 #endif
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 static gboolean
 gst_omx_video_enc_interlacing_field_order (GstOMXVideoEnc * self,
     OMX_U32 * order)
@@ -4535,7 +4541,7 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
     GST_DEBUG_OBJECT (self, "Starting task");
     gst_pad_start_task (GST_VIDEO_ENCODER_SRC_PAD (self),
         (GstTaskFunction) gst_omx_video_enc_loop, self, NULL);
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     starting = TRUE;
 #endif
   }
@@ -4663,7 +4669,7 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
       err =
           gst_omx_component_set_config (self->enc,
           OMX_IndexConfigBrcmVideoRequestIFrame, &config);
-#elif defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS)
+#elif defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
       OMX_ALG_VIDEO_CONFIG_INSERT config;
 
       GST_OMX_INIT_STRUCT (&config);
@@ -4688,7 +4694,7 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
         GST_ERROR_OBJECT (self, "Failed to force a keyframe: %s (0x%08x)",
             gst_omx_error_to_string (err), err);
     }
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     handle_roi_metadata (self, frame->input_buffer);
     if (starting) {
       OMX_U32 order;
@@ -4708,13 +4714,13 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
       }
     }
 #endif
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     if ((self->has_mcdv_sei || self->has_cll_sei || self->hlg_sdr_compatible)
         && starting) {
 #else
     if ((self->has_mcdv_sei || self->has_cll_sei) && starting) {
 #endif
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
       OMX_ALG_VIDEO_CONFIG_HIGH_DYNAMIC_RANGE_SEI hdr_sei_config;
       OMX_ERRORTYPE err;
       int i;
@@ -4806,7 +4812,7 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
       buf->omx_buf->nTickCount = 0;
     }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     if (GST_VIDEO_BUFFER_IS_TOP_FIELD (frame->input_buffer))
       buf->omx_buf->nFlags |= OMX_ALG_BUFFERFLAG_TOP_FIELD;
     else if (GST_VIDEO_BUFFER_IS_BOTTOM_FIELD (frame->input_buffer))
@@ -4823,7 +4829,7 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
 
   gst_video_codec_frame_unref (frame);
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   if (self->xlnx_ll && starting && !self->in_pool_used) {
     GstEvent *event;
 
@@ -4984,7 +4990,7 @@ gst_omx_video_enc_drain (GstOMXVideoEnc * self)
   return GST_FLOW_OK;
 }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 static gboolean
 pool_request_allocate_cb (GstBufferPool * pool, GstOMXVideoEnc * self)
 {
@@ -5098,7 +5104,7 @@ gst_omx_video_enc_propose_allocation (GstVideoEncoder * encoder,
 
   num_buffers = self->enc_in_port->port_def.nBufferCountMin + 1;
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   if (g_getenv ("ENC_EXTRA_IP_BUFFERS") != NULL)
     num_buffers += atoi (g_getenv ("ENC_EXTRA_IP_BUFFERS"));
 
@@ -5160,7 +5166,7 @@ filter_supported_formats (GList * negotiation_map)
 static GstCaps *
 add_interlace_to_caps (GstOMXVideoEnc * self, GstCaps * caps)
 {
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   OMX_ERRORTYPE err;
   OMX_INTERLACEFORMATTYPE interlace_format_param;
   GstCaps *caps_alternate;
@@ -5196,7 +5202,7 @@ add_interlace_to_caps (GstOMXVideoEnc * self, GstCaps * caps)
       gst_caps_features_new (GST_CAPS_FEATURE_FORMAT_INTERLACED, NULL));
 
   caps = gst_caps_merge (caps, caps_alternate);
-#endif // USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#endif // USE_OMX_TARGET_ZYNQ_USCALE_PLUS or USE_OMX_TARGET_VERSAL_GEN2
 
   return caps;
 }
@@ -5216,7 +5222,7 @@ gst_omx_video_enc_getcaps (GstVideoEncoder * encoder, GstCaps * filter)
       gst_omx_video_get_supported_colorformats (self->enc_in_port,
       self->input_state);
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS)
   for (l = negotiation_map; l; l = l->next) {
     GstOMXVideoNegotiationMap *m = l->data;
     if (self->is_yuv444 == 1) {
@@ -5235,7 +5241,7 @@ gst_omx_video_enc_getcaps (GstVideoEncoder * encoder, GstCaps * filter)
 
   comp_supported_caps = add_interlace_to_caps (self, comp_supported_caps);
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   comp_supported_caps =
       gst_omx_video_add_xlnx_ll_to_caps (comp_supported_caps, TRUE);
 #endif
@@ -5254,7 +5260,7 @@ gst_omx_video_enc_getcaps (GstVideoEncoder * encoder, GstCaps * filter)
   return ret;
 }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 static gboolean
 handle_scene_change_event (GstOMXVideoEnc * self, GstEvent * event)
 {
@@ -5503,7 +5509,7 @@ gst_omx_video_enc_sink_event (GstVideoEncoder * encoder, GstEvent * event)
         gst_event_unref (event);
         return TRUE;
       }
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
       else if (gst_event_has_name (event, OMX_ALG_GST_EVENT_SCENE_CHANGE))
         handle_scene_change_event (self, event);
       else if (gst_event_has_name (event, OMX_ALG_GST_EVENT_INSERT_LONGTERM)

@@ -59,7 +59,7 @@ G_DEFINE_TYPE_WITH_CODE (GstOMXH264Dec, gst_omx_h264_dec,
 /* The Zynq supports decoding subframes, though we want "au" to be the
  * default, so we keep it prepended. This is the only way that it works with
  * rtph264depay. */
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 #define SINK_CAPS MAKE_CAPS ("au") ";" MAKE_CAPS ("nal")
 #else
 #define SINK_CAPS MAKE_CAPS ("au")

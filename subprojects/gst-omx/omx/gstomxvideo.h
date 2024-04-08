@@ -77,7 +77,7 @@ gboolean gst_omx_video_is_equal_framerate_q16 (OMX_U32 q16_a, OMX_U32 q16_b);
 gboolean gst_omx_video_get_port_padding (GstOMXPort * port, GstVideoInfo * info_orig,
     GstVideoAlignment * align);
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 GstCaps * gst_omx_video_add_xlnx_ll_to_caps (GstCaps * caps, gboolean encoder);
 #endif
 gboolean gst_omx_video_port_support_resolution (GstOMXPort * port, guint width, guint height);

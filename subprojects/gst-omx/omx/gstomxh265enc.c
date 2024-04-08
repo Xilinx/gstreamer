@@ -67,7 +67,7 @@ enum
 #define GST_OMX_H265_VIDEO_ENC_LOOP_FILTER_BETA_OFFSET_DEFAULT (-1)
 #define GST_OMX_H265_VIDEO_ENC_LOOP_FILTER_TC_OFFSET_DEFAULT (-1)
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 /* zynqultrascaleplus's OMX uses a param struct different of Android's one */
 #define INDEX_PARAM_VIDEO_HEVC OMX_ALG_IndexParamVideoHevc
 #define ALIGNMENT "{ au, nal }"
@@ -86,7 +86,7 @@ enum
 G_DEFINE_TYPE_WITH_CODE (GstOMXH265Enc, gst_omx_h265_enc,
     GST_TYPE_OMX_VIDEO_ENC, DEBUG_INIT);
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 #define GST_TYPE_OMX_H265_ENC_LOOP_FILTER_MODE (gst_omx_h265_enc_loop_filter_mode_get_type ())
 static GType
 gst_omx_h265_enc_loop_filter_mode_get_type (void)
@@ -167,7 +167,7 @@ gst_omx_h265_enc_class_init (GstOMXH265EncClass * klass)
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   g_object_class_install_property (gobject_class, PROP_PERIODICITYOFIDRFRAMES,
       g_param_spec_uint ("periodicity-idr", "IDR periodicity",
           "Periodicity of IDR frames (0xffffffff=component default)",
@@ -227,7 +227,7 @@ gst_omx_h265_enc_class_init (GstOMXH265EncClass * klass)
 #endif
 
   videoenc_class->cdata.default_sink_template_caps =
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
       GST_VIDEO_CAPS_MAKE_WITH_FEATURES (GST_CAPS_FEATURE_FORMAT_INTERLACED,
       GST_OMX_VIDEO_ENC_SUPPORTED_FORMATS)
       ", interlace-mode = (string) alternate ; "
@@ -250,7 +250,7 @@ gst_omx_h265_enc_class_init (GstOMXH265EncClass * klass)
   gst_omx_set_default_role (&videoenc_class->cdata, "video_encoder.hevc");
 }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 /* We will set OMX il's nPframes & nBframes parameter as below calculation
    based on user's input of GopLength & NumBframes
    nPframes(Number of P frames between each I frame) = (GopLength -1) / (NumBframes+1)
@@ -351,7 +351,7 @@ gst_omx_h265_enc_set_property (GObject * object, guint prop_id,
     case PROP_INTERVALOFCODINGINTRAFRAMES:
       self->interval_intraframes = g_value_get_uint (value);
       break;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     case PROP_PERIODICITYOFIDRFRAMES:
       self->periodicity_idr = g_value_get_uint (value);
       break;
@@ -406,7 +406,7 @@ gst_omx_h265_enc_get_property (GObject * object, guint prop_id, GValue * value,
     case PROP_INTERVALOFCODINGINTRAFRAMES:
       g_value_set_uint (value, self->interval_intraframes);
       break;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     case PROP_PERIODICITYOFIDRFRAMES:
       g_value_set_uint (value, self->periodicity_idr);
       break;
@@ -440,7 +440,7 @@ gst_omx_h265_enc_init (GstOMXH265Enc * self)
 {
   self->interval_intraframes =
       GST_OMX_H265_VIDEO_ENC_INTERVAL_OF_CODING_INTRA_FRAMES_DEFAULT;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   self->periodicity_idr =
       GST_OMX_H265_VIDEO_ENC_PERIODICITY_OF_IDR_FRAMES_DEFAULT;
   self->b_frames = GST_OMX_H265_VIDEO_ENC_B_FRAMES_DEFAULT;
@@ -507,60 +507,36 @@ static gboolean
 update_param_hevc (GstOMXH265Enc * self,
     OMX_VIDEO_HEVCPROFILETYPE profile, OMX_VIDEO_HEVCLEVELTYPE level)
 {
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   OMX_ALG_VIDEO_PARAM_HEVCTYPE param;
   guint32 p_frames;
   guint32 b_frames;
-#else
-  OMX_VIDEO_PARAM_HEVCTYPE param;
-#endif
+
   OMX_ERRORTYPE err;
 
   GST_OMX_INIT_STRUCT (&param);
   param.nPortIndex = GST_OMX_VIDEO_ENC (self)->enc_out_port->index;
 
-  /* On Android the param struct is initialized manually with default
-   * settings rather than using GetParameter() to retrieve them.
-   * We should probably do the same when we'll add Android as target.
-   * See bgo#783862 for details. */
-
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
-  param.bConstIpred = self->constrained_intra_prediction;
-
-  if (self->loop_filter_mode != GST_OMX_H265_VIDEO_ENC_LOOP_FILTER_MODE_DEFAULT)
-    param.eLoopFilterMode = self->loop_filter_mode;
-
   err =
       gst_omx_component_get_parameter (GST_OMX_VIDEO_ENC (self)->enc,
       (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoHevc, &param);
-#else
-  err =
-      gst_omx_component_get_parameter (GST_OMX_VIDEO_ENC (self)->enc,
-      (OMX_INDEXTYPE) OMX_IndexParamVideoHevc, &param);
-#endif
 
   if (err != OMX_ErrorNone) {
     GST_WARNING_OBJECT (self,
         "Getting OMX_ALG_IndexParamVideoHevc not supported by component");
     return TRUE;
   }
+  param.bConstIpred = self->constrained_intra_prediction;
+
+  if (self->loop_filter_mode != GST_OMX_H265_VIDEO_ENC_LOOP_FILTER_MODE_DEFAULT) {
+    param.eLoopFilterMode = self->loop_filter_mode;
+  }
 
   if (profile != OMX_VIDEO_HEVCProfileUnknown)
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
     param.eProfile = (OMX_ALG_VIDEO_HEVCPROFILETYPE) profile;
-#else
-    param.eProfile = profile;
-#endif
 
   if (level != OMX_VIDEO_HEVCLevelUnknown)
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
     param.eLevel = (OMX_ALG_VIDEO_HEVCLEVELTYPE) level;
-#else
-    param.eLevel = level;
-#endif
-
-  /* GOP pattern */
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
 
   compute_gop_pattern (self, &p_frames, &b_frames);
 
@@ -572,7 +548,28 @@ update_param_hevc (GstOMXH265Enc * self,
     GST_LOG_OBJECT (self, "Changing number of B-Frame to %d", b_frames);
     param.nBFrames = b_frames;
   }
+
 #else
+  OMX_VIDEO_PARAM_HEVCTYPE param;
+  OMX_ERRORTYPE err;
+
+  GST_OMX_INIT_STRUCT (&param);
+  param.nPortIndex = GST_OMX_VIDEO_ENC (self)->enc_out_port->index;
+
+  err =
+      gst_omx_component_get_parameter (GST_OMX_VIDEO_ENC (self)->enc,
+      (OMX_INDEXTYPE) OMX_IndexParamVideoHevc, &param);
+  if (err != OMX_ErrorNone) {
+    GST_WARNING_OBJECT (self,
+        "Getting OMX_ALG_IndexParamVideoHevc not supported by component");
+    return TRUE;
+  }
+  if (profile != OMX_VIDEO_HEVCProfileUnknown)
+    param.eProfile = profile;
+
+  if (level != OMX_VIDEO_HEVCLevelUnknown)
+    param.eLevel = level;
+
   if (self->interval_intraframes !=
       GST_OMX_H265_VIDEO_ENC_INTERVAL_OF_CODING_INTRA_FRAMES_DEFAULT)
     param.nKeyFrameInterval = self->interval_intraframes;
@@ -597,7 +594,7 @@ update_param_hevc (GstOMXH265Enc * self,
   return TRUE;
 }
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 static gboolean
 set_intra_period (GstOMXH265Enc * self)
 {
@@ -716,7 +713,7 @@ gst_omx_h265_enc_set_format (GstOMXVideoEnc * enc, GstOMXPort * port,
   OMX_VIDEO_HEVCLEVELTYPE level = OMX_VIDEO_HEVCLevelUnknown;
   gboolean enable_subframe = FALSE;
 
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   if (self->periodicity_idr !=
       GST_OMX_H265_VIDEO_ENC_PERIODICITY_OF_IDR_FRAMES_DEFAULT)
     set_intra_period (self);

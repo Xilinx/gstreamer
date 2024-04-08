@@ -228,7 +228,7 @@ typedef enum {
   GST_OMX_ACQUIRE_BUFFER_ERROR,
   /* No buffer is currently available (used when calling gst_omx_port_acquire_buffer() in not waiting mode) */
   GST_OMX_ACQUIRE_BUFFER_NO_AVAILABLE,
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   GST_OMX_ACQUIRE_BUFFER_RESOLUTION_CHANGE,
 #endif
 } GstOMXAcquireBufferReturn;
@@ -263,7 +263,7 @@ typedef enum {
   GST_OMX_MESSAGE_PORT_SETTINGS_CHANGED,
   GST_OMX_MESSAGE_BUFFER_FLAG,
   GST_OMX_MESSAGE_BUFFER_DONE,
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   GST_OMX_MESSAGE_SEI_PARSED,
   GST_OMX_MESSAGE_ALG_RESOLUTION_CHANGED,
 #endif
@@ -317,7 +317,7 @@ struct _GstOMXMessage {
       OMX_BUFFERHEADERTYPE *buffer;
       OMX_BOOL empty;
     } buffer_done;
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     struct {
       gboolean prefix;
       OMX_U32 payload_type;
@@ -357,7 +357,7 @@ struct _GstOMXPort {
    * what actually changed in the port definition. */
   OMX_PARAM_PORTDEFINITIONTYPE old_port_def;
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   /* If TRUE, OMX notified a resolution change which should be resolved
    * before handling the next upcoming buffer. */
   gboolean resolution_changed;

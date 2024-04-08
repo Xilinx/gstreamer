@@ -102,7 +102,7 @@ struct _GstOMXVideoDec
   gboolean xlnx_ll;
 
   /* properties */
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   guint32 internal_entropy_buffers;
   gboolean low_latency;
   gboolean split_input;

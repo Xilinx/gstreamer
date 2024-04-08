@@ -48,6 +48,12 @@ if have_omx_hevc and get_option('target') == 'versal'
   omx_sources += 'gstomxh265dec.c'
 endif
 
+if have_omx_hevc and get_option('target') == 'versalgen2'
+  omx_sources += 'gstomxh265utils.c'
+  omx_sources += 'gstomxh265enc.c'
+  omx_sources += 'gstomxh265dec.c'
+endif
+
 optional_deps = []
 if gstgl_dep.found()
   optional_deps += gstgl_dep

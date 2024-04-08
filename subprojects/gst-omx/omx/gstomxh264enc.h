@@ -56,7 +56,7 @@ struct _GstOMXH264Enc
   gboolean constrained_intra_prediction;
   guint32 loop_filter_mode;
   guint8 ref_frames;
-#ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   guint32 gop_length;
   gint8 loop_filter_beta_offset;
   gint8 loop_filter_alpha_c0_offset;

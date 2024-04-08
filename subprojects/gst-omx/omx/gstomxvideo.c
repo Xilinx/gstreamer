@@ -358,7 +358,7 @@ gst_omx_video_get_port_padding (GstOMXPort * port, GstVideoInfo * info_orig,
   return TRUE;
 }
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 
 gboolean
 gst_omx_video_port_support_resolution (GstOMXPort * port, guint width,

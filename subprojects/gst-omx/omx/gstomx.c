@@ -230,7 +230,7 @@ gst_omx_core_release (GstOMXCore * core)
 static void
 gst_omx_message_free (GstOMXMessage * msg)
 {
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   if (msg->type == GST_OMX_MESSAGE_SEI_PARSED)
     if (msg->content.sei_parsed.payload)
       g_free (msg->content.sei_parsed.payload);
@@ -280,7 +280,7 @@ gst_omx_pending_event_free (GstOMXPendingEvent * pending)
   g_free (pending);
 }
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 /* @event: (transfer full) */
 static void
 gst_omx_component_add_downstream_pending_event (GstOMXComponent * comp,
@@ -500,7 +500,7 @@ gst_omx_component_handle_messages (GstOMXComponent * comp)
 
         break;
       }
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
       case GST_OMX_MESSAGE_SEI_PARSED:{
         if (GST_IS_OMX_VIDEO_DEC (comp->parent)) {
           GstBuffer *buf;
@@ -658,7 +658,7 @@ omx_event_type_to_str (OMX_EVENTTYPE event)
       break;
   }
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   switch ((OMX_ALG_EVENTTYPE) event) {
     case OMX_ALG_EventSEIPrefixParsed:
       return "ALG_EventSEIPrefixParsed";
@@ -745,7 +745,7 @@ omx_event_to_debug_struct (OMX_EVENTTYPE event,
       break;
   }
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   switch ((OMX_ALG_EVENTTYPE) event) {
     case OMX_ALG_EventSEIPrefixParsed:
     case OMX_ALG_EventSEISuffixParsed:
@@ -788,7 +788,7 @@ log_omx_api_trace_event (GstOMXComponent * comp, OMX_EVENTTYPE event,
 #endif /* GST_DISABLE_GST_DEBUG */
 }
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 static gboolean
 AlgEventHandler (GstOMXComponent * comp, OMX_PTR pAppData, OMX_EVENTTYPE eEvent,
     OMX_U32 nData1, OMX_U32 nData2, OMX_PTR pEventData)
@@ -966,7 +966,7 @@ EventHandler (OMX_HANDLETYPE hComponent, OMX_PTR pAppData, OMX_EVENTTYPE eEvent,
     }
     case OMX_EventPortFormatDetected:
     default:
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
       if (AlgEventHandler (comp, pAppData, eEvent, nData1, nData2, pEventData))
         return OMX_ErrorNone;
 #endif
@@ -1940,7 +1940,7 @@ omx_index_type_to_str (OMX_INDEXTYPE index)
   }
 #endif
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   switch ((OMX_ALG_INDEXTYPE) index) {
     case OMX_ALG_IndexVendorComponentStartUnused:
       return "OMX_ALG_IndexVendorComponentStartUnused";
@@ -2097,7 +2097,7 @@ omx_index_type_to_str (OMX_INDEXTYPE index)
   }
 #endif
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   /* Not part of the enum in OMX_IndexAlg.h */
   if (index == OMX_ALG_IndexParamVideoInterlaceFormatSupported)
     return "OMX_ALG_IndexParamVideoInterlaceFormatSupported";
@@ -2454,7 +2454,7 @@ retry:
     ret = GST_OMX_ACQUIRE_BUFFER_RECONFIGURE;
     goto done;
   }
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   if (port->resolution_changed) {
     GST_DEBUG_OBJECT (comp->parent, "Component %s port %d resolution changed",
         comp->name, port->index);
@@ -2936,7 +2936,7 @@ gst_omx_is_dynamic_allocation_supported (void)
 {
   /* The Zynqultrascaleplus stack implements OMX 1.1.0 but supports the dynamic
    * allocation mode from 1.2.0 as an extension. */
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   return TRUE;
 #endif
 
@@ -3687,7 +3687,7 @@ gst_omx_port_update_buffer_count_actual (GstOMXPort * port, guint nb)
 gboolean
 gst_omx_port_set_dmabuf (GstOMXPort * port, gboolean dmabuf)
 {
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   OMX_ALG_PORT_PARAM_BUFFER_MODE buffer_mode;
   OMX_ERRORTYPE err;
 
@@ -3719,7 +3719,7 @@ gst_omx_port_set_dmabuf (GstOMXPort * port, gboolean dmabuf)
 gboolean
 gst_omx_port_set_subframe (GstOMXPort * port, gboolean enabled)
 {
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   OMX_ALG_VIDEO_PARAM_SUBFRAME subframe_mode;
   OMX_ERRORTYPE err;
   GST_DEBUG_OBJECT (port->comp->parent, "%s subframe mode for Zynq",
@@ -3749,7 +3749,7 @@ gst_omx_port_set_subframe (GstOMXPort * port, gboolean enabled)
 gboolean
 gst_omx_port_get_subframe (GstOMXPort * port)
 {
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   OMX_ALG_VIDEO_PARAM_SUBFRAME subframe_mode;
   OMX_ERRORTYPE err;
 
@@ -3790,7 +3790,7 @@ static const GGetTypeFunction types[] = {
 #ifdef HAVE_THEORA
       , gst_omx_theora_dec_get_type
 #endif
-#if defined(HAVE_HEVC) && defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS)
+#if defined(HAVE_HEVC) && (defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2))
       , gst_omx_h265_enc_get_type, gst_omx_h265_dec_get_type
 #endif
 #if defined(HAVE_HEVC) && defined(USE_OMX_TARGET_VERSAL)
@@ -3903,7 +3903,7 @@ gst_omx_error_to_string (OMX_ERRORTYPE err)
     case OMX_ErrorContentPipeCreationFailed:
       return "Content pipe creation failed";
 #endif
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     case OMX_ALG_ErrorNoChannelLeft:
       return
           "Maximum number of channel supported at the same time has been exceeded";
@@ -4007,7 +4007,7 @@ struct BufferFlagString buffer_flags_map[] = {
 #ifdef OMX_BUFFERFLAG_SKIPFRAME
   {OMX_BUFFERFLAG_SKIPFRAME, "skip-frame"},
 #endif
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   {OMX_ALG_BUFFERFLAG_TOP_FIELD, "top-field"},
   {OMX_ALG_BUFFERFLAG_BOT_FIELD, "bottom-field"},
 #endif

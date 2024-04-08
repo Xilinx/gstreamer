@@ -8,6 +8,8 @@ elif omx_target == 'tizonia'
   sub = 'tizonia'
 elif omx_target == 'versal'
   sub = 'versal'
+elif omx_target == 'versalgen2'
+  sub = 'versalgen2'
 else
   # No config file defined for the 'generic' target
   sub = ''
