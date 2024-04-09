@@ -2263,20 +2263,61 @@ get_chroma_info_from_input (GstOMXVideoEnc * self, const gchar ** chroma_format,
       *chroma_format = "4:2:0";
       *bit_depth_luma = *bit_depth_chroma = 10;
       break;
+    case GST_VIDEO_FORMAT_P012_LE:
+      *chroma_format = "4:2:0";
+      *bit_depth_luma = *bit_depth_chroma = 12;
+      break;
     case GST_VIDEO_FORMAT_NV16_10LE32:
+    case GST_VIDEO_FORMAT_P210_10LE:
       *chroma_format = "4:2:2";
       *bit_depth_luma = *bit_depth_chroma = 10;
       break;
+    case GST_VIDEO_FORMAT_P212_12LE:
+      *chroma_format = "4:2:2";
+      *bit_depth_luma = *bit_depth_chroma = 12;
+      break;
     case GST_VIDEO_FORMAT_Y444:
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+      *chroma_format = "4:4:4";
+      *bit_depth_luma = 8;
+      *bit_depth_chroma = 8;
+#else
       *chroma_format = "4:0:0";
       *bit_depth_luma = 8;
       *bit_depth_chroma = 0;
+#endif
       break;
     case GST_VIDEO_FORMAT_Y444_10LE32:
       *chroma_format = "4:0:0";
       *bit_depth_luma = 10;
       *bit_depth_chroma = 0;
       break;
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+    case GST_VIDEO_FORMAT_Y444_10LE:
+      *chroma_format = "4:4:4";
+      *bit_depth_luma = 10;
+      *bit_depth_chroma = 10;
+      break;
+    case GST_VIDEO_FORMAT_Y444_12LE:
+      *chroma_format = "4:4:4";
+      *bit_depth_luma = 12;
+      *bit_depth_chroma = 12;
+      break;
+    case GST_VIDEO_FORMAT_GRAY10_LE:
+      *chroma_format = "4:0:0";
+      *bit_depth_luma = 10;
+      *bit_depth_chroma = 0;
+      break;
+    case GST_VIDEO_FORMAT_GRAY12_LE:
+      *chroma_format = "4:0:0";
+      *bit_depth_luma = 12;
+      *bit_depth_chroma = 0;
+      break;
+    case GST_VIDEO_FORMAT_P010_10LE:
+      *chroma_format = "4:2:0";
+      *bit_depth_luma = *bit_depth_chroma = 10;
+      break;
+#endif
     default:
       return FALSE;
   }
@@ -3131,6 +3172,8 @@ gst_omx_video_enc_configure_input_buffer (GstOMXVideoEnc * self,
       /* Formats defined in extensions have their own enum so disable to -Wswitch warning */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wswitch"
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar10bit:
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar12bit:
     case OMX_ALG_COLOR_FormatYUV420SemiPlanar10bitPacked:
 #pragma GCC diagnostic pop
 #endif
@@ -3153,6 +3196,8 @@ gst_omx_video_enc_configure_input_buffer (GstOMXVideoEnc * self,
       /* Formats defined in extensions have their own enum so disable to -Wswitch warning */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wswitch"
+    case OMX_ALG_COLOR_FormatL10bit:
+    case OMX_ALG_COLOR_FormatL12bit:
     case OMX_ALG_COLOR_FormatL10bitPacked:
 #pragma GCC diagnostic pop
 #endif
@@ -3165,7 +3210,9 @@ gst_omx_video_enc_configure_input_buffer (GstOMXVideoEnc * self,
       /* Formats defined in extensions have their own enum so disable to -Wswitch warning */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wswitch"
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar10bit:
     case OMX_ALG_COLOR_FormatYUV422SemiPlanar10bitPacked:
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar12bit:
 #pragma GCC diagnostic pop
 #endif
       port_def.nBufferSize =
@@ -3173,6 +3220,18 @@ gst_omx_video_enc_configure_input_buffer (GstOMXVideoEnc * self,
           2 * (port_def.format.video.nStride *
           ((port_def.format.video.nFrameHeight + 1) / 2));
       break;
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+      /* Formats defined in extensions have their own enum so disable to -Wswitch warning */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch"
+    case OMX_ALG_COLOR_FormatYUV444Planar8bit:
+    case OMX_ALG_COLOR_FormatYUV444Planar10bit:
+    case OMX_ALG_COLOR_FormatYUV444Planar12bit:
+#pragma GCC diagnostic pop
+      port_def.nBufferSize =
+          port_def.format.video.nStride * port_def.format.video.nFrameHeight * 3;
+      break;
+#endif
 
     default:
       GST_ERROR_OBJECT (self, "Unsupported port format %x",
@@ -3809,10 +3868,40 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
         port_def.format.video.eColorFormat = OMX_COLOR_FormatL8;
         break;
       case GST_VIDEO_FORMAT_Y444:
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+        port_def.format.video.eColorFormat = OMX_ALG_COLOR_FormatYUV444Planar8bit;
+#else
         port_def.format.video.eColorFormat = OMX_COLOR_FormatL8;
+#endif
         break;
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+      case GST_VIDEO_FORMAT_Y444_10LE:
+        port_def.format.video.eColorFormat = OMX_ALG_COLOR_FormatYUV444Planar10bit;
+        break;
+      case GST_VIDEO_FORMAT_Y444_12LE:
+        port_def.format.video.eColorFormat = OMX_ALG_COLOR_FormatYUV444Planar12bit;
+        break;
+      case GST_VIDEO_FORMAT_GRAY10_LE:
+        port_def.format.video.eColorFormat = OMX_ALG_COLOR_FormatL10bit;
+        break;
+      case GST_VIDEO_FORMAT_GRAY12_LE:
+        port_def.format.video.eColorFormat = OMX_ALG_COLOR_FormatL12bit;
+        break;
+      case GST_VIDEO_FORMAT_P012_LE:
+        port_def.format.video.eColorFormat = OMX_ALG_COLOR_FormatYUV420SemiPlanar12bit;
+        break;
+#endif
       case GST_VIDEO_FORMAT_Y444_10LE32:
         port_def.format.video.eColorFormat = OMX_COLOR_FormatL8;
+        break;
+      case GST_VIDEO_FORMAT_P010_10LE:
+        port_def.format.video.eColorFormat = OMX_COLOR_FormatYUV420SemiPlanar;
+        break;
+      case GST_VIDEO_FORMAT_P210_10LE:
+        port_def.format.video.eColorFormat = OMX_ALG_COLOR_FormatYUV422SemiPlanar10bit;
+        break;
+      case GST_VIDEO_FORMAT_P212_12LE:
+        port_def.format.video.eColorFormat = OMX_ALG_COLOR_FormatYUV422SemiPlanar12bit;
         break;
       default:
         GST_ERROR_OBJECT (self, "Unsupported format %s",
@@ -4100,7 +4189,7 @@ gst_omx_video_enc_flush (GstVideoEncoder * encoder)
 static gboolean
 gst_omx_video_enc_copy_plane (GstOMXVideoEnc * self, guint i,
     GstVideoFrame * frame, GstOMXBuffer * outbuf,
-    const GstVideoFormatInfo * finfo)
+    const GstVideoFormatInfo * finfo, gboolean packed)
 {
   OMX_PARAM_PORTDEFINITIONTYPE *port_def = &self->enc_in_port->port_def;
   guint8 *src, *dest;
@@ -4117,14 +4206,30 @@ gst_omx_video_enc_copy_plane (GstOMXVideoEnc * self, guint i,
   if (i == 1)
     dest +=
         port_def->format.video.nSliceHeight * port_def->format.video.nStride;
+  if (i == 2)
+    dest +=
+        port_def->format.video.nSliceHeight * port_def->format.video.nStride * 2;
 
   src = GST_VIDEO_FRAME_COMP_DATA (frame, i);
   height = GST_VIDEO_FRAME_COMP_HEIGHT (frame, i);
   width = GST_VIDEO_FRAME_COMP_WIDTH (frame, i) * (i == 0 ? 1 : 2);
 
   if (GST_VIDEO_FORMAT_INFO_BITS (finfo) == 10)
-    /* Need ((width + 2) / 3) 32-bits words */
-    width = (width + 2) / 3 * 4;
+    if (packed)
+      /* Need ((width + 2) / 3) 32-bits words */
+      width = (width + 2) / 3 * 4;
+    else
+      width *= 2;
+
+  if (GST_VIDEO_FORMAT_INFO_BITS (finfo) == 12 ||
+    GST_VIDEO_FORMAT_INFO_BITS (finfo) == 16)
+    width *= 2;
+
+  if (finfo->format == GST_VIDEO_FORMAT_Y444)
+    width = GST_VIDEO_FRAME_COMP_WIDTH (frame, i);
+  else if (finfo->format == GST_VIDEO_FORMAT_Y444_10LE ||
+    finfo->format == GST_VIDEO_FORMAT_Y444_12LE)
+    width = 2 * GST_VIDEO_FRAME_COMP_WIDTH (frame, i);
 
   if (dest + dest_stride * height >
       outbuf->omx_buf->pBuffer + outbuf->omx_buf->nAllocLen) {
@@ -4147,7 +4252,8 @@ gst_omx_video_enc_copy_plane (GstOMXVideoEnc * self, guint i,
 
 static gboolean
 gst_omx_video_enc_semi_planar_manual_copy (GstOMXVideoEnc * self,
-    GstBuffer * inbuf, GstOMXBuffer * outbuf, const GstVideoFormatInfo * finfo)
+    GstBuffer * inbuf, GstOMXBuffer * outbuf, const GstVideoFormatInfo * finfo,
+    gboolean packed, gint planes)
 {
   GstVideoInfo *info = &self->input_state->info;
   GstVideoFrame frame;
@@ -4160,8 +4266,8 @@ gst_omx_video_enc_semi_planar_manual_copy (GstOMXVideoEnc * self,
     return FALSE;
   }
 
-  for (i = 0; i < 2; i++) {
-    if (!gst_omx_video_enc_copy_plane (self, i, &frame, outbuf, finfo)) {
+  for (i = 0; i < planes; i++) {
+    if (!gst_omx_video_enc_copy_plane (self, i, &frame, outbuf, finfo, packed)) {
       gst_video_frame_unmap (&frame);
       return FALSE;
     }
@@ -4349,9 +4455,28 @@ gst_omx_video_enc_fill_buffer (GstOMXVideoEnc * self, GstBuffer * inbuf,
     case GST_VIDEO_FORMAT_NV16_10LE32:
       ret =
           gst_omx_video_enc_semi_planar_manual_copy (self, inbuf, outbuf,
-          info->finfo);
+          info->finfo, TRUE, 2);
       break;
+    case GST_VIDEO_FORMAT_P010_10LE:
+    case GST_VIDEO_FORMAT_P012_LE:
+    case GST_VIDEO_FORMAT_P210_10LE:
+    case GST_VIDEO_FORMAT_P212_12LE:
+      ret =
+          gst_omx_video_enc_semi_planar_manual_copy (self, inbuf, outbuf,
+          info->finfo, FALSE, 2);
+      break;
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+    case GST_VIDEO_FORMAT_Y444:
+    case GST_VIDEO_FORMAT_Y444_10LE:
+    case GST_VIDEO_FORMAT_Y444_12LE:
+      ret =
+          gst_omx_video_enc_semi_planar_manual_copy (self, inbuf, outbuf,
+          info->finfo, FALSE, 3);
+      break;
+#endif
     case GST_VIDEO_FORMAT_GRAY8:
+    case GST_VIDEO_FORMAT_GRAY10_LE:
+    case GST_VIDEO_FORMAT_GRAY12_LE:
     {
       if (!gst_video_frame_map (&frame, info, inbuf, GST_MAP_READ)) {
         GST_ERROR_OBJECT (self, "Failed to map input buffer");
@@ -4359,7 +4484,7 @@ gst_omx_video_enc_fill_buffer (GstOMXVideoEnc * self, GstBuffer * inbuf,
         goto done;
       }
 
-      ret = gst_omx_video_enc_copy_plane (self, 0, &frame, outbuf, info->finfo);
+      ret = gst_omx_video_enc_copy_plane (self, 0, &frame, outbuf, info->finfo, FALSE);
       gst_video_frame_unmap (&frame);
     }
       break;
@@ -5141,15 +5266,25 @@ filter_supported_formats (GList * negotiation_map)
     GList *next;
 
     switch (nmap->format) {
+#if !defined(USE_OMX_TARGET_VERSAL_GEN2)
+      case GST_VIDEO_FORMAT_NV12_10LE32:
+      case GST_VIDEO_FORMAT_NV16_10LE32:
+      case GST_VIDEO_FORMAT_GRAY10_LE32:
+      case GST_VIDEO_FORMAT_Y444_10LE32:
+#endif
       case GST_VIDEO_FORMAT_I420:
       case GST_VIDEO_FORMAT_NV12:
-      case GST_VIDEO_FORMAT_NV12_10LE32:
       case GST_VIDEO_FORMAT_NV16:
-      case GST_VIDEO_FORMAT_NV16_10LE32:
       case GST_VIDEO_FORMAT_GRAY8:
-      case GST_VIDEO_FORMAT_GRAY10_LE32:
       case GST_VIDEO_FORMAT_Y444:
-      case GST_VIDEO_FORMAT_Y444_10LE32:
+      case GST_VIDEO_FORMAT_Y444_10LE:
+      case GST_VIDEO_FORMAT_Y444_12LE:
+      case GST_VIDEO_FORMAT_GRAY10_LE:
+      case GST_VIDEO_FORMAT_GRAY12_LE:
+      case GST_VIDEO_FORMAT_P010_10LE:
+      case GST_VIDEO_FORMAT_P012_LE:
+      case GST_VIDEO_FORMAT_P210_10LE:
+      case GST_VIDEO_FORMAT_P212_12LE:
         cur = g_list_next (cur);
         continue;
       default:

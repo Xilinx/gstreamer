@@ -96,7 +96,43 @@ gst_omx_video_get_format_from_omx (OMX_COLOR_FORMATTYPE omx_colorformat)
       format = GST_VIDEO_FORMAT_GRAY10_LE32;
       break;
 #pragma GCC diagnostic pop
+#elif defined(USE_OMX_TARGET_VERSAL_GEN2)
+      /* Formats defined in extensions have their own enum so disable to -Wswitch warning */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch"
+    // case OMX_ALG_COLOR_FormatL10bitPacked not supported Versal Gen2
+    case OMX_ALG_COLOR_FormatL10bit:
+      format = GST_VIDEO_FORMAT_GRAY10_LE;
+      break;
+    case OMX_ALG_COLOR_FormatL12bit:
+      format = GST_VIDEO_FORMAT_GRAY12_LE;
+      break;
+    // case OMX_ALG_COLOR_FormatYUV420SemiPlanar10bitPacked not supported Versal Gen 2
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar10bit:
+      format = GST_VIDEO_FORMAT_P010_10LE;
+      break;
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar12bit:
+      format = GST_VIDEO_FORMAT_P012_LE;
+      break;
+    // case OMX_ALG_COLOR_FormatYUV422SemiPlanar10bitPacked not supported Versal Gen 2
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar10bit:
+      format = GST_VIDEO_FORMAT_P210_10LE;
+      break;
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar12bit:
+      format = GST_VIDEO_FORMAT_P212_12LE;
+      break;
+    case OMX_ALG_COLOR_FormatYUV444Planar8bit:
+      format = GST_VIDEO_FORMAT_Y444;
+      break;
+    case OMX_ALG_COLOR_FormatYUV444Planar10bit:
+      format = GST_VIDEO_FORMAT_Y444_10LE;
+      break;
+    case OMX_ALG_COLOR_FormatYUV444Planar12bit:
+      format = GST_VIDEO_FORMAT_Y444_12LE;
+      break;
+#pragma GCC diagnostic pop
 #endif
+
     default:
       format = GST_VIDEO_FORMAT_UNKNOWN;
       break;

@@ -68,6 +68,9 @@ static const H264ProfileMapping h264_profiles[] = {
   {"xavc-long-gop-high-4:2:2-mxf",
       (OMX_VIDEO_AVCPROFILETYPE) OMX_ALG_VIDEO_XAVCProfileLongGopHigh422_MXF},
 #endif
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+  {"high-4:4:4", OMX_VIDEO_AVCProfileHigh444},
+#endif
 };
 
 OMX_VIDEO_AVCPROFILETYPE

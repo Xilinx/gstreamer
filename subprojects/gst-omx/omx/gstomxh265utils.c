@@ -57,6 +57,20 @@ static const H265ProfileMapping h265_profiles[] = {
   {"main-422-10-intra",
       (OMX_VIDEO_HEVCPROFILETYPE) OMX_ALG_VIDEO_HEVCProfileMain422_10_Intra},
 #endif
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+  {"monochrome-12",
+      (OMX_VIDEO_HEVCPROFILETYPE) OMX_ALG_VIDEO_HEVCProfileMonochrome12},
+  {"main-12",
+      (OMX_VIDEO_HEVCPROFILETYPE) OMX_ALG_VIDEO_HEVCProfileMain12},
+  {"main-422-12",
+      (OMX_VIDEO_HEVCPROFILETYPE) OMX_ALG_VIDEO_HEVCProfileMain422_12},
+  {"main-444",
+      (OMX_VIDEO_HEVCPROFILETYPE) OMX_ALG_VIDEO_HEVCProfileMain444},
+  {"main-444-10",
+      (OMX_VIDEO_HEVCPROFILETYPE) OMX_ALG_VIDEO_HEVCProfileMain444_10},
+  {"main-444-12",
+      (OMX_VIDEO_HEVCPROFILETYPE) OMX_ALG_VIDEO_HEVCProfileMain444_12},
+#endif
 };
 
 OMX_VIDEO_HEVCPROFILETYPE

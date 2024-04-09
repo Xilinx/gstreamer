@@ -362,14 +362,25 @@ gst_omx_buffer_pool_alloc_buffer (GstBufferPool * bpool,
         case GST_VIDEO_FORMAT_UYVY:
         case GST_VIDEO_FORMAT_YVYU:
         case GST_VIDEO_FORMAT_GRAY8:
+        case GST_VIDEO_FORMAT_GRAY10_LE:
+        case GST_VIDEO_FORMAT_GRAY12_LE:
         case GST_VIDEO_FORMAT_GRAY10_LE32:
           break;
-        case GST_VIDEO_FORMAT_Y444:
         case GST_VIDEO_FORMAT_Y444_10LE32:
+        case GST_VIDEO_FORMAT_Y444:
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+        case GST_VIDEO_FORMAT_Y444_10LE:
+        case GST_VIDEO_FORMAT_Y444_12LE:
+          stride[1] = nstride;
+          offset[1] = offset[0] + stride[0] * nheight;
+          stride[2] = nstride;
+          offset[2] = offset[1] + stride[1] * nheight;
+#else
           stride[1] = nstride;
           offset[1] = offset[0] + (stride[0] * nheight / 3);
           stride[2] = nstride;
           offset[2] = offset[1] + (stride[1] * nheight / 3);
+#endif
           break;
         case GST_VIDEO_FORMAT_I420:
           stride[1] = nstride / 2;
@@ -381,6 +392,10 @@ gst_omx_buffer_pool_alloc_buffer (GstBufferPool * bpool,
         case GST_VIDEO_FORMAT_NV12_10LE32:
         case GST_VIDEO_FORMAT_NV16:
         case GST_VIDEO_FORMAT_NV16_10LE32:
+        case GST_VIDEO_FORMAT_P010_10LE:
+        case GST_VIDEO_FORMAT_P012_LE:
+        case GST_VIDEO_FORMAT_P210_10LE:
+        case GST_VIDEO_FORMAT_P212_12LE:
           stride[1] = nstride;
           offset[1] = offset[0] + stride[0] * nslice;
           break;

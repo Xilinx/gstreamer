@@ -652,7 +652,7 @@ gst_omx_video_dec_shutdown (GstOMXVideoDec * self)
     }
   }
 
-  /* Otherwise we didn't use EGL and just fall back to 
+  /* Otherwise we didn't use EGL and just fall back to
    * shutting down the decoder */
 #endif
 
@@ -895,9 +895,52 @@ gst_omx_video_dec_fill_buffer (GstOMXVideoDec * self,
         src_size[1] = src_stride[1] * nslice;
         dst_height[1] = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo);
         break;
+      case GST_VIDEO_FORMAT_GRAY10_LE:
+      case GST_VIDEO_FORMAT_GRAY12_LE:
+        dst_width[0] = GST_VIDEO_INFO_WIDTH (vinfo) * 2;
+        break;
       case GST_VIDEO_FORMAT_GRAY10_LE32:
         /* Need ((width + 2) / 3) 32-bits words */
         dst_width[0] = (GST_VIDEO_INFO_WIDTH (vinfo) + 2) / 3 * 4;
+        break;
+      case GST_VIDEO_FORMAT_P010_10LE:
+      case GST_VIDEO_FORMAT_P012_LE:
+        dst_width[0] = GST_VIDEO_INFO_WIDTH (vinfo) * 2;
+        src_stride[1] = nstride;
+        src_size[1] = src_stride[1] * nslice / 2;
+        dst_width[1] = GST_VIDEO_INFO_WIDTH (vinfo) * 2;
+        dst_height[1] = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo) / 2;
+        break;
+      case GST_VIDEO_FORMAT_P210_10LE:
+      case GST_VIDEO_FORMAT_P212_12LE:
+        dst_width[0] = GST_VIDEO_INFO_WIDTH (vinfo) * 2;
+        src_stride[1] = nstride;
+        src_size[1] = src_stride[1] * nslice;
+        dst_width[1] = GST_VIDEO_INFO_WIDTH (vinfo) * 2;
+        dst_height[1] = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo);
+        break;
+      case GST_VIDEO_FORMAT_Y444:
+        dst_width[0] = GST_VIDEO_INFO_WIDTH (vinfo);
+        src_stride[1] = nstride;
+        src_size[1] = src_stride[1] * nslice;
+        dst_width[1] = GST_VIDEO_INFO_WIDTH (vinfo);
+        dst_height[1] = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo);
+        src_stride[2] = nstride;
+        src_size[2] = src_stride[1] * nslice;
+        dst_width[2] = GST_VIDEO_INFO_WIDTH (vinfo);
+        dst_height[2] = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo);
+        break;
+      case GST_VIDEO_FORMAT_Y444_10LE:
+      case GST_VIDEO_FORMAT_Y444_12LE:
+        dst_width[0] = GST_VIDEO_INFO_WIDTH (vinfo) * 2;
+        src_stride[1] = nstride;
+        src_size[1] = src_stride[1] * nslice;
+        dst_width[1] = GST_VIDEO_INFO_WIDTH (vinfo) * 2;
+        dst_height[1] = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo);
+        src_stride[2] = nstride;
+        src_size[2] = src_stride[1] * nslice;
+        dst_width[2] = GST_VIDEO_INFO_WIDTH (vinfo) * 2;
+        dst_height[2] = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo);
         break;
       default:
         g_assert_not_reached ();
@@ -3117,6 +3160,11 @@ get_color_format_from_chroma (const gchar * chroma_format,
 #if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
       case 10:
         return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL10bitPacked;
+#elif defined(USE_OMX_TARGET_VERSAL_GEN2)
+      case 10:
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL10bit;
+      case 12:
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL12bit;
 #endif
       case 16:
         return OMX_COLOR_FormatL16;
@@ -3133,6 +3181,10 @@ get_color_format_from_chroma (const gchar * chroma_format,
       return OMX_COLOR_FormatYUV420SemiPlanar;
     else if (!g_strcmp0 (chroma_format, "4:2:2"))
       return OMX_COLOR_FormatYUV422SemiPlanar;
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+    else if (!g_strcmp0 (chroma_format, "4:4:4"))
+      return OMX_ALG_COLOR_FormatYUV444Planar8bit ;
+#endif
   }
 #if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
   if (bit_depth_luma == 10 && bit_depth_chroma == 10) {
@@ -3142,6 +3194,31 @@ get_color_format_from_chroma (const gchar * chroma_format,
     else if (!g_strcmp0 (chroma_format, "4:2:2"))
       return (OMX_COLOR_FORMATTYPE)
           OMX_ALG_COLOR_FormatYUV422SemiPlanar10bitPacked;
+  }
+#elif defined(USE_OMX_TARGET_VERSAL_GEN2)
+  if (bit_depth_luma == 10 && bit_depth_chroma == 10) {
+    if (!g_strcmp0 (chroma_format, "4:2:0"))
+      return (OMX_COLOR_FORMATTYPE)
+          OMX_ALG_COLOR_FormatYUV420SemiPlanar10bit;
+    else if (!g_strcmp0 (chroma_format, "4:2:2"))
+      return (OMX_COLOR_FORMATTYPE)
+          OMX_ALG_COLOR_FormatYUV422SemiPlanar10bit;
+    else if ((!g_strcmp0 (chroma_format, "4:4:4"))) {
+      return (OMX_COLOR_FORMATTYPE)
+          OMX_ALG_COLOR_FormatYUV444Planar10bit;
+    }
+  }
+  if (bit_depth_luma == 12 && bit_depth_chroma == 12) {
+    if (!g_strcmp0 (chroma_format, "4:2:0"))
+      return (OMX_COLOR_FORMATTYPE)
+          OMX_ALG_COLOR_FormatYUV420SemiPlanar12bit;
+    else if (!g_strcmp0 (chroma_format, "4:2:2"))
+      return (OMX_COLOR_FORMATTYPE)
+          OMX_ALG_COLOR_FormatYUV422SemiPlanar12bit;
+    else if ((!g_strcmp0 (chroma_format, "4:4:4"))) {
+      return (OMX_COLOR_FORMATTYPE)
+          OMX_ALG_COLOR_FormatYUV444Planar12bit;
+    }
   }
 #endif
 

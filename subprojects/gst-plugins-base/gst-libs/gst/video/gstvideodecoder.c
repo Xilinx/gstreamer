@@ -3385,7 +3385,6 @@ foreach_metadata (GstBuffer * inbuf, GstMeta ** meta, gpointer user_data)
   GstVideoDecoder *decoder = data->decoder;
   GstVideoDecoderClass *klass = GST_VIDEO_DECODER_GET_CLASS (decoder);
   GstVideoCodecFrame *frame = data->frame;
-  GstBuffer *buffer = data->buffer;
   const GstMetaInfo *info = (*meta)->info;
   gboolean do_copy = FALSE;
 

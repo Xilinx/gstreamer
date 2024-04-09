@@ -100,6 +100,8 @@ G_BEGIN_DECLS
  * @GST_VIDEO_FORMAT_NV61: planar 4:2:2 YUV with interleaved VU plane (Since: 1.6)
  * @GST_VIDEO_FORMAT_P010_10BE: planar 4:2:0 YUV with interleaved UV plane, 10 bits per channel (Since: 1.10)
  * @GST_VIDEO_FORMAT_P010_10LE: planar 4:2:0 YUV with interleaved UV plane, 10 bits per channel (Since: 1.10)
+ * @GST_VIDEO_FORMAT_P210_10LE: planar 4:2:2 YUV with interleaved UV plane, 10 bits per channel
+ * @GST_VIDEO_FORMAT_P212_12LE: planar 4:2:2 YUV with interleaved UV plane, 12 bits per channel
  * @GST_VIDEO_FORMAT_GBRA: planar 4:4:4:4 ARGB, 8 bits per channel (Since: 1.12)
  * @GST_VIDEO_FORMAT_GBRA_10BE: planar 4:4:4:4 ARGB, 10 bits per channel (Since: 1.12)
  * @GST_VIDEO_FORMAT_GBRA_10LE: planar 4:4:4:4 ARGB, 10 bits per channel (Since: 1.12)
@@ -146,7 +148,8 @@ G_BEGIN_DECLS
  * @GST_VIDEO_FORMAT_NV12_16L32S: NV12 with 16x32 Y tiles and 16x16 UV tiles. (Since: 1.22)
  * @GST_VIDEO_FORMAT_NV12_8L128 : NV12 with 8x128 tiles in linear order (Since: 1.22)
  * @GST_VIDEO_FORMAT_NV12_10BE_8L128 : NV12 10bit big endian with 8x128 tiles in linear order (Since: 1.22)
- *
+ * @GST_VIDEO_FORMAT_GRAY10_LE: 10-bit grayscale
+ * @GST_VIDEO_FORMAT_GRAY12_LE: 12-bit grayscale
  * Enum value describing the most common video formats.
  *
  * See the [GStreamer raw video format design document](https://gstreamer.freedesktop.org/documentation/additional/design/mediatype-video-raw.html#formats)
@@ -216,6 +219,8 @@ typedef enum {
   GST_VIDEO_FORMAT_NV61,
   GST_VIDEO_FORMAT_P010_10BE,
   GST_VIDEO_FORMAT_P010_10LE,
+  GST_VIDEO_FORMAT_P210_10LE,
+  GST_VIDEO_FORMAT_P212_12LE,
   GST_VIDEO_FORMAT_IYU2,
   GST_VIDEO_FORMAT_VYUY,
   GST_VIDEO_FORMAT_GBRA,
@@ -407,6 +412,8 @@ typedef enum {
    * Since: 1.22
    */
   GST_VIDEO_FORMAT_NV12_10BE_8L128,
+  GST_VIDEO_FORMAT_GRAY10_LE,
+  GST_VIDEO_FORMAT_GRAY12_LE,
 } GstVideoFormat;
 
 #define GST_VIDEO_MAX_PLANES 4
@@ -884,7 +891,8 @@ gconstpointer  gst_video_format_get_palette          (GstVideoFormat format, gsi
     "P010_10BE, P010_10LE, NV12_10LE32, NV12_10LE40, NV12_10BE_8L128, Y444, RGBP, GBR, BGRP, NV24, xBGR, BGRx, " \
     "xRGB, RGBx, BGR, IYU2, v308, RGB, Y42B, NV61, NV16, VYUY, UYVY, YVYU, YUY2, I420, " \
     "YV12, NV21, NV12, NV12_8L128, NV12_64Z32, NV12_4L4, NV12_32L32, NV12_16L32S, Y41B, IYU1, YVU9, YUV9, RGB16, " \
-    "BGR16, RGB15, BGR15, RGB8P, GRAY16_BE, GRAY16_LE, GRAY10_LE32, GRAY8 }"
+    "BGR16, RGB15, BGR15, RGB8P, GRAY16_BE, GRAY16_LE, GRAY10_LE32, GRAY8, " \
+    "GRAY10_LE, GRAY12_LE, P210_10LE, P212_12LE }"
 #elif G_BYTE_ORDER == G_LITTLE_ENDIAN
 #define GST_VIDEO_FORMATS_ALL "{ ABGR64_LE, BGRA64_LE, AYUV64, ARGB64_LE, ARGB64, " \
     "RGBA64_LE, ABGR64_BE, BGRA64_BE, ARGB64_BE, RGBA64_BE, GBRA_12LE, GBRA_12BE, Y412_LE, " \
@@ -897,7 +905,8 @@ gconstpointer  gst_video_format_get_palette          (GstVideoFormat format, gsi
     "P010_10LE, NV12_10LE32, NV12_10LE40, P010_10BE, NV12_10BE_8L128, Y444, RGBP, GBR, BGRP, NV24, xBGR, BGRx, " \
     "xRGB, RGBx, BGR, IYU2, v308, RGB, Y42B, NV61, NV16, VYUY, UYVY, YVYU, YUY2, I420, " \
     "YV12, NV21, NV12, NV12_8L128, NV12_64Z32, NV12_4L4, NV12_32L32, NV12_16L32S, Y41B, IYU1, YVU9, YUV9, RGB16, " \
-    "BGR16, RGB15, BGR15, RGB8P, GRAY16_LE, GRAY16_BE, GRAY10_LE32, GRAY8 }"
+    "BGR16, RGB15, BGR15, RGB8P, GRAY16_LE, GRAY16_BE, GRAY10_LE32, GRAY8, " \
+    "GRAY10_LE, GRAY12_LE, P210_10LE, P212_12LE }"
 #endif
 
 GST_VIDEO_API
