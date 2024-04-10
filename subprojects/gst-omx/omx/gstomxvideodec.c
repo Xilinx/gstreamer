@@ -852,6 +852,12 @@ gst_omx_video_dec_fill_buffer (GstOMXVideoDec * self,
         dst_width[0] = GST_VIDEO_INFO_WIDTH (vinfo) * 2;
         break;
       case GST_VIDEO_FORMAT_GRAY8:
+      case GST_VIDEO_FORMAT_T5M8:
+      case GST_VIDEO_FORMAT_T5MA:
+      case GST_VIDEO_FORMAT_T5MC:
+      case GST_VIDEO_FORMAT_T6M8:
+      case GST_VIDEO_FORMAT_T6MA:
+      case GST_VIDEO_FORMAT_T6MC:
         dst_width[0] = GST_VIDEO_INFO_WIDTH (vinfo);
         break;
       case GST_VIDEO_FORMAT_I420:
@@ -866,6 +872,12 @@ gst_omx_video_dec_fill_buffer (GstOMXVideoDec * self,
         dst_height[2] = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo) / 2;
         break;
       case GST_VIDEO_FORMAT_NV12:
+      case GST_VIDEO_FORMAT_T508:
+      case GST_VIDEO_FORMAT_T50A:
+      case GST_VIDEO_FORMAT_T60A:
+      case GST_VIDEO_FORMAT_T50C:
+      case GST_VIDEO_FORMAT_T608:
+      case GST_VIDEO_FORMAT_T60C:
         dst_width[0] = GST_VIDEO_INFO_WIDTH (vinfo);
         src_stride[1] = nstride;
         src_size[1] = src_stride[1] * nslice / 2;
@@ -873,6 +885,12 @@ gst_omx_video_dec_fill_buffer (GstOMXVideoDec * self,
         dst_height[1] = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo) / 2;
         break;
       case GST_VIDEO_FORMAT_NV16:
+      case GST_VIDEO_FORMAT_T528:
+      case GST_VIDEO_FORMAT_T52A:
+      case GST_VIDEO_FORMAT_T52C:
+      case GST_VIDEO_FORMAT_T628:
+      case GST_VIDEO_FORMAT_T62A:
+      case GST_VIDEO_FORMAT_T62C:
         dst_width[0] = GST_VIDEO_INFO_WIDTH (vinfo);
         src_stride[1] = nstride;
         src_size[1] = src_stride[1] * nslice;
@@ -920,6 +938,12 @@ gst_omx_video_dec_fill_buffer (GstOMXVideoDec * self,
         dst_height[1] = GST_VIDEO_INFO_FIELD_HEIGHT (vinfo);
         break;
       case GST_VIDEO_FORMAT_Y444:
+      case GST_VIDEO_FORMAT_T548:
+      case GST_VIDEO_FORMAT_T54A:
+      case GST_VIDEO_FORMAT_T54C:
+      case GST_VIDEO_FORMAT_T648:
+      case GST_VIDEO_FORMAT_T64A:
+      case GST_VIDEO_FORMAT_T64C:
         dst_width[0] = GST_VIDEO_INFO_WIDTH (vinfo);
         src_stride[1] = nstride;
         src_size[1] = src_stride[1] * nslice;

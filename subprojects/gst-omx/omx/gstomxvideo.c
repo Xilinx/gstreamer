@@ -100,32 +100,104 @@ gst_omx_video_get_format_from_omx (OMX_COLOR_FORMATTYPE omx_colorformat)
       /* Formats defined in extensions have their own enum so disable to -Wswitch warning */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wswitch"
+    case OMX_ALG_COLOR_FormatL8bitTiled32x4:
+      format = GST_VIDEO_FORMAT_T5M8;
+      break;
+    case OMX_ALG_COLOR_FormatL8bitTiled64x4:
+      format = GST_VIDEO_FORMAT_T6M8;
+      break;
+    case OMX_ALG_COLOR_FormatL10bitTiled32x4:
+      format = GST_VIDEO_FORMAT_T5MA;
+      break;
+    case OMX_ALG_COLOR_FormatL10bitTiled64x4:
+      format = GST_VIDEO_FORMAT_T6MA;
+      break;
     // case OMX_ALG_COLOR_FormatL10bitPacked not supported Versal Gen2
     case OMX_ALG_COLOR_FormatL10bit:
       format = GST_VIDEO_FORMAT_GRAY10_LE;
       break;
+    case OMX_ALG_COLOR_FormatL12bitTiled32x4:
+      format = GST_VIDEO_FORMAT_T5MC;
+      break;
+    case OMX_ALG_COLOR_FormatL12bitTiled64x4:
+      format = GST_VIDEO_FORMAT_T6MC;
+      break;
     case OMX_ALG_COLOR_FormatL12bit:
       format = GST_VIDEO_FORMAT_GRAY12_LE;
+      break;
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar8bitTiled32x4:
+      format = GST_VIDEO_FORMAT_T508;
+      break;
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar8bitTiled64x4:
+      format = GST_VIDEO_FORMAT_T608;
+      break;
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar10bitTiled32x4:
+      format = GST_VIDEO_FORMAT_T50A;
+      break;
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar10bitTiled64x4:
+      format = GST_VIDEO_FORMAT_T60A;
       break;
     // case OMX_ALG_COLOR_FormatYUV420SemiPlanar10bitPacked not supported Versal Gen 2
     case OMX_ALG_COLOR_FormatYUV420SemiPlanar10bit:
       format = GST_VIDEO_FORMAT_P010_10LE;
       break;
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar12bitTiled32x4:
+      format = GST_VIDEO_FORMAT_T50C;
+      break;
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar12bitTiled64x4:
+      format = GST_VIDEO_FORMAT_T60C;
+      break;
     case OMX_ALG_COLOR_FormatYUV420SemiPlanar12bit:
       format = GST_VIDEO_FORMAT_P012_LE;
+      break;
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar8bitTiled32x4:
+      format = GST_VIDEO_FORMAT_T528;
+      break;
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar8bitTiled64x4:
+      format = GST_VIDEO_FORMAT_T628;
+      break;
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar10bitTiled32x4:
+      format = GST_VIDEO_FORMAT_T52A;
+      break;
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar10bitTiled64x4:
+      format = GST_VIDEO_FORMAT_T62A;
       break;
     // case OMX_ALG_COLOR_FormatYUV422SemiPlanar10bitPacked not supported Versal Gen 2
     case OMX_ALG_COLOR_FormatYUV422SemiPlanar10bit:
       format = GST_VIDEO_FORMAT_P210_10LE;
       break;
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar12bitTiled32x4:
+      format = GST_VIDEO_FORMAT_T52C;
+      break;
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar12bitTiled64x4:
+      format = GST_VIDEO_FORMAT_T62C;
+      break;
     case OMX_ALG_COLOR_FormatYUV422SemiPlanar12bit:
       format = GST_VIDEO_FORMAT_P212_12LE;
+      break;
+    case OMX_ALG_COLOR_FormatYUV444Planar8bitTiled32x4:
+      format = GST_VIDEO_FORMAT_T548;
+      break;
+    case OMX_ALG_COLOR_FormatYUV444Planar8bitTiled64x4:
+      format = GST_VIDEO_FORMAT_T648;
       break;
     case OMX_ALG_COLOR_FormatYUV444Planar8bit:
       format = GST_VIDEO_FORMAT_Y444;
       break;
+    case OMX_ALG_COLOR_FormatYUV444Planar10bitTiled32x4:
+      format = GST_VIDEO_FORMAT_T54A;
+      break;
+    case OMX_ALG_COLOR_FormatYUV444Planar10bitTiled64x4:
+      format = GST_VIDEO_FORMAT_T64A;
+      break;
     case OMX_ALG_COLOR_FormatYUV444Planar10bit:
       format = GST_VIDEO_FORMAT_Y444_10LE;
+      break;
+    case OMX_ALG_COLOR_FormatYUV444Planar12bitTiled32x4:
+      format = GST_VIDEO_FORMAT_T54C;
+      break;
+    case OMX_ALG_COLOR_FormatYUV444Planar12bitTiled64x4:
+      format = GST_VIDEO_FORMAT_T64C;
       break;
     case OMX_ALG_COLOR_FormatYUV444Planar12bit:
       format = GST_VIDEO_FORMAT_Y444_12LE;

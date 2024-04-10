@@ -2238,12 +2238,16 @@ get_chroma_info_from_input (GstOMXVideoEnc * self, const gchar ** chroma_format,
 {
   switch (self->input_state->info.finfo->format) {
     case GST_VIDEO_FORMAT_GRAY8:
+    case GST_VIDEO_FORMAT_T5M8:
+    case GST_VIDEO_FORMAT_T6M8:
       *chroma_format = "4:0:0";
       *bit_depth_luma = 8;
       *bit_depth_chroma = 0;
       break;
     case GST_VIDEO_FORMAT_I420:
     case GST_VIDEO_FORMAT_NV12:
+    case GST_VIDEO_FORMAT_T508:
+    case GST_VIDEO_FORMAT_T608:
       *chroma_format = "4:2:0";
       *bit_depth_luma = *bit_depth_chroma = 8;
       break;
@@ -2251,33 +2255,47 @@ get_chroma_info_from_input (GstOMXVideoEnc * self, const gchar ** chroma_format,
     case GST_VIDEO_FORMAT_YUY2:
     case GST_VIDEO_FORMAT_YVYU:
     case GST_VIDEO_FORMAT_UYVY:
+    case GST_VIDEO_FORMAT_T528:
+    case GST_VIDEO_FORMAT_T628:
       *chroma_format = "4:2:2";
       *bit_depth_luma = *bit_depth_chroma = 8;
       break;
     case GST_VIDEO_FORMAT_GRAY10_LE32:
+    case GST_VIDEO_FORMAT_T5MA:
+    case GST_VIDEO_FORMAT_T6MA:
       *chroma_format = "4:0:0";
       *bit_depth_luma = 10;
       *bit_depth_chroma = 0;
       break;
     case GST_VIDEO_FORMAT_NV12_10LE32:
+    case GST_VIDEO_FORMAT_T50A:
+    case GST_VIDEO_FORMAT_T60A:
       *chroma_format = "4:2:0";
       *bit_depth_luma = *bit_depth_chroma = 10;
       break;
     case GST_VIDEO_FORMAT_P012_LE:
+    case GST_VIDEO_FORMAT_T50C:
+    case GST_VIDEO_FORMAT_T60C:
       *chroma_format = "4:2:0";
       *bit_depth_luma = *bit_depth_chroma = 12;
       break;
     case GST_VIDEO_FORMAT_NV16_10LE32:
     case GST_VIDEO_FORMAT_P210_10LE:
+    case GST_VIDEO_FORMAT_T52A:
+    case GST_VIDEO_FORMAT_T62A:
       *chroma_format = "4:2:2";
       *bit_depth_luma = *bit_depth_chroma = 10;
       break;
     case GST_VIDEO_FORMAT_P212_12LE:
+    case GST_VIDEO_FORMAT_T52C:
+    case GST_VIDEO_FORMAT_T62C:
       *chroma_format = "4:2:2";
       *bit_depth_luma = *bit_depth_chroma = 12;
       break;
     case GST_VIDEO_FORMAT_Y444:
 #if defined(USE_OMX_TARGET_VERSAL_GEN2)
+    case GST_VIDEO_FORMAT_T548:
+    case GST_VIDEO_FORMAT_T648:
       *chroma_format = "4:4:4";
       *bit_depth_luma = 8;
       *bit_depth_chroma = 8;
@@ -2294,11 +2312,15 @@ get_chroma_info_from_input (GstOMXVideoEnc * self, const gchar ** chroma_format,
       break;
 #if defined(USE_OMX_TARGET_VERSAL_GEN2)
     case GST_VIDEO_FORMAT_Y444_10LE:
+    case GST_VIDEO_FORMAT_T54A:
+    case GST_VIDEO_FORMAT_T64A:
       *chroma_format = "4:4:4";
       *bit_depth_luma = 10;
       *bit_depth_chroma = 10;
       break;
     case GST_VIDEO_FORMAT_Y444_12LE:
+    case GST_VIDEO_FORMAT_T54C:
+    case GST_VIDEO_FORMAT_T64C:
       *chroma_format = "4:4:4";
       *bit_depth_luma = 12;
       *bit_depth_chroma = 12;
@@ -2309,6 +2331,8 @@ get_chroma_info_from_input (GstOMXVideoEnc * self, const gchar ** chroma_format,
       *bit_depth_chroma = 0;
       break;
     case GST_VIDEO_FORMAT_GRAY12_LE:
+    case GST_VIDEO_FORMAT_T5MC:
+    case GST_VIDEO_FORMAT_T6MC:
       *chroma_format = "4:0:0";
       *bit_depth_luma = 12;
       *bit_depth_chroma = 0;
@@ -3191,6 +3215,74 @@ gst_omx_video_enc_configure_input_buffer (GstOMXVideoEnc * self,
           ((port_def.format.video.nFrameHeight + 1) / 2));
       break;
 
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch"
+    case OMX_ALG_COLOR_FormatL8bitTiled32x4:
+    case OMX_ALG_COLOR_FormatL8bitTiled64x4:
+    case OMX_ALG_COLOR_FormatL10bitTiled32x4:
+    case OMX_ALG_COLOR_FormatL10bitTiled64x4:
+    case OMX_ALG_COLOR_FormatL12bitTiled32x4:
+    case OMX_ALG_COLOR_FormatL12bitTiled64x4:
+#pragma GCC diagnostic pop
+      port_def.nBufferSize =
+          port_def.format.video.nStride * port_def.format.video.nSliceHeight;
+      break;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch"
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar10bitTiled32x4:
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar10bitTiled64x4:
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar12bitTiled32x4:
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar12bitTiled64x4:
+#pragma GCC diagnostic pop
+      /* For 10/12 bits tiled format, do the stride alignment on 8 bits base to avoid alignment check issue */
+      if (port_def.format.video.eColorFormat == OMX_ALG_COLOR_FormatYUV420SemiPlanar10bitTiled32x4 ||
+          port_def.format.video.eColorFormat == OMX_ALG_COLOR_FormatYUV420SemiPlanar10bitTiled64x4)
+        stride = stride * 8 / 10;
+      else if (port_def.format.video.eColorFormat == OMX_ALG_COLOR_FormatYUV420SemiPlanar12bitTiled32x4 ||
+               port_def.format.video.eColorFormat == OMX_ALG_COLOR_FormatYUV420SemiPlanar12bitTiled64x4)
+        stride = stride * 8 / 12;
+
+      if (port_def.nBufferAlignment)
+        stride = GST_ROUND_UP_N (stride, port_def.nBufferAlignment);
+      else
+        stride = GST_ROUND_UP_4 (stride);
+
+      if (port_def.format.video.eColorFormat == OMX_ALG_COLOR_FormatYUV420SemiPlanar10bitTiled32x4 ||
+          port_def.format.video.eColorFormat == OMX_ALG_COLOR_FormatYUV420SemiPlanar10bitTiled64x4)
+        stride = stride * 10 / 8;
+      else if (port_def.format.video.eColorFormat == OMX_ALG_COLOR_FormatYUV420SemiPlanar12bitTiled32x4 ||
+               port_def.format.video.eColorFormat == OMX_ALG_COLOR_FormatYUV420SemiPlanar12bitTiled64x4)
+        stride = stride * 12 / 8;
+
+      port_def.format.video.nStride = stride;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch"
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar8bitTiled32x4:
+    case OMX_ALG_COLOR_FormatYUV420SemiPlanar8bitTiled64x4:
+#pragma GCC diagnostic pop
+      port_def.nBufferSize =
+          (port_def.format.video.nStride * port_def.format.video.nSliceHeight) +
+          (port_def.format.video.nStride *
+          ((port_def.format.video.nSliceHeight + 1) / 2));
+      break;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch"
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar8bitTiled32x4:
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar10bitTiled32x4:
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar12bitTiled32x4:
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar8bitTiled64x4:
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar10bitTiled64x4:
+    case OMX_ALG_COLOR_FormatYUV422SemiPlanar12bitTiled64x4:
+      port_def.nBufferSize =
+          port_def.format.video.nStride * port_def.format.video.nSliceHeight * 2;
+      break;
+#pragma GCC diagnostic pop
+#endif
+
     case OMX_COLOR_FormatL8:
 #if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
       /* Formats defined in extensions have their own enum so disable to -Wswitch warning */
@@ -3230,6 +3322,19 @@ gst_omx_video_enc_configure_input_buffer (GstOMXVideoEnc * self,
 #pragma GCC diagnostic pop
       port_def.nBufferSize =
           port_def.format.video.nStride * port_def.format.video.nFrameHeight * 3;
+      break;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch"
+    case OMX_ALG_COLOR_FormatYUV444Planar8bitTiled32x4:
+    case OMX_ALG_COLOR_FormatYUV444Planar10bitTiled32x4:
+    case OMX_ALG_COLOR_FormatYUV444Planar12bitTiled32x4:
+    case OMX_ALG_COLOR_FormatYUV444Planar8bitTiled64x4:
+    case OMX_ALG_COLOR_FormatYUV444Planar10bitTiled64x4:
+    case OMX_ALG_COLOR_FormatYUV444Planar12bitTiled64x4:
+#pragma GCC diagnostic pop
+      port_def.nBufferSize =
+          port_def.format.video.nStride * port_def.format.video.nSliceHeight * 3;
       break;
 #endif
 
@@ -3853,9 +3958,21 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
         port_def.format.video.eColorFormat = OMX_COLOR_FormatYUV420Planar;
         break;
       case GST_VIDEO_FORMAT_NV12:
+      case GST_VIDEO_FORMAT_T508:
+      case GST_VIDEO_FORMAT_T50A:
+      case GST_VIDEO_FORMAT_T50C:
+      case GST_VIDEO_FORMAT_T608:
+      case GST_VIDEO_FORMAT_T60A:
+      case GST_VIDEO_FORMAT_T60C:
         port_def.format.video.eColorFormat = OMX_COLOR_FormatYUV420SemiPlanar;
         break;
       case GST_VIDEO_FORMAT_NV16:
+      case GST_VIDEO_FORMAT_T528:
+      case GST_VIDEO_FORMAT_T52A:
+      case GST_VIDEO_FORMAT_T52C:
+      case GST_VIDEO_FORMAT_T628:
+      case GST_VIDEO_FORMAT_T62A:
+      case GST_VIDEO_FORMAT_T62C:
         port_def.format.video.eColorFormat = OMX_COLOR_FormatYUV422SemiPlanar;
         break;
       case GST_VIDEO_FORMAT_ABGR:
@@ -3865,10 +3982,18 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
         port_def.format.video.eColorFormat = OMX_COLOR_Format32bitBGRA8888;
         break;
       case GST_VIDEO_FORMAT_GRAY8:
+      case GST_VIDEO_FORMAT_T5M8:
+      case GST_VIDEO_FORMAT_T5MA:
+      case GST_VIDEO_FORMAT_T5MC:
+      case GST_VIDEO_FORMAT_T6M8:
+      case GST_VIDEO_FORMAT_T6MA:
+      case GST_VIDEO_FORMAT_T6MC:
         port_def.format.video.eColorFormat = OMX_COLOR_FormatL8;
         break;
       case GST_VIDEO_FORMAT_Y444:
 #if defined(USE_OMX_TARGET_VERSAL_GEN2)
+      case GST_VIDEO_FORMAT_T548:
+      case GST_VIDEO_FORMAT_T648:
         port_def.format.video.eColorFormat = OMX_ALG_COLOR_FormatYUV444Planar8bit;
 #else
         port_def.format.video.eColorFormat = OMX_COLOR_FormatL8;
@@ -3876,9 +4001,13 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
         break;
 #if defined(USE_OMX_TARGET_VERSAL_GEN2)
       case GST_VIDEO_FORMAT_Y444_10LE:
+      case GST_VIDEO_FORMAT_T54A:
+      case GST_VIDEO_FORMAT_T64A:
         port_def.format.video.eColorFormat = OMX_ALG_COLOR_FormatYUV444Planar10bit;
         break;
       case GST_VIDEO_FORMAT_Y444_12LE:
+      case GST_VIDEO_FORMAT_T54C:
+      case GST_VIDEO_FORMAT_T64C:
         port_def.format.video.eColorFormat = OMX_ALG_COLOR_FormatYUV444Planar12bit;
         break;
       case GST_VIDEO_FORMAT_GRAY10_LE:
@@ -4237,6 +4366,14 @@ gst_omx_video_enc_copy_plane (GstOMXVideoEnc * self, guint i,
     return FALSE;
   }
 
+  /* for Allegro tiled formats, src_stride and dest_stride are for 4 lines */
+  if (finfo->format >= GST_VIDEO_FORMAT_T5M8 &&
+      finfo->format <= GST_VIDEO_FORMAT_T64C ) {
+    src_stride *= 4;
+    width = src_stride;
+    height = (height + 3) / 4;
+  }
+
   for (j = 0; j < height; j++) {
     memcpy (dest, src, width);
     src += src_stride;
@@ -4449,6 +4586,16 @@ gst_omx_video_enc_fill_buffer (GstOMXVideoEnc * self, GstBuffer * inbuf,
       ret = TRUE;
       break;
     }
+    case GST_VIDEO_FORMAT_T5M8:
+    case GST_VIDEO_FORMAT_T5MA:
+    case GST_VIDEO_FORMAT_T5MC:
+    case GST_VIDEO_FORMAT_T6M8:
+    case GST_VIDEO_FORMAT_T6MA:
+    case GST_VIDEO_FORMAT_T6MC:
+      ret =
+          gst_omx_video_enc_semi_planar_manual_copy (self, inbuf, outbuf,
+          info->finfo, FALSE, 1);
+      break;
     case GST_VIDEO_FORMAT_NV12:
     case GST_VIDEO_FORMAT_NV16:
     case GST_VIDEO_FORMAT_NV12_10LE32:
@@ -4461,6 +4608,18 @@ gst_omx_video_enc_fill_buffer (GstOMXVideoEnc * self, GstBuffer * inbuf,
     case GST_VIDEO_FORMAT_P012_LE:
     case GST_VIDEO_FORMAT_P210_10LE:
     case GST_VIDEO_FORMAT_P212_12LE:
+    case GST_VIDEO_FORMAT_T508:
+    case GST_VIDEO_FORMAT_T50A:
+    case GST_VIDEO_FORMAT_T60A:
+    case GST_VIDEO_FORMAT_T50C:
+    case GST_VIDEO_FORMAT_T608:
+    case GST_VIDEO_FORMAT_T60C:
+    case GST_VIDEO_FORMAT_T528:
+    case GST_VIDEO_FORMAT_T52A:
+    case GST_VIDEO_FORMAT_T52C:
+    case GST_VIDEO_FORMAT_T628:
+    case GST_VIDEO_FORMAT_T62A:
+    case GST_VIDEO_FORMAT_T62C:
       ret =
           gst_omx_video_enc_semi_planar_manual_copy (self, inbuf, outbuf,
           info->finfo, FALSE, 2);
@@ -4469,6 +4628,12 @@ gst_omx_video_enc_fill_buffer (GstOMXVideoEnc * self, GstBuffer * inbuf,
     case GST_VIDEO_FORMAT_Y444:
     case GST_VIDEO_FORMAT_Y444_10LE:
     case GST_VIDEO_FORMAT_Y444_12LE:
+    case GST_VIDEO_FORMAT_T548:
+    case GST_VIDEO_FORMAT_T54A:
+    case GST_VIDEO_FORMAT_T54C:
+    case GST_VIDEO_FORMAT_T648:
+    case GST_VIDEO_FORMAT_T64A:
+    case GST_VIDEO_FORMAT_T64C:
       ret =
           gst_omx_video_enc_semi_planar_manual_copy (self, inbuf, outbuf,
           info->finfo, FALSE, 3);
@@ -5285,6 +5450,30 @@ filter_supported_formats (GList * negotiation_map)
       case GST_VIDEO_FORMAT_P012_LE:
       case GST_VIDEO_FORMAT_P210_10LE:
       case GST_VIDEO_FORMAT_P212_12LE:
+      case GST_VIDEO_FORMAT_T5M8:
+      case GST_VIDEO_FORMAT_T5MA:
+      case GST_VIDEO_FORMAT_T5MC:
+      case GST_VIDEO_FORMAT_T6M8:
+      case GST_VIDEO_FORMAT_T6MA:
+      case GST_VIDEO_FORMAT_T6MC:
+      case GST_VIDEO_FORMAT_T508:
+      case GST_VIDEO_FORMAT_T50A:
+      case GST_VIDEO_FORMAT_T60A:
+      case GST_VIDEO_FORMAT_T50C:
+      case GST_VIDEO_FORMAT_T608:
+      case GST_VIDEO_FORMAT_T60C:
+      case GST_VIDEO_FORMAT_T528:
+      case GST_VIDEO_FORMAT_T52A:
+      case GST_VIDEO_FORMAT_T52C:
+      case GST_VIDEO_FORMAT_T628:
+      case GST_VIDEO_FORMAT_T62A:
+      case GST_VIDEO_FORMAT_T62C:
+      case GST_VIDEO_FORMAT_T548:
+      case GST_VIDEO_FORMAT_T54A:
+      case GST_VIDEO_FORMAT_T54C:
+      case GST_VIDEO_FORMAT_T648:
+      case GST_VIDEO_FORMAT_T64A:
+      case GST_VIDEO_FORMAT_T64C:
         cur = g_list_next (cur);
         continue;
       default:

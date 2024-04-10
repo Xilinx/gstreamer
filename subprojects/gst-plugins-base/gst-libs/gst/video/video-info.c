@@ -1289,6 +1289,107 @@ fill_planes (GstVideoInfo * info, gsize plane_size[GST_VIDEO_MAX_PLANES])
       info->size = info->offset[1] + n_tile_x * uv_n_tile_y * tile_size;
       break;
     }
+    case GST_VIDEO_FORMAT_T5M8:
+    case GST_VIDEO_FORMAT_T5MA:
+    case GST_VIDEO_FORMAT_T5MC:
+    case GST_VIDEO_FORMAT_T6M8:
+    case GST_VIDEO_FORMAT_T6MA:
+    case GST_VIDEO_FORMAT_T6MC:
+      if (info->finfo->format == GST_VIDEO_FORMAT_T5M8 ||
+        info->finfo->format == GST_VIDEO_FORMAT_T5MA ||
+        info->finfo->format == GST_VIDEO_FORMAT_T5MC)
+        info->stride[0] = GST_ROUND_UP_32(width); /* 32x4 tile */
+      else if (info->finfo->format == GST_VIDEO_FORMAT_T6M8 ||
+        info->finfo->format == GST_VIDEO_FORMAT_T6MA ||
+        info->finfo->format == GST_VIDEO_FORMAT_T6MC)
+        info->stride[0] = GST_ROUND_UP_64(width); /* 64x4 tile */
+      if (info->finfo->format == GST_VIDEO_FORMAT_T5MA ||
+        info->finfo->format == GST_VIDEO_FORMAT_T6MA)
+        info->stride[0] = info->stride[0] * 10 / 8; /* 10 bit-depth */
+      else if (info->finfo->format == GST_VIDEO_FORMAT_T5MC ||
+        info->finfo->format == GST_VIDEO_FORMAT_T6MC)
+        info->stride[0] = info->stride[0] * 12 / 8; /* 12 bit-depth */
+      info->offset[0] = 0;
+      info->size = info->stride[0] * GST_ROUND_UP_4 (height);
+      break;
+    case GST_VIDEO_FORMAT_T508:
+    case GST_VIDEO_FORMAT_T50A:
+    case GST_VIDEO_FORMAT_T50C:
+    case GST_VIDEO_FORMAT_T608:
+    case GST_VIDEO_FORMAT_T60A:
+    case GST_VIDEO_FORMAT_T60C:
+      if (info->finfo->format == GST_VIDEO_FORMAT_T508 ||
+        info->finfo->format == GST_VIDEO_FORMAT_T50A ||
+        info->finfo->format == GST_VIDEO_FORMAT_T50C)
+        info->stride[0] = GST_ROUND_UP_32(width); /* 32x4 tile */
+      else if (info->finfo->format == GST_VIDEO_FORMAT_T608 ||
+        info->finfo->format == GST_VIDEO_FORMAT_T60A ||
+        info->finfo->format == GST_VIDEO_FORMAT_T60C)
+        info->stride[0] = GST_ROUND_UP_64(width); /* 64x4 tile */
+      if (info->finfo->format == GST_VIDEO_FORMAT_T50A ||
+        info->finfo->format == GST_VIDEO_FORMAT_T60A)
+        info->stride[0] = info->stride[0] * 10 / 8; /* 10 bit-depth */
+      else if (info->finfo->format == GST_VIDEO_FORMAT_T50C ||
+        info->finfo->format == GST_VIDEO_FORMAT_T60C)
+        info->stride[0] = info->stride[0] * 12 / 8; /* 12 bit-depth */
+      info->stride[1] = info->stride[0];
+      info->offset[0] = 0;
+      info->offset[1] = info->stride[0] * GST_ROUND_UP_4 (height);
+      info->size = info->offset[1] + info->stride[1] * GST_ROUND_UP_4 (height / 2);
+      break;
+    case GST_VIDEO_FORMAT_T528:
+    case GST_VIDEO_FORMAT_T52A:
+    case GST_VIDEO_FORMAT_T52C:
+    case GST_VIDEO_FORMAT_T628:
+    case GST_VIDEO_FORMAT_T62A:
+    case GST_VIDEO_FORMAT_T62C:
+      if (info->finfo->format == GST_VIDEO_FORMAT_T528 ||
+        info->finfo->format == GST_VIDEO_FORMAT_T52A ||
+        info->finfo->format == GST_VIDEO_FORMAT_T52C)
+        info->stride[0] = GST_ROUND_UP_32(width); /* 32x4 tile */
+      else if (info->finfo->format == GST_VIDEO_FORMAT_T628 ||
+        info->finfo->format == GST_VIDEO_FORMAT_T62A ||
+        info->finfo->format == GST_VIDEO_FORMAT_T62C)
+        info->stride[0] = GST_ROUND_UP_64(width); /* 64x4 tile */
+      if (info->finfo->format == GST_VIDEO_FORMAT_T52A ||
+        info->finfo->format == GST_VIDEO_FORMAT_T62A)
+        info->stride[0] = info->stride[0] * 10 / 8;  /* 10 bit-depth */
+      else if (info->finfo->format == GST_VIDEO_FORMAT_T52C ||
+        info->finfo->format == GST_VIDEO_FORMAT_T62C)
+        info->stride[0] = info->stride[0] * 12 / 8;  /* 12 bit-depth */
+      info->stride[1] = info->stride[0];
+      info->offset[0] = 0;
+      info->offset[1] = info->stride[0] * GST_ROUND_UP_4 (height);
+      info->size = info->stride[0] * GST_ROUND_UP_4 (height) * 2;
+      break;
+    case GST_VIDEO_FORMAT_T548:
+    case GST_VIDEO_FORMAT_T54A:
+    case GST_VIDEO_FORMAT_T54C:
+    case GST_VIDEO_FORMAT_T648:
+    case GST_VIDEO_FORMAT_T64A:
+    case GST_VIDEO_FORMAT_T64C:
+      if (info->finfo->format == GST_VIDEO_FORMAT_T548 ||
+        info->finfo->format == GST_VIDEO_FORMAT_T54A ||
+        info->finfo->format == GST_VIDEO_FORMAT_T54C)
+        info->stride[0] = GST_ROUND_UP_32(width);
+      else if (info->finfo->format == GST_VIDEO_FORMAT_T648 ||
+        info->finfo->format == GST_VIDEO_FORMAT_T64A ||
+        info->finfo->format == GST_VIDEO_FORMAT_T64C)
+        info->stride[0] = GST_ROUND_UP_64(width);
+      if (info->finfo->format == GST_VIDEO_FORMAT_T54A ||
+        info->finfo->format == GST_VIDEO_FORMAT_T64A)
+        info->stride[0] = info->stride[0] * 10 / 8; /* 10 bit-depth */
+      else if (info->finfo->format == GST_VIDEO_FORMAT_T54C ||
+        info->finfo->format == GST_VIDEO_FORMAT_T64C)
+        info->stride[0] = info->stride[0] * 12 / 8; /* 12 bit-depth */
+      info->stride[1] = info->stride[0];
+      info->stride[2] = info->stride[0];
+      info->offset[0] = 0;
+      info->offset[1] = info->stride[0] * GST_ROUND_UP_4 (height);
+      info->offset[2] = info->offset[1] * 2;
+      info->size = info->stride[0] * GST_ROUND_UP_4 (height) * 3;
+      break;
+
     case GST_VIDEO_FORMAT_ENCODED:
       break;
     case GST_VIDEO_FORMAT_UNKNOWN:

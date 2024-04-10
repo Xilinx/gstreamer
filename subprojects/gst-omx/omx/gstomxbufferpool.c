@@ -366,6 +366,14 @@ gst_omx_buffer_pool_alloc_buffer (GstBufferPool * bpool,
         case GST_VIDEO_FORMAT_GRAY12_LE:
         case GST_VIDEO_FORMAT_GRAY10_LE32:
           break;
+        case GST_VIDEO_FORMAT_T5M8:
+        case GST_VIDEO_FORMAT_T5MA:
+        case GST_VIDEO_FORMAT_T5MC:
+        case GST_VIDEO_FORMAT_T6M8:
+        case GST_VIDEO_FORMAT_T6MA:
+        case GST_VIDEO_FORMAT_T6MC:
+          stride[0] = nstride / 4;
+          break;
         case GST_VIDEO_FORMAT_Y444_10LE32:
         case GST_VIDEO_FORMAT_Y444:
 #if defined(USE_OMX_TARGET_VERSAL_GEN2)
@@ -381,6 +389,18 @@ gst_omx_buffer_pool_alloc_buffer (GstBufferPool * bpool,
           stride[2] = nstride;
           offset[2] = offset[1] + (stride[1] * nheight / 3);
 #endif
+          break;
+        case GST_VIDEO_FORMAT_T548:
+        case GST_VIDEO_FORMAT_T54A:
+        case GST_VIDEO_FORMAT_T54C:
+        case GST_VIDEO_FORMAT_T648:
+        case GST_VIDEO_FORMAT_T64A:
+        case GST_VIDEO_FORMAT_T64C:
+          stride[0] = nstride/4;
+          stride[1] = nstride/4;
+          offset[1] = offset[0] + stride[0] * nslice * 4;
+          stride[2] = nstride/4;
+          offset[2] = offset[1] + stride[1] * nslice * 4;
           break;
         case GST_VIDEO_FORMAT_I420:
           stride[1] = nstride / 2;
@@ -398,6 +418,22 @@ gst_omx_buffer_pool_alloc_buffer (GstBufferPool * bpool,
         case GST_VIDEO_FORMAT_P212_12LE:
           stride[1] = nstride;
           offset[1] = offset[0] + stride[0] * nslice;
+          break;
+        case GST_VIDEO_FORMAT_T508:
+        case GST_VIDEO_FORMAT_T50A:
+        case GST_VIDEO_FORMAT_T60A:
+        case GST_VIDEO_FORMAT_T50C:
+        case GST_VIDEO_FORMAT_T608:
+        case GST_VIDEO_FORMAT_T60C:
+        case GST_VIDEO_FORMAT_T528:
+        case GST_VIDEO_FORMAT_T52A:
+        case GST_VIDEO_FORMAT_T52C:
+        case GST_VIDEO_FORMAT_T628:
+        case GST_VIDEO_FORMAT_T62A:
+        case GST_VIDEO_FORMAT_T62C:
+          stride[0] = nstride / 4;
+          stride[1] = nstride / 4;
+          offset[1] = offset[0] + stride[0] * nslice * 4;
           break;
         default:
           g_assert_not_reached ();
