@@ -357,7 +357,8 @@ gst_v4l2_allocator_release (GstV4l2Allocator * allocator, GstV4l2Memory * mem)
 
   switch (allocator->memory) {
     case V4L2_MEMORY_DMABUF:
-      close (mem->dmafd);
+      if (V4L2_TYPE_IS_CAPTURE(allocator->obj->type) && (allocator->obj->mode == GST_V4L2_IO_DMABUF_IMPORT))
+        break;
       mem->dmafd = -1;
       break;
     case V4L2_MEMORY_USERPTR:
@@ -396,9 +397,10 @@ gst_v4l2_allocator_free (GstAllocator * gallocator, GstMemory * gmem)
         obj->munmap (mem->data, group->planes[mem->plane].length);
     }
 
-    /* This apply for both mmap with expbuf, and dmabuf imported memory */
-    if (mem->dmafd >= 0)
+    if (allocator->memory == V4L2_MEMORY_MMAP && mem->dmafd >= 0){
       close (mem->dmafd);
+      GST_LOG_OBJECT (allocator, "close fd: %d", mem->dmafd);
+    }
   }
 
   g_slice_free (GstV4l2Memory, mem);
@@ -1023,6 +1025,91 @@ gst_v4l2_allocator_alloc_dmabufin (GstV4l2Allocator * allocator)
   return group;
 }
 
+GstV4l2MemoryGroup *
+gst_v4l2_allocator_alloc_dmabufin_capture (GstV4l2Allocator * allocator,
+    GstAllocator * dmabuf_allocator, GstBuffer* downstream_buffer)
+{
+  GstV4l2Object *obj = allocator->obj;
+  GstV4l2MemoryGroup *group;
+  gint i;
+
+  g_return_val_if_fail (allocator->memory == V4L2_MEMORY_DMABUF, NULL);
+
+  group = gst_v4l2_allocator_alloc (allocator);
+
+  if (group == NULL)
+    return NULL;
+
+  for (i = 0; i < group->n_mem; i++) {
+    GstV4l2Memory *mem;
+    GstMemory *dma_mem;
+    gsize size, offset, maxsize;
+
+
+    if (group->mem[i] == NULL) {
+      dma_mem = gst_buffer_peek_memory (downstream_buffer, i);
+      int downstream_fd = gst_dmabuf_memory_get_fd (dma_mem);
+
+      GST_LOG_OBJECT (allocator, "import DMABUF fd %d into fd %i plane %d",
+          downstream_fd, downstream_fd, i);
+
+      group->planes[i].m.fd = downstream_fd;
+      group->planes[i].length = dma_mem->size;
+      group->planes[i].data_offset = dma_mem->offset;
+
+      group->mem[i] = (GstMemory *) _v4l2mem_new (0, GST_ALLOCATOR (allocator),
+          NULL, group->planes[i].length, 0, group->planes[i].data_offset,
+          group->planes[i].length - group->planes[i].data_offset, i, NULL,
+          downstream_fd, group);
+    } else {
+      /* Take back the allocator reference */
+      gst_object_ref (allocator);
+    }
+
+    group->mems_allocated++;
+
+    g_assert (gst_is_v4l2_memory (group->mem[i]));
+    mem = (GstV4l2Memory *) group->mem[i];
+
+    dma_mem = gst_fd_allocator_alloc (dmabuf_allocator, mem->dmafd,
+        group->planes[i].length, GST_FD_MEMORY_FLAG_DONT_CLOSE);
+    gst_memory_resize (dma_mem, group->planes[i].data_offset,
+        group->planes[i].length - group->planes[i].data_offset);
+
+    gst_mini_object_set_qdata (GST_MINI_OBJECT (dma_mem),
+        GST_V4L2_MEMORY_QUARK, mem, (GDestroyNotify) gst_memory_unref);
+
+    group->mem[i] = dma_mem;
+  }
+
+  if (!V4L2_TYPE_IS_MULTIPLANAR (obj->type)) {
+    group->buffer.bytesused = group->planes[0].bytesused;
+    group->buffer.length = group->planes[0].length;
+    group->buffer.m.fd = group->planes[0].m.fd;
+
+    /* FIXME Check if data_offset > 0 and fail for non-multi-planar */
+    g_assert (group->planes[0].data_offset == 0);
+  } else {
+    group->buffer.length = group->n_mem;
+  }
+
+  gst_v4l2_allocator_reset_size (allocator, group);
+
+  return group;
+
+expbuf_failed:
+  {
+    GST_ERROR_OBJECT (allocator, "Failed to export DMABUF: %s",
+        g_strerror (errno));
+    goto cleanup;
+  }
+cleanup:
+  {
+    _cleanup_failed_alloc (allocator, group);
+    return NULL;
+  }
+}
+
 static void
 gst_v4l2_allocator_clear_userptr (GstV4l2Allocator * allocator,
     GstV4l2MemoryGroup * group)
@@ -1455,7 +1542,12 @@ gst_v4l2_allocator_reset_group (GstV4l2Allocator * allocator,
       gst_v4l2_allocator_clear_userptr (allocator, group);
       break;
     case V4L2_MEMORY_DMABUF:
-      gst_v4l2_allocator_clear_dmabufin (allocator, group);
+      if (V4L2_TYPE_IS_CAPTURE(allocator->obj->type) && (allocator->obj->mode == GST_V4L2_IO_DMABUF_IMPORT)) {
+        break;
+      }
+      else {
+        gst_v4l2_allocator_clear_dmabufin (allocator, group);
+      }
       break;
     case V4L2_MEMORY_MMAP:
       break;

@@ -137,6 +137,9 @@ GstV4l2MemoryGroup*  gst_v4l2_allocator_alloc_dmabuf   (GstV4l2Allocator * alloc
 
 GstV4l2MemoryGroup * gst_v4l2_allocator_alloc_dmabufin (GstV4l2Allocator * allocator);
 
+GstV4l2MemoryGroup * gst_v4l2_allocator_alloc_dmabufin_capture (GstV4l2Allocator * allocator,
+    GstAllocator * dmabuf_allocator, GstBuffer* downstream_buffer);
+
 GstV4l2MemoryGroup * gst_v4l2_allocator_alloc_userptr  (GstV4l2Allocator * allocator);
 
 gboolean             gst_v4l2_allocator_import_dmabuf  (GstV4l2Allocator * allocator,

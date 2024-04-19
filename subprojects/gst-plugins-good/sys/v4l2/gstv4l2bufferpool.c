@@ -456,6 +456,7 @@ gst_v4l2_buffer_pool_alloc_buffer (GstBufferPool * bpool, GstBuffer ** buffer,
   GstBuffer *newbuf = NULL;
   GstV4l2Object *obj;
   GstVideoInfo *info;
+  GstBuffer *downstream_buffer = NULL;
 
   obj = pool->obj;
   info = &obj->info;
@@ -476,7 +477,23 @@ gst_v4l2_buffer_pool_alloc_buffer (GstBufferPool * bpool, GstBuffer ** buffer,
       group = gst_v4l2_allocator_alloc_userptr (pool->vallocator);
       break;
     case GST_V4L2_IO_DMABUF_IMPORT:
-      group = gst_v4l2_allocator_alloc_dmabufin (pool->vallocator);
+      if (V4L2_TYPE_IS_OUTPUT(obj->type))
+        group = gst_v4l2_allocator_alloc_dmabufin (pool->vallocator);
+      else {
+        GstFlowReturn ret = gst_buffer_pool_acquire_buffer (pool->other_pool, &downstream_buffer, NULL);
+	if (ret == GST_FLOW_OK)
+	{
+          group = gst_v4l2_allocator_alloc_dmabufin_capture (pool->vallocator, pool->allocator, downstream_buffer);
+          if (group == NULL) {
+             gst_buffer_unref (downstream_buffer);
+             GST_DEBUG_OBJECT (pool, "failed to create buffer while dmabuf importing");
+          }
+	}
+	else
+	{
+          GST_DEBUG_OBJECT (pool->other_pool, "failed to acquire buffer");
+	}
+      }
       break;
     default:
       newbuf = NULL;
@@ -511,6 +528,11 @@ gst_v4l2_buffer_pool_alloc_buffer (GstBufferPool * bpool, GstBuffer ** buffer,
   }
 
   *buffer = newbuf;
+
+  if (downstream_buffer) {
+    gst_mini_object_set_qdata (GST_MINI_OBJECT (newbuf), GST_V4L2_IMPORT_QUARK,
+        downstream_buffer, (GDestroyNotify) gst_buffer_unref);
+  }
 
   return GST_FLOW_OK;
 
@@ -566,6 +588,7 @@ gst_v4l2_buffer_pool_set_config (GstBufferPool * bpool, GstStructure * config)
           GST_V4L2_ALLOCATOR_CAN_ALLOCATE (pool->vallocator, USERPTR);
       break;
     case GST_V4L2_IO_DMABUF_IMPORT:
+      pool->allocator = gst_dmabuf_allocator_new ();
       can_allocate = GST_V4L2_ALLOCATOR_CAN_ALLOCATE (pool->vallocator, DMABUF);
       break;
     case GST_V4L2_IO_RW:
@@ -1741,7 +1764,6 @@ gst_v4l2_buffer_pool_complete_release_buffer (GstBufferPool * bpool,
         case GST_V4L2_IO_DMABUF:
         case GST_V4L2_IO_MMAP:
         case GST_V4L2_IO_USERPTR:
-        case GST_V4L2_IO_DMABUF_IMPORT:
         {
           GstV4l2MemoryGroup *group;
           if (gst_v4l2_is_buffer_valid (buffer, &group)) {
@@ -1764,6 +1786,22 @@ gst_v4l2_buffer_pool_complete_release_buffer (GstBufferPool * bpool,
             if (ret != GST_FLOW_OK ||
                 gst_v4l2_buffer_pool_qbuf (pool, buffer, group,
                     NULL) != GST_FLOW_OK)
+              pclass->release_buffer (bpool, buffer);
+          } else {
+            /* Simply release invalid/modified buffer, the allocator will
+             * give it back later */
+            GST_BUFFER_FLAG_SET (buffer, GST_BUFFER_FLAG_TAG_MEMORY);
+            pclass->release_buffer (bpool, buffer);
+          }
+          break;
+        }
+        case GST_V4L2_IO_DMABUF_IMPORT:
+        {
+          GstV4l2MemoryGroup *group;
+          if (gst_v4l2_is_buffer_valid (buffer, &group)) {
+            GstFlowReturn ret = GST_FLOW_OK;
+            if (ret != GST_FLOW_OK ||
+                gst_v4l2_buffer_pool_qbuf (pool, buffer, group, NULL) != GST_FLOW_OK)
               pclass->release_buffer (bpool, buffer);
           } else {
             /* Simply release invalid/modified buffer, the allocator will
@@ -2221,17 +2259,6 @@ gst_v4l2_buffer_pool_process (GstV4l2BufferPool * pool, GstBuffer ** buf,
 
         case GST_V4L2_IO_DMABUF_IMPORT:
         {
-          GstBuffer *tmp;
-
-          /* Replace our buffer with downstream allocated buffer */
-          tmp = gst_mini_object_steal_qdata (GST_MINI_OBJECT (*buf),
-              GST_V4L2_IMPORT_QUARK);
-
-          gst_buffer_copy_into (tmp, *buf,
-              GST_BUFFER_COPY_FLAGS | GST_BUFFER_COPY_TIMESTAMPS, 0, -1);
-
-          gst_buffer_replace (buf, tmp);
-          gst_buffer_unref (tmp);
           break;
         }
 
