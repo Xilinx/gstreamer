@@ -123,7 +123,11 @@ struct _GstOMXVideoEnc
   gboolean is_yuv444;
   gboolean disable_realtime;
 #endif
-
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+  gboolean scenechg_res;
+  guint32 startcode;
+  gboolean video_full_range;
+#endif
   /* for HDR10 support */
   GstVideoMasteringDisplayInfo minfo;
   GstVideoContentLightLevel linfo;

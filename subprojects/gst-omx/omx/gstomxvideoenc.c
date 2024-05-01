@@ -355,6 +355,9 @@ enum
   PROP_HLG_SDR_COMPATIBLE,
   PROP_IS_YUV444,
   PROP_DISABLE_REALTIME,
+  PROP_SC_RESILIENCE,
+  PROP_STARTCODE,
+  PROP_VIDEO_FULL_RANGE
 };
 
 /* FIXME: Better defaults */
@@ -367,6 +370,7 @@ enum
 #define GST_OMX_VIDEO_ENC_QP_MODE_DEFAULT (0xffffffff)
 #define GST_OMX_VIDEO_ENC_MIN_QP_DEFAULT (10)
 #define GST_OMX_VIDEO_ENC_MAX_QP_DEFAULT (51)
+#define GST_OMX_VIDEO_ENC_QP_AUTO (0xffffffff)
 #define GST_OMX_VIDEO_ENC_GOP_MODE_DEFAULT (OMX_ALG_GOP_MODE_DEFAULT)
 #define GST_OMX_VIDEO_ENC_GDR_MODE_DEFAULT (OMX_ALG_GDR_OFF)
 #define GST_OMX_VIDEO_ENC_INITIAL_DELAY_DEFAULT (1500)
@@ -407,7 +411,9 @@ enum
 #define GST_OMX_VIDEO_ENC_HLG_SDR_COMPATIBLE_DEFAULT (FALSE)
 #define GST_OMX_VIDEO_ENC_IS_YUV444_DEFAULT (FALSE)
 #define GST_OMX_VIDEO_ENC_DISABLE_REALTIME_DEFAULT (FALSE)
-
+#define GST_OMX_VIDEO_ENC_SC_RESILIENCE_DEFAULT (FALSE)
+#define GST_OMX_VIDEO_ENC_STARTCODE_DEFAULT (0)
+#define GST_OMX_VIDEO_ENC_VIDEO_FULL_RANGE_DEFAULT (FALSE)
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
 #define OMX_ALG_GST_EVENT_INSERT_LONGTERM "omx-alg/insert-longterm"
@@ -675,7 +681,7 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
   g_object_class_install_property (gobject_class, PROP_MAX_PICTURE_SIZES,
       gst_param_spec_array ("max-picture-sizes",
           "Max picture size for I,P and B frames",
-          "Max picture sizes baed on frame types ('<I, P, B>') "
+          "Max picture sizes based on frame types ('<I, P, B>') "
           "Maximum picture size of I,P and B frames in Kbits, encoded picture size will be limited to max-picture-size-x value. "
           "If set it to 0 then max-picture-size-x will not have any effect",
           g_param_spec_int ("max-picture-size-x", "max picture size value",
@@ -749,6 +755,29 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
 #endif
+#endif
+
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+  g_object_class_install_property (gobject_class, PROP_SC_RESILIENCE,
+      g_param_spec_boolean ("scenechg-res", "Scene change resilience",
+          "Enable more resilience to improve quality on scene changes",
+          GST_OMX_VIDEO_ENC_SC_RESILIENCE_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_STARTCODE,
+      g_param_spec_uint ("sc-nbytes", "Start code number of bytes",
+          "Number of start code alignment bytes 3: 000001, 4: 00000001, 0: AUTO",
+          0, 4, GST_OMX_VIDEO_ENC_STARTCODE_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_VIDEO_FULL_RANGE,
+      g_param_spec_boolean ("video-full-range", "Use full YUV range",
+          "Using the full range YUV instead of the reduced range (CCIR601) legacy range",
+          GST_OMX_VIDEO_ENC_VIDEO_FULL_RANGE_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
 #endif
 
   element_class->change_state =
@@ -834,6 +863,11 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->input_crop_top = GST_OMX_VIDEO_ENC_INPUT_CROP_TOP_DEFAULT;
   self->input_crop_width = GST_OMX_VIDEO_ENC_INPUT_CROP_WIDTH_DEFAULT;
   self->input_crop_height = GST_OMX_VIDEO_ENC_INPUT_CROP_HEIGHT_DEFAULT;
+#endif
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+  self->scenechg_res = GST_OMX_VIDEO_ENC_SC_RESILIENCE_DEFAULT;
+  self->startcode = GST_OMX_VIDEO_ENC_STARTCODE_DEFAULT;
+  self->video_full_range = GST_OMX_VIDEO_ENC_VIDEO_FULL_RANGE_DEFAULT;
 #endif
 
   gst_video_mastering_display_info_init (&self->minfo);
@@ -1351,7 +1385,7 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
     err =
         gst_omx_component_set_parameter (self->enc,
         (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoSubframe, &subframe_mode);
-    CHECK_ERR ("latency mode");
+    CHECK_ERR ("latency-mode");
   }
 
   {
@@ -1492,12 +1526,73 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
         self->uniform_slice_type ? "Enable" : "Disable");
 
     err =
-        gst_omx_component_set_parameter (self->uniform_slice_type,
+        gst_omx_component_set_parameter (self->enc,
         (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoUniformSliceType,
         &uniform_slice_type);
-    CHECK_ERR ("uniform_slice_type");
+    CHECK_ERR ("uniform-slice-type");
   }
 
+  return TRUE;
+}
+#endif
+
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+static gboolean
+set_versalgen2_props (GstOMXVideoEnc * self)
+{
+  OMX_ERRORTYPE err;
+  {
+    OMX_ALG_VIDEO_PARAM_SCENE_CHANGE_RESILIENCE resilience;
+
+    GST_OMX_INIT_STRUCT (&resilience);
+    resilience.nPortIndex = self->enc_out_port->index;
+    resilience.bDisableSceneChangeResilience = self->scenechg_res;
+
+    GST_DEBUG_OBJECT (self, "setting scene change resilience to %d",
+        resilience.bDisableSceneChangeResilience);
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoSceneChangeResilience,
+        &resilience);
+    CHECK_ERR ("scenechg-res");
+  }
+
+  {
+    OMX_ALG_VIDEO_PARAM_START_CODE_BYTES_ALIGNMENT scba;
+
+    GST_OMX_INIT_STRUCT (&scba);
+    scba.nPortIndex = self->enc_out_port->index;
+    scba.eStartCodeBytesAlignment =
+      (self->startcode == 3) ? OMX_ALG_START_CODE_BYTES_ALIGNMENT_3_BYTES :
+      (self->startcode == 4) ? OMX_ALG_START_CODE_BYTES_ALIGNMENT_4_BYTES :
+      OMX_ALG_START_CODE_BYTES_ALIGNMENT_AUTO;
+
+    GST_DEBUG_OBJECT (self, "setting start code alignment to %u", self->startcode);
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoStartCodeBytesAlignment,
+        &scba);
+    CHECK_ERR ("sc-nbytes");
+  }
+
+  {
+    OMX_ALG_VIDEO_PARAM_VIDEO_FULL_RANGE fullrange;
+
+    GST_OMX_INIT_STRUCT (&fullrange);
+    fullrange.nPortIndex = self->enc_out_port->index;
+    fullrange.bVideoFullRangeEnabled = self->video_full_range;
+
+    GST_DEBUG_OBJECT (self, "setting video full range to %d",
+        fullrange.bVideoFullRangeEnabled);
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoFullRange,
+        &fullrange);
+    CHECK_ERR ("video-full-range");
+  }
   return TRUE;
 }
 #endif
@@ -1673,6 +1768,11 @@ gst_omx_video_enc_open (GstVideoEncoder * encoder)
   }
 #if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   if (!set_zynqultrascaleplus_props (self))
+    return FALSE;
+#endif
+
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+  if (!set_versalgen2_props (self))
     return FALSE;
 #endif
 
@@ -2042,6 +2142,22 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
       self->disable_realtime = g_value_get_boolean (value);
       break;
 #endif
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+    case PROP_SC_RESILIENCE:
+      self->scenechg_res = g_value_get_boolean (value);
+      break;
+    case PROP_STARTCODE: {
+      guint32 startcode = g_value_get_uint (value);
+      if (startcode != 3 && startcode != 4) {
+        startcode = 0; // value is 3, 4 or 0 for auto.
+      }
+      self->startcode = startcode;
+      break;
+    case PROP_VIDEO_FULL_RANGE:
+      self->video_full_range = g_value_get_boolean (value);
+      break;
+    }
+#endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -2162,6 +2278,17 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
       break;
     case PROP_DISABLE_REALTIME:
       g_value_set_boolean (value, self->disable_realtime);
+      break;
+#endif
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+    case PROP_SC_RESILIENCE:
+      g_value_set_boolean (value, self->scenechg_res);
+      break;
+    case PROP_STARTCODE:
+      g_value_set_uint (value, self->startcode);
+      break;
+    case PROP_VIDEO_FULL_RANGE:
+      g_value_set_boolean (value, self->video_full_range);
       break;
 #endif
     default:
@@ -5786,18 +5913,19 @@ gst_omx_video_enc_src_event (GstVideoEncoder * encoder, GstEvent * event)
       {
         if (peer_caps)
           gst_caps_unref (peer_caps);
-          GstCaps *enc_curr_caps = gst_pad_query_caps (src_pad, NULL);
-          /* get the peer caps */
-          GstCaps *peer_caps = gst_pad_peer_query_caps (src_pad, enc_curr_caps);
-          GST_ERROR_OBJECT (self, "can not change encoder caps to %s", gst_caps_to_string(peer_caps));
-          GST_ELEMENT_ERROR (self, LIBRARY, FAILED, (NULL),
-              ("dynamic caps   is not currently supported in omxencoder"));
-          if (peer_caps)
-            gst_caps_unref (peer_caps);
-          if (enc_curr_caps)
-            gst_caps_unref (enc_curr_caps);
-          return FALSE;
-     }
+
+        GstCaps *enc_curr_caps = gst_pad_query_caps (src_pad, NULL);
+        /* get the peer caps */
+        GstCaps *peer_caps = gst_pad_peer_query_caps (src_pad, enc_curr_caps);
+        GST_ERROR_OBJECT (self, "can not change encoder caps to %s", gst_caps_to_string(peer_caps));
+        GST_ELEMENT_ERROR (self, LIBRARY, FAILED, (NULL),
+            ("dynamic caps   is not currently supported in omxencoder"));
+        if (peer_caps)
+          gst_caps_unref (peer_caps);
+        if (enc_curr_caps)
+          gst_caps_unref (enc_curr_caps);
+        return FALSE;
+      }
     }
     default:
       break;
