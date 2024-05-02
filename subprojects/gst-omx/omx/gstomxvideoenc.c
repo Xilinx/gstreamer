@@ -357,7 +357,8 @@ enum
   PROP_DISABLE_REALTIME,
   PROP_SC_RESILIENCE,
   PROP_STARTCODE,
-  PROP_VIDEO_FULL_RANGE
+  PROP_VIDEO_FULL_RANGE,
+  PROP_ENABLE_AUD
 };
 
 /* FIXME: Better defaults */
@@ -414,6 +415,7 @@ enum
 #define GST_OMX_VIDEO_ENC_SC_RESILIENCE_DEFAULT (FALSE)
 #define GST_OMX_VIDEO_ENC_STARTCODE_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_VIDEO_FULL_RANGE_DEFAULT (FALSE)
+#define GST_OMX_VIDEO_ENC_ENABLE_AUD_DEFAULT (FALSE)
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
 #define OMX_ALG_GST_EVENT_INSERT_LONGTERM "omx-alg/insert-longterm"
@@ -778,6 +780,13 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
           GST_OMX_VIDEO_ENC_VIDEO_FULL_RANGE_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_ENABLE_AUD,
+      g_param_spec_boolean ("enable-aud", "Enable Access Unit Delimiters",
+          "When enabled Access Unit Delimiters are added to the stream, disabled by default.",
+          GST_OMX_VIDEO_ENC_ENABLE_AUD_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
 #endif
 
   element_class->change_state =
@@ -868,6 +877,7 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->scenechg_res = GST_OMX_VIDEO_ENC_SC_RESILIENCE_DEFAULT;
   self->startcode = GST_OMX_VIDEO_ENC_STARTCODE_DEFAULT;
   self->video_full_range = GST_OMX_VIDEO_ENC_VIDEO_FULL_RANGE_DEFAULT;
+  self->enable_aud = GST_OMX_VIDEO_ENC_ENABLE_AUD_DEFAULT;
 #endif
 
   gst_video_mastering_display_info_init (&self->minfo);
@@ -1593,6 +1603,23 @@ set_versalgen2_props (GstOMXVideoEnc * self)
         &fullrange);
     CHECK_ERR ("video-full-range");
   }
+
+  {
+    OMX_ALG_VIDEO_PARAM_ACCESS_UNIT_DELIMITER aud_enable;
+
+    GST_OMX_INIT_STRUCT (&aud_enable);
+    aud_enable.nPortIndex = self->enc_out_port->index;
+    aud_enable.bEnableAccessUnitDelimiter = self->video_full_range;
+
+    GST_DEBUG_OBJECT (self, "setting enable_aud to %d",
+        aud_enable.bEnableAccessUnitDelimiter);
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoAccessUnitDelimiter,
+        &aud_enable);
+    CHECK_ERR ("enable-aud");
+  }
   return TRUE;
 }
 #endif
@@ -2156,6 +2183,9 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
     case PROP_VIDEO_FULL_RANGE:
       self->video_full_range = g_value_get_boolean (value);
       break;
+    case PROP_ENABLE_AUD:
+      self->enable_aud = g_value_get_boolean (value);
+      break;
     }
 #endif
     default:
@@ -2289,6 +2319,9 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
       break;
     case PROP_VIDEO_FULL_RANGE:
       g_value_set_boolean (value, self->video_full_range);
+      break;
+    case PROP_ENABLE_AUD:
+      g_value_set_boolean (value, self->enable_aud);
       break;
 #endif
     default:

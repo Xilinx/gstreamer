@@ -127,6 +127,7 @@ struct _GstOMXVideoEnc
   gboolean scenechg_res;
   guint32 startcode;
   gboolean video_full_range;
+  gboolean enable_aud;
 #endif
   /* for HDR10 support */
   GstVideoMasteringDisplayInfo minfo;
