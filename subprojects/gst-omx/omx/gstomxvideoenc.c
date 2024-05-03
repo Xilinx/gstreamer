@@ -992,7 +992,41 @@ gst_omx_video_enc_set_transfer_characteristics (GstOMXVideoEnc * self,
       param.eTransferCharac =
           OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_BT_2100_HLG;
       break;
-    case GST_VIDEO_TRANSFER_UNKNOWN:
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+    case GST_VIDEO_TRANSFER_GAMMA10:
+    case GST_VIDEO_TRANSFER_GAMMA18:
+    case GST_VIDEO_TRANSFER_GAMMA20:
+    case GST_VIDEO_TRANSFER_GAMMA22:
+    case GST_VIDEO_TRANSFER_BT709:
+      param.eTransferCharac =
+          OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_BT_709;
+      break;
+    case GST_VIDEO_TRANSFER_SMPTE240M:
+      param.eTransferCharac =
+          OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_SMPTE_240M;
+      break;
+    case GST_VIDEO_TRANSFER_SRGB:
+      param.eTransferCharac =
+          OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_IEC_61966_2_1;
+      break;
+    case GST_VIDEO_TRANSFER_GAMMA28:
+      param.eTransferCharac =
+          OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_BT_470_SYSTEM_B;
+      break;
+    case GST_VIDEO_TRANSFER_LOG100:
+      param.eTransferCharac =
+          OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_LOG;
+      break;
+    case GST_VIDEO_TRANSFER_LOG316:
+      param.eTransferCharac =
+          OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_LOG_EXTENDED;
+      break;
+    case GST_VIDEO_TRANSFER_BT2020_12:
+      param.eTransferCharac =
+          OMX_ALG_VIDEO_TRANSFER_CHARACTERISTICS_BT_2020_12B;
+      break;
+    case GST_VIDEO_TRANSFER_ADOBERGB:
+#else
     case GST_VIDEO_TRANSFER_GAMMA10:
     case GST_VIDEO_TRANSFER_GAMMA18:
     case GST_VIDEO_TRANSFER_GAMMA20:
@@ -1005,6 +1039,8 @@ gst_omx_video_enc_set_transfer_characteristics (GstOMXVideoEnc * self,
     case GST_VIDEO_TRANSFER_LOG316:
     case GST_VIDEO_TRANSFER_BT2020_12:
     case GST_VIDEO_TRANSFER_ADOBERGB:
+#endif
+    case GST_VIDEO_TRANSFER_UNKNOWN:
     default:
       GST_WARNING_OBJECT (self,
           "Provided transfer characteristics %d are not supported", transfer);
