@@ -99,6 +99,7 @@ enum
   PROP_OUTPUT_POSITION,
   PROP_DEVICE,
   PROP_DISABLE_REALTIME,
+  PROP_STORAGE_MODE,
 };
 
 #define GST_OMX_VIDEO_DEC_INTERNAL_ENTROPY_BUFFERS_DEFAULT (5)
@@ -109,6 +110,7 @@ enum
 #define GST_OMX_VIDEO_DEC_OUTPUT_POSITION_Y_DEFAULT        (0)
 #define GST_OMX_VIDEO_DEC_DEVICE_DEFAULT                   ("/dev/allegroDecodeIP0")
 #define GST_OMX_VIDEO_DEC_DISABLE_REALTIME_DEFAULT         (FALSE)
+#define GST_OMX_VIDEO_DEC_STORAGE_MODE_DEFAULT             (0)
 
 #if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 #define LATENCY_MODE_LOW_DEPRECATION_MESSAGE \
@@ -216,6 +218,11 @@ gst_omx_video_dec_set_property (GObject * object, guint prop_id,
       self->device = g_strdup (g_value_get_string (value));
       break;
 #endif
+#ifdef USE_OMX_TARGET_VERSAL_GEN2
+    case PROP_STORAGE_MODE:
+      self->storage_mode = g_value_get_uint (value);
+      break;
+#endif
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -253,6 +260,9 @@ gst_omx_video_dec_get_property (GObject * object, guint prop_id,
       g_value_set_string (value, self->device);
       break;
 #endif
+    case PROP_STORAGE_MODE:
+      g_value_set_uint (value, self->storage_mode);
+      break;
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -329,6 +339,14 @@ gst_omx_video_dec_class_init (GstOMXVideoDecClass * klass)
           GST_OMX_VIDEO_DEC_DEVICE_DEFAULT,
           G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
 #endif
+
+  g_object_class_install_property (gobject_class, PROP_STORAGE_MODE,
+      g_param_spec_uint ("storage-mode", "Output storage mode",
+          "Output storage mode, raster, 32x4 tiles, 64x4 tiles",
+          0, 2, GST_OMX_VIDEO_DEC_STORAGE_MODE_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
+
 #endif
 
   element_class->change_state =
@@ -386,6 +404,7 @@ gst_omx_video_dec_init (GstOMXVideoDec * self)
 #ifdef USE_OMX_TARGET_VERSAL
   self->device = g_strdup (GST_OMX_VIDEO_DEC_DEVICE_DEFAULT);
 #endif
+  self->storage_mode = GST_OMX_VIDEO_DEC_STORAGE_MODE_DEFAULT;
 #endif
 
   gst_video_decoder_set_packetized (GST_VIDEO_DECODER (self), TRUE);
@@ -3166,7 +3185,7 @@ gst_omx_video_dec_enable (GstOMXVideoDec * self, GstBuffer * input)
 
 static OMX_COLOR_FORMATTYPE
 get_color_format_from_chroma (const gchar * chroma_format,
-    guint bit_depth_luma, guint bit_depth_chroma)
+    guint bit_depth_luma, guint bit_depth_chroma, guint storage_mode)
 {
   if (chroma_format == NULL)
     goto out;
@@ -3180,15 +3199,32 @@ get_color_format_from_chroma (const gchar * chroma_format,
       case 4:
         return OMX_COLOR_FormatL4;
       case 8:
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+        if (storage_mode == 1)
+          return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL8bitTiled32x4;
+        else if (storage_mode == 2)
+          return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL8bitTiled64x4;
+#endif
         return OMX_COLOR_FormatL8;
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
       case 10:
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
         return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL10bitPacked;
 #elif defined(USE_OMX_TARGET_VERSAL_GEN2)
-      case 10:
-        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL10bit;
+        if (storage_mode == 0)
+          return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL10bit;
+        else if (storage_mode == 1)
+          return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL10bitTiled32x4;
+        else if (storage_mode == 2)
+          return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL10bitTiled64x4;
+#endif
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
       case 12:
-        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL12bit;
+        if (storage_mode == 0)
+          return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL12bit;
+        else if (storage_mode == 1)
+          return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL12bitTiled32x4;
+        else if (storage_mode == 2)
+          return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatL12bitTiled64x4;
 #endif
       case 16:
         return OMX_COLOR_FormatL16;
@@ -3201,13 +3237,33 @@ get_color_format_from_chroma (const gchar * chroma_format,
   }
 
   if (bit_depth_luma == 8 && bit_depth_chroma == 8) {
-    if (!g_strcmp0 (chroma_format, "4:2:0"))
-      return OMX_COLOR_FormatYUV420SemiPlanar;
-    else if (!g_strcmp0 (chroma_format, "4:2:2"))
-      return OMX_COLOR_FormatYUV422SemiPlanar;
+    if (!g_strcmp0 (chroma_format, "4:2:0")) {
 #if defined(USE_OMX_TARGET_VERSAL_GEN2)
-    else if (!g_strcmp0 (chroma_format, "4:4:4"))
-      return OMX_ALG_COLOR_FormatYUV444Planar8bit ;
+      if (storage_mode == 1)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV420SemiPlanar8bitTiled32x4;
+      else if (storage_mode == 2)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV420SemiPlanar8bitTiled64x4;
+#endif
+      return OMX_COLOR_FormatYUV420SemiPlanar ;
+    }
+    else if (!g_strcmp0 (chroma_format, "4:2:2")) {
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+      if (storage_mode == 1)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV422SemiPlanar8bitTiled32x4;
+      else if (storage_mode == 2)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV422SemiPlanar8bitTiled64x4;
+#endif
+      return OMX_COLOR_FormatYUV422SemiPlanar;
+    }
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+    else if (!g_strcmp0 (chroma_format, "4:4:4")) {
+      if (storage_mode == 0)
+        return OMX_ALG_COLOR_FormatYUV444Planar8bit;
+      else if (storage_mode == 1)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV444Planar8bitTiled32x4;
+      else if (storage_mode == 2)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV444Planar8bitTiled64x4;
+    }
 #endif
   }
 #if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
@@ -3221,27 +3277,55 @@ get_color_format_from_chroma (const gchar * chroma_format,
   }
 #elif defined(USE_OMX_TARGET_VERSAL_GEN2)
   if (bit_depth_luma == 10 && bit_depth_chroma == 10) {
-    if (!g_strcmp0 (chroma_format, "4:2:0"))
-      return (OMX_COLOR_FORMATTYPE)
-          OMX_ALG_COLOR_FormatYUV420SemiPlanar10bit;
-    else if (!g_strcmp0 (chroma_format, "4:2:2"))
-      return (OMX_COLOR_FORMATTYPE)
-          OMX_ALG_COLOR_FormatYUV422SemiPlanar10bit;
-    else if ((!g_strcmp0 (chroma_format, "4:4:4"))) {
-      return (OMX_COLOR_FORMATTYPE)
-          OMX_ALG_COLOR_FormatYUV444Planar10bit;
+    if (!g_strcmp0 (chroma_format, "4:2:0")) {
+      if (storage_mode == 0)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV420SemiPlanar10bit;
+      else if (storage_mode == 1)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV420SemiPlanar10bitTiled32x4;
+      else if (storage_mode == 2)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV420SemiPlanar10bitTiled64x4;
+    }
+    else if (!g_strcmp0 (chroma_format, "4:2:2")) {
+      if (storage_mode == 0)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV422SemiPlanar10bit;
+      else if (storage_mode == 1)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV422SemiPlanar10bitTiled32x4;
+      else if (storage_mode == 2)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV422SemiPlanar10bitTiled64x4;
+    }
+    else if (!g_strcmp0 (chroma_format, "4:4:4")) {
+      if (storage_mode == 0)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV444Planar10bit;
+      else if (storage_mode == 1)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV444Planar10bitTiled32x4;
+      else if (storage_mode == 2)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV444Planar10bitTiled64x4;
     }
   }
   if (bit_depth_luma == 12 && bit_depth_chroma == 12) {
-    if (!g_strcmp0 (chroma_format, "4:2:0"))
-      return (OMX_COLOR_FORMATTYPE)
-          OMX_ALG_COLOR_FormatYUV420SemiPlanar12bit;
-    else if (!g_strcmp0 (chroma_format, "4:2:2"))
-      return (OMX_COLOR_FORMATTYPE)
-          OMX_ALG_COLOR_FormatYUV422SemiPlanar12bit;
-    else if ((!g_strcmp0 (chroma_format, "4:4:4"))) {
-      return (OMX_COLOR_FORMATTYPE)
-          OMX_ALG_COLOR_FormatYUV444Planar12bit;
+    if (!g_strcmp0 (chroma_format, "4:2:0")) {
+      if (storage_mode == 0)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV420SemiPlanar12bit;
+      else if (storage_mode == 1)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV420SemiPlanar12bitTiled32x4;
+      else if (storage_mode == 2)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV420SemiPlanar12bitTiled64x4;
+    }
+    else if (!g_strcmp0 (chroma_format, "4:2:2")) {
+      if (storage_mode == 0)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV422SemiPlanar12bit;
+      else if (storage_mode == 1)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV422SemiPlanar12bitTiled32x4;
+      else if (storage_mode == 2)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV422SemiPlanar12bitTiled64x4;
+    }
+    else if (!g_strcmp0 (chroma_format, "4:4:4")) {
+      if (storage_mode == 0)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV444Planar12bit;
+      else if (storage_mode == 1)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV444Planar12bitTiled32x4;
+      else if (storage_mode == 2)
+        return (OMX_COLOR_FORMATTYPE) OMX_ALG_COLOR_FormatYUV444Planar12bitTiled64x4;
     }
   }
 #endif
@@ -3490,7 +3574,7 @@ gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
 
       color_format =
           get_color_format_from_chroma (chroma_format,
-          bit_depth_luma, bit_depth_chroma);
+          bit_depth_luma, bit_depth_chroma, self->storage_mode);
       if (color_format != OMX_COLOR_FormatUnused) {
         GST_DEBUG_OBJECT (self, "Setting input eColorFormat to %d",
             color_format);

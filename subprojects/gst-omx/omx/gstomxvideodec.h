@@ -112,6 +112,7 @@ struct _GstOMXVideoDec
 #ifdef USE_OMX_TARGET_VERSAL
   gchar *device;
 #endif
+  guint32 storage_mode;
 #endif
 };
 
