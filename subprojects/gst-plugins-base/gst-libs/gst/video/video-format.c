@@ -5153,10 +5153,10 @@ pack_P010_10LE (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
 
   if (IS_CHROMA_LINE_420 (y, flags)) {
     for (i = 0; i < width / 2; i++) {
-      Y0 = s[i * 8 + 1] & 0xffc0;
-      Y1 = s[i * 8 + 5] & 0xffc0;
-      U = s[i * 8 + 2] & 0xffc0;
-      V = s[i * 8 + 3] & 0xffc0;
+      Y0 = s[i * 8 + 1] >> 6;
+      Y1 = s[i * 8 + 5] >> 6;
+      U = s[i * 8 + 2] >> 6;
+      V = s[i * 8 + 3] >> 6;
 
       GST_WRITE_UINT16_LE (dy + i * 2 + 0, Y0);
       GST_WRITE_UINT16_LE (dy + i * 2 + 1, Y1);
@@ -5166,9 +5166,9 @@ pack_P010_10LE (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     if (width & 1) {
       gint i = width - 1;
 
-      Y0 = s[i * 4 + 1] & 0xffc0;
-      U = s[i * 4 + 2] & 0xffc0;
-      V = s[i * 4 + 3] & 0xffc0;
+      Y0 = s[i * 4 + 1] >> 6;
+      U = s[i * 4 + 2] >> 6;
+      V = s[i * 4 + 3] >> 6;
 
       GST_WRITE_UINT16_LE (dy + i, Y0);
       GST_WRITE_UINT16_LE (duv + i + 0, U);
@@ -5176,7 +5176,7 @@ pack_P010_10LE (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     }
   } else {
     for (i = 0; i < width; i++) {
-      Y0 = s[i * 4 + 1] & 0xffc0;
+      Y0 = s[i * 4 + 1] >> 6;
       GST_WRITE_UINT16_LE (dy + i, Y0);
     }
   }
@@ -6397,10 +6397,10 @@ pack_P012_LE (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
 
   if (IS_CHROMA_LINE_420 (y, flags)) {
     for (i = 0; i < width / 2; i++) {
-      Y0 = s[i * 8 + 1] & 0xfff0;
-      Y1 = s[i * 8 + 5] & 0xfff0;
-      U = s[i * 8 + 2] & 0xfff0;
-      V = s[i * 8 + 3] & 0xfff0;
+      Y0 = s[i * 8 + 1] >> 4;
+      Y1 = s[i * 8 + 5] >> 4;
+      U = s[i * 8 + 2] >> 4;
+      V = s[i * 8 + 3] >> 4;
 
       GST_WRITE_UINT16_LE (dy + i * 2 + 0, Y0);
       GST_WRITE_UINT16_LE (dy + i * 2 + 1, Y1);
@@ -6410,9 +6410,9 @@ pack_P012_LE (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     if (width & 1) {
       gint i = width - 1;
 
-      Y0 = s[i * 4 + 1] & 0xfff0;
-      U = s[i * 4 + 2] & 0xfff0;
-      V = s[i * 4 + 3] & 0xfff0;
+      Y0 = s[i * 4 + 1] >> 4;
+      U = s[i * 4 + 2] >> 4;
+      V = s[i * 4 + 3] >> 4;
 
       GST_WRITE_UINT16_LE (dy + i, Y0);
       GST_WRITE_UINT16_LE (duv + i + 0, U);
@@ -6420,7 +6420,7 @@ pack_P012_LE (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     }
   } else {
     for (i = 0; i < width; i++) {
-      Y0 = s[i * 4 + 1] & 0xfff0;
+      Y0 = s[i * 4 + 1] >> 4;
       GST_WRITE_UINT16_LE (dy + i, Y0);
     }
   }
