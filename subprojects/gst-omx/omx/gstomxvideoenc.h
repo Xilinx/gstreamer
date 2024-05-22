@@ -128,6 +128,14 @@ struct _GstOMXVideoEnc
   guint32 startcode;
   gboolean video_full_range;
   gboolean enable_aud;
+  gboolean sei_atc;
+  gboolean sei_bp;
+  gboolean sei_cll;
+  gboolean sei_mdcv;
+  gboolean sei_pt;
+  gboolean sei_rp;
+  gboolean sei_st2094_10;
+  gboolean sei_st2094_40;
 #endif
   /* for HDR10 support */
   GstVideoMasteringDisplayInfo minfo;

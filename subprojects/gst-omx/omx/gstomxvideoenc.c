@@ -358,7 +358,10 @@ enum
   PROP_SC_RESILIENCE,
   PROP_STARTCODE,
   PROP_VIDEO_FULL_RANGE,
-  PROP_ENABLE_AUD
+  PROP_ENABLE_AUD,
+  PROP_SEI_BP,
+  PROP_SEI_PT,
+  PROP_SEI_RP,
 };
 
 /* FIXME: Better defaults */
@@ -416,6 +419,7 @@ enum
 #define GST_OMX_VIDEO_ENC_STARTCODE_DEFAULT (0)
 #define GST_OMX_VIDEO_ENC_VIDEO_FULL_RANGE_DEFAULT (FALSE)
 #define GST_OMX_VIDEO_ENC_ENABLE_AUD_DEFAULT (FALSE)
+#define GST_OMX_VIDEO_ENC_SEI_DEFAULT (FALSE)
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
 #define OMX_ALG_GST_EVENT_INSERT_LONGTERM "omx-alg/insert-longterm"
@@ -787,6 +791,27 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
           GST_OMX_VIDEO_ENC_ENABLE_AUD_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_SEI_BP,
+      g_param_spec_boolean ("sei-bp", "Buffering Period SEI",
+          "When enabled SEI for BP is added to the stream, disabled by default.",
+          GST_OMX_VIDEO_ENC_SEI_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_SEI_PT,
+      g_param_spec_boolean ("sei-pt", "Enable Picture Timing SEI",
+          "When enabled SEI for PT is added to the stream, disabled by default.",
+          GST_OMX_VIDEO_ENC_SEI_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_SEI_RP,
+      g_param_spec_boolean ("sei-rp", "Enable Recovery Point SEI",
+          "When enabled SEI for RP is added to the stream, disabled by default.",
+          GST_OMX_VIDEO_ENC_SEI_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
 #endif
 
   element_class->change_state =
@@ -878,6 +903,9 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->startcode = GST_OMX_VIDEO_ENC_STARTCODE_DEFAULT;
   self->video_full_range = GST_OMX_VIDEO_ENC_VIDEO_FULL_RANGE_DEFAULT;
   self->enable_aud = GST_OMX_VIDEO_ENC_ENABLE_AUD_DEFAULT;
+  self->sei_bp = GST_OMX_VIDEO_ENC_SEI_DEFAULT;
+  self->sei_pt = GST_OMX_VIDEO_ENC_SEI_DEFAULT;
+  self->sei_rp = GST_OMX_VIDEO_ENC_SEI_DEFAULT;
 #endif
 
   gst_video_mastering_display_info_init (&self->minfo);
@@ -1257,7 +1285,7 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
     low_bw.nPortIndex = self->enc_out_port->index;
     low_bw.bEnableLowBandwidth = self->low_bandwidth;
 
-    GST_DEBUG_OBJECT (self, "%s low bandwith moded",
+    GST_DEBUG_OBJECT (self, "%s low bandwidth mode",
         self->low_bandwidth ? "Enable" : "Disable");
 
     err =
@@ -1656,6 +1684,58 @@ set_versalgen2_props (GstOMXVideoEnc * self)
         &aud_enable);
     CHECK_ERR ("enable-aud");
   }
+
+  {
+    OMX_ALG_VIDEO_PARAM_BUFFERING_PERIOD_SEI sei_bp;
+
+    GST_OMX_INIT_STRUCT (&sei_bp);
+    sei_bp.nPortIndex = self->enc_out_port->index;
+    sei_bp.bEnableBufferingPeriodSEI = self->sei_bp;
+
+    GST_DEBUG_OBJECT (self, "setting sei bp to %d",
+        sei_bp.bEnableBufferingPeriodSEI);
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoBufferingPeriodSEI,
+        &sei_bp);
+    CHECK_ERR ("sei-bp");
+  }
+
+  {
+    OMX_ALG_VIDEO_PARAM_PICTURE_TIMING_SEI sei_pt;
+
+    GST_OMX_INIT_STRUCT (&sei_pt);
+    sei_pt.nPortIndex = self->enc_out_port->index;
+    sei_pt.bEnablePictureTimingSEI = self->sei_pt;
+
+    GST_DEBUG_OBJECT (self, "setting sei pt to %d",
+        sei_pt.bEnablePictureTimingSEI);
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoPictureTimingSEI,
+        &sei_pt);
+    CHECK_ERR ("sei-pt");
+  }
+
+  {
+    OMX_ALG_VIDEO_PARAM_RECOVERY_POINT_SEI sei_rp;
+
+    GST_OMX_INIT_STRUCT (&sei_rp);
+    sei_rp.nPortIndex = self->enc_out_port->index;
+    sei_rp.bEnableRecoveryPointSEI = self->sei_rp;
+
+    GST_DEBUG_OBJECT (self, "setting sei mdcv to %d",
+        sei_rp.bEnableRecoveryPointSEI);
+
+    err =
+        gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexParamVideoRecoveryPointSEI,
+        &sei_rp);
+    CHECK_ERR ("sei-rp");
+  }
+
   return TRUE;
 }
 #endif
@@ -2222,6 +2302,15 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
     case PROP_ENABLE_AUD:
       self->enable_aud = g_value_get_boolean (value);
       break;
+    case PROP_SEI_BP:
+      self->sei_bp = g_value_get_boolean (value);
+      break;
+    case PROP_SEI_PT:
+      self->sei_pt = g_value_get_boolean (value);
+      break;
+    case PROP_SEI_RP:
+      self->sei_rp = g_value_get_boolean (value);
+      break;
     }
 #endif
     default:
@@ -2358,6 +2447,15 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
       break;
     case PROP_ENABLE_AUD:
       g_value_set_boolean (value, self->enable_aud);
+      break;
+    case PROP_SEI_BP:
+      g_value_set_boolean (value, self->sei_bp);
+      break;
+    case PROP_SEI_PT:
+      g_value_set_boolean (value, self->sei_pt);
+      break;
+    case PROP_SEI_RP:
+      g_value_set_boolean (value, self->sei_rp);
       break;
 #endif
     default:
