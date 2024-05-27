@@ -362,6 +362,7 @@ enum
   PROP_SEI_BP,
   PROP_SEI_PT,
   PROP_SEI_RP,
+  PROP_SRC_SYNC,
 };
 
 /* FIXME: Better defaults */
@@ -420,6 +421,7 @@ enum
 #define GST_OMX_VIDEO_ENC_VIDEO_FULL_RANGE_DEFAULT (FALSE)
 #define GST_OMX_VIDEO_ENC_ENABLE_AUD_DEFAULT (FALSE)
 #define GST_OMX_VIDEO_ENC_SEI_DEFAULT (FALSE)
+#define GST_OMX_VIDEO_ENC_SRC_SYNC_DEFAULT (FALSE)
 
 /* ZYNQ_USCALE_PLUS encoder custom events */
 #define OMX_ALG_GST_EVENT_INSERT_LONGTERM "omx-alg/insert-longterm"
@@ -812,6 +814,13 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
           GST_OMX_VIDEO_ENC_SEI_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
+
+  g_object_class_install_property (gobject_class, PROP_SRC_SYNC,
+      g_param_spec_boolean ("src-sync", "Src Sync Mode",
+          "Use synchronised source for encoder",
+          GST_OMX_VIDEO_ENC_SRC_SYNC_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
+          GST_PARAM_MUTABLE_READY));
 #endif
 
   element_class->change_state =
@@ -906,6 +915,7 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->sei_bp = GST_OMX_VIDEO_ENC_SEI_DEFAULT;
   self->sei_pt = GST_OMX_VIDEO_ENC_SEI_DEFAULT;
   self->sei_rp = GST_OMX_VIDEO_ENC_SEI_DEFAULT;
+  self->src_sync = GST_OMX_VIDEO_ENC_SRC_SYNC_DEFAULT;
 #endif
 
   gst_video_mastering_display_info_init (&self->minfo);
@@ -1736,6 +1746,29 @@ set_versalgen2_props (GstOMXVideoEnc * self)
     CHECK_ERR ("sei-rp");
   }
 
+  {
+    OMX_ERRORTYPE err;
+    OMX_ALG_PORT_PARAM_SYNCHRONIZATION src_sync;
+
+    GST_OMX_INIT_STRUCT (&src_sync);
+    src_sync.nPortIndex = self->enc_in_port->index;
+    err = gst_omx_component_get_parameter (self->enc,
+            (OMX_INDEXTYPE) OMX_ALG_IndexPortParamSynchronization,
+            &src_sync);
+    if (err == OMX_ErrorNone) {
+        src_sync.bEnableSrcSynchronization = self->src_sync;
+
+        GST_DEBUG_OBJECT (self, "setting source synchronization to %d",
+            self->prefetch_buffer);
+
+        err =
+            gst_omx_component_set_parameter (self->enc,
+            (OMX_INDEXTYPE) OMX_ALG_IndexPortParamSynchronization,
+            &src_sync);
+        CHECK_ERR ("srcsync");
+    }
+  }
+
   return TRUE;
 }
 #endif
@@ -2311,6 +2344,9 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
     case PROP_SEI_RP:
       self->sei_rp = g_value_get_boolean (value);
       break;
+    case PROP_SRC_SYNC:
+      self->src_sync = g_value_get_boolean (value);
+      break;
     }
 #endif
     default:
@@ -2456,6 +2492,9 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
       break;
     case PROP_SEI_RP:
       g_value_set_boolean (value, self->sei_rp);
+      break;
+    case PROP_SRC_SYNC:
+      g_value_set_boolean (value, self->src_sync);
       break;
 #endif
     default:

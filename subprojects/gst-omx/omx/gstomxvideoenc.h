@@ -136,6 +136,7 @@ struct _GstOMXVideoEnc
   gboolean sei_rp;
   gboolean sei_st2094_10;
   gboolean sei_st2094_40;
+  gboolean src_sync;
 #endif
   /* for HDR10 support */
   GstVideoMasteringDisplayInfo minfo;
