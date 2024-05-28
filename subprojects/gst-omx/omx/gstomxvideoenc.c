@@ -3776,6 +3776,8 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
     return FALSE;
   if (!gst_omx_video_enc_set_input_crop (self, info))
     return FALSE;
+  if (info->interlace_mode == GST_VIDEO_INTERLACE_MODE_ALTERNATE)
+    port_def.nBufferCountActual *= 2;
 #endif
 
   if (G_UNLIKELY (klass->cdata.hacks & GST_OMX_HACK_VIDEO_FRAMERATE_INTEGER)) {
