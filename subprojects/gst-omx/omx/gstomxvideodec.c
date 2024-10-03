@@ -99,7 +99,9 @@ enum
   PROP_OUTPUT_POSITION,
   PROP_DEVICE,
   PROP_DISABLE_REALTIME,
+#ifdef USE_OMX_TARGET_VERSAL_GEN2
   PROP_STORAGE_MODE,
+#endif
 };
 
 #define GST_OMX_VIDEO_DEC_INTERNAL_ENTROPY_BUFFERS_DEFAULT (5)
@@ -260,9 +262,11 @@ gst_omx_video_dec_get_property (GObject * object, guint prop_id,
       g_value_set_string (value, self->device);
       break;
 #endif
+#ifdef USE_OMX_TARGET_VERSAL_GEN2
     case PROP_STORAGE_MODE:
       g_value_set_uint (value, self->storage_mode);
       break;
+#endif
 #endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -340,12 +344,14 @@ gst_omx_video_dec_class_init (GstOMXVideoDecClass * klass)
           G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
 #endif
 
+#ifdef USE_OMX_TARGET_VERSAL_GEN2
   g_object_class_install_property (gobject_class, PROP_STORAGE_MODE,
       g_param_spec_uint ("storage-mode", "Output storage mode",
           "Output storage mode, raster, 32x4 tiles, 64x4 tiles",
           0, 2, GST_OMX_VIDEO_DEC_STORAGE_MODE_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
+#endif
 
 #endif
 
@@ -404,7 +410,9 @@ gst_omx_video_dec_init (GstOMXVideoDec * self)
 #ifdef USE_OMX_TARGET_VERSAL
   self->device = g_strdup (GST_OMX_VIDEO_DEC_DEVICE_DEFAULT);
 #endif
+#ifdef USE_OMX_TARGET_VERSAL_GEN2
   self->storage_mode = GST_OMX_VIDEO_DEC_STORAGE_MODE_DEFAULT;
+#endif
 #endif
 
   gst_video_decoder_set_packetized (GST_VIDEO_DECODER (self), TRUE);
@@ -3183,9 +3191,15 @@ gst_omx_video_dec_enable (GstOMXVideoDec * self, GstBuffer * input)
   return TRUE;
 }
 
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
 static OMX_COLOR_FORMATTYPE
 get_color_format_from_chroma (const gchar * chroma_format,
     guint bit_depth_luma, guint bit_depth_chroma, guint storage_mode)
+#else
+static OMX_COLOR_FORMATTYPE
+get_color_format_from_chroma (const gchar * chroma_format,
+    guint bit_depth_luma, guint bit_depth_chroma)
+#endif
 {
   if (chroma_format == NULL)
     goto out;
@@ -3572,9 +3586,15 @@ gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
         gst_structure_get_uint (s, "bit-depth-chroma", &bit_depth_chroma)) {
       OMX_COLOR_FORMATTYPE color_format;
 
+#ifdef USE_OMX_TARGET_VERSAL_GEN2
       color_format =
           get_color_format_from_chroma (chroma_format,
           bit_depth_luma, bit_depth_chroma, self->storage_mode);
+#else
+      color_format =
+          get_color_format_from_chroma (chroma_format,
+          bit_depth_luma, bit_depth_chroma);
+#endif
       if (color_format != OMX_COLOR_FormatUnused) {
         GST_DEBUG_OBJECT (self, "Setting input eColorFormat to %d",
             color_format);

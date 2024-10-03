@@ -4359,12 +4359,14 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
       case GST_VIDEO_FORMAT_P010_10LE:
         port_def.format.video.eColorFormat = OMX_COLOR_FormatYUV420SemiPlanar;
         break;
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
       case GST_VIDEO_FORMAT_P210_10LE:
         port_def.format.video.eColorFormat = OMX_ALG_COLOR_FormatYUV422SemiPlanar10bit;
         break;
       case GST_VIDEO_FORMAT_P212_12LE:
         port_def.format.video.eColorFormat = OMX_ALG_COLOR_FormatYUV422SemiPlanar12bit;
         break;
+#endif
       default:
         GST_ERROR_OBJECT (self, "Unsupported format %s",
             gst_video_format_to_string (info->finfo->format));
