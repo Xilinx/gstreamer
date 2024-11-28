@@ -887,6 +887,22 @@ gst_omx_h265_enc_get_caps (GstOMXVideoEnc * enc, GstOMXPort * port,
         tier = "main";
         level = "6.2";
         break;
+      case OMX_VIDEO_HEVCMainTierLevel63:
+        tier = "main";
+        level = "6.3";
+        break;
+      case OMX_VIDEO_HEVCMainTierLevel7:
+        tier = "main";
+        level = "7";
+        break;
+      case OMX_VIDEO_HEVCMainTierLevel71:
+        tier = "main";
+        level = "7.1";
+        break;
+      case OMX_VIDEO_HEVCMainTierLevel72:
+        tier = "main";
+        level = "7.2";
+        break;
       case OMX_VIDEO_HEVCHighTierLevel4:
         tier = "high";
         level = "4";
@@ -918,6 +934,22 @@ gst_omx_h265_enc_get_caps (GstOMXVideoEnc * enc, GstOMXPort * port,
       case OMX_VIDEO_HEVCHighTierLevel62:
         tier = "high";
         level = "6.2";
+        break;
+      case OMX_VIDEO_HEVCHighTierLevel63:
+        tier = "high";
+        level = "6.3";
+        break;
+      case OMX_VIDEO_HEVCHighTierLevel7:
+        tier = "high";
+        level = "7";
+        break;
+      case OMX_VIDEO_HEVCHighTierLevel71:
+        tier = "high";
+        level = "7.1";
+        break;
+      case OMX_VIDEO_HEVCHighTierLevel72:
+        tier = "high";
+        level = "7.2";
         break;
       default:
         g_assert_not_reached ();
