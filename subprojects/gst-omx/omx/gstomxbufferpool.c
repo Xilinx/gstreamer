@@ -380,9 +380,9 @@ gst_omx_buffer_pool_alloc_buffer (GstBufferPool * bpool,
         case GST_VIDEO_FORMAT_Y444_10LE:
         case GST_VIDEO_FORMAT_Y444_12LE:
           stride[1] = nstride;
-          offset[1] = offset[0] + stride[0] * nheight;
+          offset[1] = offset[0] + stride[0] * nslice;
           stride[2] = nstride;
-          offset[2] = offset[1] + stride[1] * nheight;
+          offset[2] = offset[1] + stride[1] * nslice;
 #else
           stride[1] = nstride;
           offset[1] = offset[0] + (stride[0] * nheight / 3);
