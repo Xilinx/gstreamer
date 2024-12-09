@@ -1964,8 +1964,10 @@ omx_index_type_to_str (OMX_INDEXTYPE index)
       return "OMX_ALG_IndexParamVideoSlices";
     case OMX_ALG_IndexParamVideoSceneChangeResilience:
       return "OMX_ALG_IndexParamVideoSceneChangeResilience";
+#ifndef USE_OMX_TARGET_VERSAL_GEN2
     case OMX_ALG_IndexParamVideoPrefetchBuffer:
       return "OMX_ALG_IndexParamVideoPrefetchBuffer";
+#endif
     case OMX_ALG_IndexParamVideoCodedPictureBuffer:
       return "OMX_ALG_IndexParamVideoCodedPictureBuffer";
     case OMX_ALG_IndexParamVideoQuantizationControl:

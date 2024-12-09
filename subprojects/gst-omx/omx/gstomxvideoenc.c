@@ -1422,6 +1422,7 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
     CHECK_ERR ("slices");
   }
 
+#ifndef USE_OMX_TARGET_VERSAL_GEN2
   {
     OMX_ALG_VIDEO_PARAM_PREFETCH_BUFFER prefetch_buffer;
 
@@ -1440,6 +1441,7 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
         &prefetch_buffer);
     CHECK_ERR ("prefetch");
   }
+#endif
 
   {
     OMX_ALG_VIDEO_PARAM_REALTIME realtime;
