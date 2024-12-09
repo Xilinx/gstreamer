@@ -4695,18 +4695,18 @@ gst_omx_video_enc_copy_plane (GstOMXVideoEnc * self, guint i,
     finfo->format == GST_VIDEO_FORMAT_Y444_12LE)
     width = 2 * GST_VIDEO_FRAME_COMP_WIDTH (frame, i);
 
-  if (dest + dest_stride * height >
-      outbuf->omx_buf->pBuffer + outbuf->omx_buf->nAllocLen) {
-    GST_ERROR_OBJECT (self, "Invalid output buffer size");
-    return FALSE;
-  }
-
   /* for Allegro tiled formats, src_stride and dest_stride are for 4 lines */
   if (finfo->format >= GST_VIDEO_FORMAT_T5M8 &&
       finfo->format <= GST_VIDEO_FORMAT_T64C ) {
     src_stride *= 4;
     width = src_stride;
     height = (height + 3) / 4;
+  }
+
+  if (dest + dest_stride * height >
+      outbuf->omx_buf->pBuffer + outbuf->omx_buf->nAllocLen) {
+    GST_ERROR_OBJECT (self, "Invalid output buffer size");
+    return FALSE;
   }
 
   for (j = 0; j < height; j++) {

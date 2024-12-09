@@ -396,10 +396,10 @@ gst_omx_buffer_pool_alloc_buffer (GstBufferPool * bpool,
         case GST_VIDEO_FORMAT_T648:
         case GST_VIDEO_FORMAT_T64A:
         case GST_VIDEO_FORMAT_T64C:
-          stride[0] = nstride/4;
-          stride[1] = nstride/4;
+          stride[0] = nstride / 4;
+          stride[1] = nstride / 4;
           offset[1] = offset[0] + stride[0] * nslice * 4;
-          stride[2] = nstride/4;
+          stride[2] = nstride / 4;
           offset[2] = offset[1] + stride[1] * nslice * 4;
           break;
         case GST_VIDEO_FORMAT_I420:
