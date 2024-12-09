@@ -4702,7 +4702,7 @@ gst_omx_video_enc_copy_plane (GstOMXVideoEnc * self, guint i,
       finfo->format <= GST_VIDEO_FORMAT_T64C ) {
     src_stride *= 4;
     width = src_stride;
-    height = (height + 3) / 4;
+    height /= 4;
   }
 
   if (dest + dest_stride * height >
