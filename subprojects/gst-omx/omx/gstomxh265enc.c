@@ -887,6 +887,7 @@ gst_omx_h265_enc_get_caps (GstOMXVideoEnc * enc, GstOMXPort * port,
         tier = "main";
         level = "6.2";
         break;
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS)
       case OMX_VIDEO_HEVCMainTierLevel63:
         tier = "main";
         level = "6.3";
@@ -903,6 +904,7 @@ gst_omx_h265_enc_get_caps (GstOMXVideoEnc * enc, GstOMXPort * port,
         tier = "main";
         level = "7.2";
         break;
+#endif
       case OMX_VIDEO_HEVCHighTierLevel4:
         tier = "high";
         level = "4";
@@ -935,6 +937,7 @@ gst_omx_h265_enc_get_caps (GstOMXVideoEnc * enc, GstOMXPort * port,
         tier = "high";
         level = "6.2";
         break;
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS)
       case OMX_VIDEO_HEVCHighTierLevel63:
         tier = "high";
         level = "6.3";
@@ -951,6 +954,7 @@ gst_omx_h265_enc_get_caps (GstOMXVideoEnc * enc, GstOMXPort * port,
         tier = "high";
         level = "7.2";
         break;
+#endif
       default:
         g_assert_not_reached ();
         gst_caps_unref (caps);
