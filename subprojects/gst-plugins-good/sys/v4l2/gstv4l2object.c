@@ -5100,6 +5100,15 @@ gst_v4l2_object_match_buffer_layout (GstV4l2Object * obj, guint n_planes,
       return FALSE;
     }
 
+	// Update width ailgn to padding requested by down stream
+	if (V4L2_TYPE_IS_MULTIPLANAR (obj->type)) {
+		format.fmt.pix_mp.width = GST_VIDEO_INFO_WIDTH(&obj->info) +
+			obj->align.padding_left +obj->align.padding_right;
+	} else {
+		format.fmt.pix.width =  GST_VIDEO_INFO_WIDTH(&obj->info) +
+                         obj->align.padding_left +obj->align.padding_right;
+	}
+
     gst_v4l2_object_save_format (obj, obj->fmtdesc, &format, &obj->info,
         &obj->align);
 
@@ -5211,6 +5220,9 @@ gst_v4l2_object_match_buffer_layout_from_struct (GstV4l2Object * obj,
 
   GST_DEBUG_OBJECT (obj->dbg_obj,
       "try matching buffer layout requested by downstream");
+
+  //Updating alignment data to match buffer layout
+  obj->align = align;
 
   gst_v4l2_object_match_buffer_layout (obj, GST_VIDEO_INFO_N_PLANES (&info),
       info.offset, info.stride, buffer_size,
