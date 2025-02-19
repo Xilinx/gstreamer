@@ -1208,6 +1208,8 @@ fill_planes (GstVideoInfo * info, gsize plane_size[GST_VIDEO_MAX_PLANES])
       break;
     case GST_VIDEO_FORMAT_NV12_10LE32:
       info->stride[0] = (width + 2) / 3 * 4;
+      /* Align stride to 64 bit format for complex formats */
+      info->stride[0] = GST_ROUND_UP_64(info->stride[0]);
       info->stride[1] = info->stride[0];
       info->offset[0] = 0;
       info->offset[1] = info->stride[0] * GST_ROUND_UP_2 (height);
@@ -1218,6 +1220,8 @@ fill_planes (GstVideoInfo * info, gsize plane_size[GST_VIDEO_MAX_PLANES])
       break;
     case GST_VIDEO_FORMAT_NV16_10LE32:
       info->stride[0] = (width + 2) / 3 * 4;
+      /* Align stride to 64 bit format for complex formats */
+      info->stride[0] = GST_ROUND_UP_64(info->stride[0]);
       info->stride[1] = info->stride[0];
       info->offset[0] = 0;
       info->offset[1] = info->stride[0] * height;
