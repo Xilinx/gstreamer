@@ -682,7 +682,7 @@ gst_media_src_bin_class_init (GstMediaSrcBinClass * klass)
   gst_element_class_set_static_metadata (gstelement_class,
       "mediasrcbin",
       "Source/Video",
-      "Reads frames from media device e.g. /dev/media0",
+      "Reads frames from media device e.g. /dev/media0 (DEPRECATED: Use v4l2src instead)",
       "Naveen Cherukuri <naveen.cherukuri@xilinx.com>, "
       "Vishal Sagar <vishal.sagar@xilinx.com>, "
       "Ronak Shah <ronak.shah@xilinx.com>");
