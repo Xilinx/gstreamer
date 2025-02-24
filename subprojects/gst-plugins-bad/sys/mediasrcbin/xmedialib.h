@@ -61,6 +61,7 @@ struct media_entity
   struct media_link *links;
   unsigned int max_links;
   unsigned int num_links;
+  bool supports_streams;
 
   char dev_name[32];
   int fd;
