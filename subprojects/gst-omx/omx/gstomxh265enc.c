@@ -237,7 +237,11 @@ gst_omx_h265_enc_class_init (GstOMXH265EncClass * klass)
       GST_VIDEO_CAPS_MAKE (GST_OMX_VIDEO_ENC_SUPPORTED_FORMATS);
 
   videoenc_class->cdata.default_src_template_caps = "video/x-h265, "
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+      "width=(int) [ 256, 8192 ], " "height=(int) [ 128, 8192 ], "
+#else
       "width=(int) [ 1, MAX ], " "height=(int) [ 1, MAX ], "
+#endif
       "framerate = (fraction) [0, MAX], stream-format=(string) byte-stream, "
       "aligmment = (string) " ALIGNMENT;
 

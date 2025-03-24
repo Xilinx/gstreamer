@@ -281,7 +281,11 @@ gst_omx_h264_enc_class_init (GstOMXH264EncClass * klass)
 #endif
 
   videoenc_class->cdata.default_src_template_caps = "video/x-h264, "
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+      "width = (int) [ 128, 8192 ], height = (int) [ 96, 8192 ], "
+#else
       "width = (int) [ 16, 4096 ], height = (int) [ 16, 4096 ], "
+#endif
       "framerate = (fraction) [0, MAX], stream-format=(string) byte-stream, "
       "alignment = (string) " ALIGNMENT;
   videoenc_class->handle_output_frame =

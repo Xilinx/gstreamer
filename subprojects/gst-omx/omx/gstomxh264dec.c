@@ -50,11 +50,19 @@ enum
 G_DEFINE_TYPE_WITH_CODE (GstOMXH264Dec, gst_omx_h264_dec,
     GST_TYPE_OMX_VIDEO_DEC, DEBUG_INIT);
 
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+#define MAKE_CAPS(alignment) \
+  "video/x-h264, " \
+      "alignment=(string) " alignment ", " \
+      "stream-format=(string) byte-stream, " \
+      "width=(int) [80,4096], height=(int) [96,4096]"
+#else
 #define MAKE_CAPS(alignment) \
   "video/x-h264, " \
       "alignment=(string) " alignment ", " \
       "stream-format=(string) byte-stream, " \
       "width=(int) [1,MAX], height=(int) [1,MAX]"
+#endif
 
 /* The Zynq supports decoding subframes, though we want "au" to be the
  * default, so we keep it prepended. This is the only way that it works with
