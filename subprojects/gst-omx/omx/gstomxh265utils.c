@@ -129,6 +129,16 @@ gst_omx_h265_utils_get_level_from_str (const gchar * level, const gchar * tier)
       return OMX_VIDEO_HEVCMainTierLevel61;
     else if (g_str_equal (level, "6.2"))
       return OMX_VIDEO_HEVCMainTierLevel62;
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS)
+    else if (g_str_equal (level, "6.3"))
+      return OMX_VIDEO_HEVCMainTierLevel63;
+    else if (g_str_equal (level, "7"))
+      return OMX_VIDEO_HEVCMainTierLevel7;
+    else if (g_str_equal (level, "7.1"))
+      return OMX_VIDEO_HEVCMainTierLevel71;
+    else if (g_str_equal (level, "7.2"))
+      return OMX_VIDEO_HEVCMainTierLevel72;
+#endif
   } else if (g_str_equal (tier, "high")) {
     if (g_str_equal (level, "4"))
       return OMX_VIDEO_HEVCHighTierLevel4;
@@ -146,6 +156,16 @@ gst_omx_h265_utils_get_level_from_str (const gchar * level, const gchar * tier)
       return OMX_VIDEO_HEVCHighTierLevel61;
     else if (g_str_equal (level, "6.2"))
       return OMX_VIDEO_HEVCHighTierLevel62;
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS)
+    else if (g_str_equal (level, "6.3"))
+      return OMX_VIDEO_HEVCHighTierLevel63;
+    else if (g_str_equal (level, "7"))
+      return OMX_VIDEO_HEVCHighTierLevel7;
+    else if (g_str_equal (level, "7.1"))
+      return OMX_VIDEO_HEVCHighTierLevel71;
+    else if (g_str_equal (level, "7.2"))
+      return OMX_VIDEO_HEVCHighTierLevel72;
+#endif
   }
 
   return OMX_VIDEO_HEVCLevelUnknown;
