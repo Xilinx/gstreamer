@@ -174,6 +174,32 @@ static const GstV4L2FormatDesc gst_v4l2_formats[] = {
   /* three planes -- one Y, one Cr, one  Cb  */
   {V4L2_PIX_FMT_X403, TRUE, GST_V4L2_RAW},
 
+  /* Tiled YUV formats AMD Versal Gen2 VCU2, 4:4:4 is planar, others semiplanar */
+  {V4L2_PIX_FMT_T5MA, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T5M8, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T5MC, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T508, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T50A, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T50C, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T528, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T52A, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T52C, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T548, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T54A, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T54C, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T6M8, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T6MA, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T6MC, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T608, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T60A, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T60C, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T628, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T62A, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T62C, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T648, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T64A, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_T64C, TRUE, GST_V4L2_RAW},
+
   /* Bayer formats - see http://www.siliconimaging.com/RGB%20Bayer.htm */
   {V4L2_PIX_FMT_SBGGR8, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_SGBRG8, TRUE, GST_V4L2_RAW},
@@ -1154,6 +1180,30 @@ gst_v4l2_object_format_get_rank (const struct v4l2_fmtdesc *fmt)
     case V4L2_PIX_FMT_XV15:
     case V4L2_PIX_FMT_XV20:
     case V4L2_PIX_FMT_X403:
+    case V4L2_PIX_FMT_T5M8:
+    case V4L2_PIX_FMT_T5MA:
+    case V4L2_PIX_FMT_T5MC:
+    case V4L2_PIX_FMT_T508:
+    case V4L2_PIX_FMT_T50A:
+    case V4L2_PIX_FMT_T50C:
+    case V4L2_PIX_FMT_T528:
+    case V4L2_PIX_FMT_T52A:
+    case V4L2_PIX_FMT_T52C:
+    case V4L2_PIX_FMT_T548:
+    case V4L2_PIX_FMT_T54A:
+    case V4L2_PIX_FMT_T54C:
+    case V4L2_PIX_FMT_T6M8:
+    case V4L2_PIX_FMT_T6MA:
+    case V4L2_PIX_FMT_T6MC:
+    case V4L2_PIX_FMT_T608:
+    case V4L2_PIX_FMT_T60A:
+    case V4L2_PIX_FMT_T60C:
+    case V4L2_PIX_FMT_T628:
+    case V4L2_PIX_FMT_T62A:
+    case V4L2_PIX_FMT_T62C:
+    case V4L2_PIX_FMT_T648:
+    case V4L2_PIX_FMT_T64A:
+    case V4L2_PIX_FMT_T64C:
       rank = YUV_ODD_BASE_RANK;
       break;
 
@@ -1497,6 +1547,79 @@ gst_v4l2_object_v4l2fourcc_to_video_format (guint32 fourcc)
     case V4L2_PIX_FMT_X403:
       format = GST_VIDEO_FORMAT_Y444_10LE32;
       break;
+    case V4L2_PIX_FMT_T5M8:
+      format = GST_VIDEO_FORMAT_T5M8;
+      break;
+    case V4L2_PIX_FMT_T5MA:
+      format = GST_VIDEO_FORMAT_T5MA;
+      break;
+    case V4L2_PIX_FMT_T5MC:
+      format = GST_VIDEO_FORMAT_T5MC;
+      break;
+    case V4L2_PIX_FMT_T508:
+      format = GST_VIDEO_FORMAT_T508;
+      break;
+    case V4L2_PIX_FMT_T50A:
+      format = GST_VIDEO_FORMAT_T50A;
+      break;
+    case V4L2_PIX_FMT_T50C:
+      format = GST_VIDEO_FORMAT_T50C;
+      break;
+    case V4L2_PIX_FMT_T528:
+      format = GST_VIDEO_FORMAT_T528;
+      break;
+    case V4L2_PIX_FMT_T52A:
+      format = GST_VIDEO_FORMAT_T52A;
+      break;
+    case V4L2_PIX_FMT_T52C:
+      format = GST_VIDEO_FORMAT_T52C;
+      break;
+    case V4L2_PIX_FMT_T548:
+      format = GST_VIDEO_FORMAT_T548;
+      break;
+    case V4L2_PIX_FMT_T54A:
+      format = GST_VIDEO_FORMAT_T54A;
+      break;
+    case V4L2_PIX_FMT_T54C:
+      format = GST_VIDEO_FORMAT_T54C;
+      break;
+    case V4L2_PIX_FMT_T6M8:
+      format = GST_VIDEO_FORMAT_T6M8;
+      break;
+    case V4L2_PIX_FMT_T6MA:
+      format = GST_VIDEO_FORMAT_T6MA;
+      break;
+    case V4L2_PIX_FMT_T6MC:
+      format = GST_VIDEO_FORMAT_T6MC;
+      break;
+    case V4L2_PIX_FMT_T608:
+      format = GST_VIDEO_FORMAT_T608;
+      break;
+    case V4L2_PIX_FMT_T60A:
+      format = GST_VIDEO_FORMAT_T60A;
+      break;
+    case V4L2_PIX_FMT_T60C:
+      format = GST_VIDEO_FORMAT_T60C;
+      break;
+    case V4L2_PIX_FMT_T628:
+      format = GST_VIDEO_FORMAT_T628;
+      break;
+    case V4L2_PIX_FMT_T62A:
+      format = GST_VIDEO_FORMAT_T62A;
+      break;
+    case V4L2_PIX_FMT_T62C:
+      format = GST_VIDEO_FORMAT_T62C;
+      break;
+    case V4L2_PIX_FMT_T648:
+      format = GST_VIDEO_FORMAT_T648;
+      break;
+    case V4L2_PIX_FMT_T64A:
+      format = GST_VIDEO_FORMAT_T64A;
+      break;
+    case V4L2_PIX_FMT_T64C:
+      format = GST_VIDEO_FORMAT_T64C;
+      break;
+
     default:
       format = GST_VIDEO_FORMAT_UNKNOWN;
       break;
@@ -1647,7 +1770,31 @@ gst_v4l2_object_v4l2fourcc_to_bare_struct (guint32 fourcc)
     case V4L2_PIX_FMT_YUV411P:
     case V4L2_PIX_FMT_XV15:
     case V4L2_PIX_FMT_XV20:
-    case V4L2_PIX_FMT_X403:{
+    case V4L2_PIX_FMT_X403:
+    case V4L2_PIX_FMT_T5M8:
+    case V4L2_PIX_FMT_T5MA:
+    case V4L2_PIX_FMT_T5MC:
+    case V4L2_PIX_FMT_T508:
+    case V4L2_PIX_FMT_T50A:
+    case V4L2_PIX_FMT_T50C:
+    case V4L2_PIX_FMT_T528:
+    case V4L2_PIX_FMT_T52A:
+    case V4L2_PIX_FMT_T52C:
+    case V4L2_PIX_FMT_T548:
+    case V4L2_PIX_FMT_T54A:
+    case V4L2_PIX_FMT_T54C:
+    case V4L2_PIX_FMT_T6M8:
+    case V4L2_PIX_FMT_T6MA:
+    case V4L2_PIX_FMT_T6MC:
+    case V4L2_PIX_FMT_T608:
+    case V4L2_PIX_FMT_T60A:
+    case V4L2_PIX_FMT_T60C:
+    case V4L2_PIX_FMT_T628:
+    case V4L2_PIX_FMT_T62A:
+    case V4L2_PIX_FMT_T62C:
+    case V4L2_PIX_FMT_T648:
+    case V4L2_PIX_FMT_T64A:
+    case V4L2_PIX_FMT_T64C: {
       GstVideoFormat format;
       format = gst_v4l2_object_v4l2fourcc_to_video_format (fourcc);
       if (format != GST_VIDEO_FORMAT_UNKNOWN)
@@ -1974,6 +2121,78 @@ gst_v4l2_object_get_caps_info (GstV4l2Object * v4l2object, GstCaps * caps,
         break;
       case GST_VIDEO_FORMAT_YVYU:
         fourcc = V4L2_PIX_FMT_YVYU;
+        break;
+      case GST_VIDEO_FORMAT_T5M8:
+        fourcc = V4L2_PIX_FMT_T5M8;
+        break;
+      case GST_VIDEO_FORMAT_T5MA:
+        fourcc = V4L2_PIX_FMT_T5MA;
+        break;
+      case GST_VIDEO_FORMAT_T5MC:
+        fourcc = V4L2_PIX_FMT_T5MC;
+        break;
+      case GST_VIDEO_FORMAT_T508:
+        fourcc = V4L2_PIX_FMT_T508;
+        break;
+      case GST_VIDEO_FORMAT_T50A:
+        fourcc = V4L2_PIX_FMT_T50A;
+        break;
+      case GST_VIDEO_FORMAT_T50C:
+        fourcc = V4L2_PIX_FMT_T50C;
+        break;
+      case GST_VIDEO_FORMAT_T528:
+        fourcc = V4L2_PIX_FMT_T528;
+        break;
+      case GST_VIDEO_FORMAT_T52A:
+        fourcc = V4L2_PIX_FMT_T52A;
+        break;
+      case GST_VIDEO_FORMAT_T52C:
+        fourcc = V4L2_PIX_FMT_T52C;
+        break;
+      case GST_VIDEO_FORMAT_T548:
+        fourcc = V4L2_PIX_FMT_T548;
+        break;
+      case GST_VIDEO_FORMAT_T54A:
+        fourcc = V4L2_PIX_FMT_T54A;
+        break;
+      case GST_VIDEO_FORMAT_T54C:
+        fourcc = V4L2_PIX_FMT_T54C;
+        break;
+      case GST_VIDEO_FORMAT_T6M8:
+        fourcc = V4L2_PIX_FMT_T6M8;
+        break;
+      case GST_VIDEO_FORMAT_T6MA:
+        fourcc = V4L2_PIX_FMT_T6MA;
+        break;
+      case GST_VIDEO_FORMAT_T6MC:
+        fourcc = V4L2_PIX_FMT_T6MC;
+        break;
+      case GST_VIDEO_FORMAT_T608:
+        fourcc = V4L2_PIX_FMT_T608;
+        break;
+      case GST_VIDEO_FORMAT_T60A:
+        fourcc = V4L2_PIX_FMT_T60A;
+        break;
+      case GST_VIDEO_FORMAT_T60C:
+        fourcc = V4L2_PIX_FMT_T60C;
+        break;
+      case GST_VIDEO_FORMAT_T628:
+        fourcc = V4L2_PIX_FMT_T628;
+        break;
+      case GST_VIDEO_FORMAT_T62A:
+        fourcc = V4L2_PIX_FMT_T62A;
+        break;
+      case GST_VIDEO_FORMAT_T62C:
+        fourcc = V4L2_PIX_FMT_T62C;
+        break;
+      case GST_VIDEO_FORMAT_T648:
+        fourcc = V4L2_PIX_FMT_T648;
+        break;
+      case GST_VIDEO_FORMAT_T64A:
+        fourcc = V4L2_PIX_FMT_T64A;
+        break;
+      case GST_VIDEO_FORMAT_T64C:
+        fourcc = V4L2_PIX_FMT_T64C;
         break;
       case GST_VIDEO_FORMAT_RGB15:
         fourcc = V4L2_PIX_FMT_RGB555;

@@ -635,6 +635,32 @@ struct v4l2_pix_format {
 #define V4L2_PIX_FMT_NV12M_8L128      v4l2_fourcc('N', 'A', '1', '2') /* Y/CbCr 4:2:0 8x128 tiles */
 #define V4L2_PIX_FMT_NV12M_10BE_8L128 v4l2_fourcc_be('N', 'T', '1', '2') /* Y/CbCr 4:2:0 10-bit 8x128 tiles */
 
+/* Tiled YUV formats AMD Versal Gen2 VCU2, 4:4:4 is planar, others semiplanar */
+#define V4L2_PIX_FMT_T5M8	v4l2_fourcc('T', '5', 'M', '8') /*  8 Y/CbCr 4:0:0 32x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T5MA	v4l2_fourcc('T', '5', 'M', 'A') /* 10 Y/CbCr 4:0:0 32x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T5MC	v4l2_fourcc('T', '5', 'M', 'C') /* 12 Y/CbCr 4:0:0 32x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T508	v4l2_fourcc('T', '5', '0', '8') /*  8 Y/CbCr 4:2:0 32x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T50A	v4l2_fourcc('T', '5', '0', 'A') /* 10 Y/CbCr 4:2:0 32x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T50C	v4l2_fourcc('T', '5', '0', 'C') /* 12 Y/CbCr 4:2:0 32x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T528	v4l2_fourcc('T', '5', '2', '8') /*  8 Y/CbCr 4:2:2 32x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T52A	v4l2_fourcc('T', '5', '2', 'A') /* 10 Y/CbCr 4:2:2 32x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T52C	v4l2_fourcc('T', '5', '2', 'C') /* 12 Y/CbCr 4:2:2 32x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T548	v4l2_fourcc('T', '5', '4', '8') /*  8 Y/CbCr 4:4:4 32x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T54A	v4l2_fourcc('T', '5', '4', 'A') /* 10 Y/CbCr 4:4:4 32x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T54C	v4l2_fourcc('T', '5', '4', 'C') /* 12 Y/CbCr 4:4:4 32x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T6M8	v4l2_fourcc('T', '6', 'M', '8') /*  8 Y/CbCr 4:0:0 64x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T6MA	v4l2_fourcc('T', '6', 'M', 'A') /* 10 Y/CbCr 4:0:0 64x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T6MC	v4l2_fourcc('T', '6', 'M', 'C') /* 12 Y/CbCr 4:0:0 64x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T608	v4l2_fourcc('T', '6', '0', '8') /*  8 Y/CbCr 4:2:0 64x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T60A	v4l2_fourcc('T', '6', '0', 'A') /* 10 Y/CbCr 4:2:0 64x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T60C	v4l2_fourcc('T', '6', '0', 'C') /* 12 Y/CbCr 4:2:0 64x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T628	v4l2_fourcc('T', '6', '2', '8') /*  8 Y/CbCr 4:2:2 64x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T62A	v4l2_fourcc('T', '6', '2', 'A') /* 10 Y/CbCr 4:2:2 64x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T62C	v4l2_fourcc('T', '6', '2', 'C') /* 12 Y/CbCr 4:2:2 64x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T648	v4l2_fourcc('T', '6', '4', '8') /*  8 Y/CbCr 4:4:4 64x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T64A	v4l2_fourcc('T', '6', '4', 'A') /* 10 Y/CbCr 4:4:4 64x4 (4x4) tiles */
+#define V4L2_PIX_FMT_T64C	v4l2_fourcc('T', '6', '4', 'C') /* 12 Y/CbCr 4:4:4 64x4 (4x4) tiles */
+
 /* Bayer formats - see http://www.siliconimaging.com/RGB%20Bayer.htm */
 #define V4L2_PIX_FMT_SBGGR8  v4l2_fourcc('B', 'A', '8', '1') /*  8  BGBG.. GRGR.. */
 #define V4L2_PIX_FMT_SGBRG8  v4l2_fourcc('G', 'B', 'R', 'G') /*  8  GBGB.. RGRG.. */
