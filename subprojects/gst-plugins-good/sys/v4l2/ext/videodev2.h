@@ -597,6 +597,10 @@ struct v4l2_pix_format {
 #define V4L2_PIX_FMT_NV61    v4l2_fourcc('N', 'V', '6', '1') /* 16  Y/CrCb 4:2:2  */
 #define V4L2_PIX_FMT_NV24    v4l2_fourcc('N', 'V', '2', '4') /* 24  Y/CbCr 4:4:4  */
 #define V4L2_PIX_FMT_NV42    v4l2_fourcc('N', 'V', '4', '2') /* 24  Y/CrCb 4:4:4  */
+#define V4L2_PIX_FMT_P010    v4l2_fourcc('P', '0', '1', '0') /* 16  Y/CbCr 4:2:0 10-bit per component */
+#define V4L2_PIX_FMT_P012    v4l2_fourcc('P', '0', '1', '2') /* 16  Y/CbCr 4:2:0 12-bit per component */
+#define V4L2_PIX_FMT_P210    v4l2_fourcc('P', '2', '1', '0') /* 16  Y/CbCr 4:2:2 10-bit per component */
+#define V4L2_PIX_FMT_P212    v4l2_fourcc('P', '2', '1', '2') /* 16  Y/CbCr 4:2:0 12-bit per component */
 #define V4L2_PIX_FMT_XV20    v4l2_fourcc('X', 'V', '2', '0') /* 32 XY/UV 4:2:2 10-bit */
 #define V4L2_PIX_FMT_XV15    v4l2_fourcc('X', 'V', '1', '5') /* 32 XY/UV 4:2:0 10-bit */
 
@@ -617,6 +621,7 @@ struct v4l2_pix_format {
 
 /* three non contiguous planes - Y, Cb, Cr */
 #define V4L2_PIX_FMT_YUV420M v4l2_fourcc('Y', 'M', '1', '2') /* 12  YUV420 planar */
+
 #define V4L2_PIX_FMT_YVU420M v4l2_fourcc('Y', 'M', '2', '1') /* 12  YVU420 planar */
 #define V4L2_PIX_FMT_YUV422M v4l2_fourcc('Y', 'M', '1', '6') /* 16  YUV422 planar */
 #define V4L2_PIX_FMT_YVU422M v4l2_fourcc('Y', 'M', '6', '1') /* 16  YVU422 planar */
@@ -624,6 +629,9 @@ struct v4l2_pix_format {
 #define V4L2_PIX_FMT_YVU444M v4l2_fourcc('Y', 'M', '4', '2') /* 24  YVU444 planar */
 
 #define V4L2_PIX_FMT_YUV444P v4l2_fourcc('4', '4', '4', 'P') /* 24  YUV444 planar */
+#define V4L2_PIX_FMT_I4AL    v4l2_fourcc('I', '4', 'A', 'L') /* 16  Y/CbCr 4:4:4 10-bit */
+#define V4L2_PIX_FMT_I4CL    v4l2_fourcc('I', '4', 'C', 'L') /* 16  Y/CbCr 4:4:4 12-bit */
+
 /* Tiled YUV formats */
 #define V4L2_PIX_FMT_NV12_4L4 v4l2_fourcc('V', 'T', '1', '2')   /* 12  Y/CbCr 4:2:0  4x4 tiles */
 #define V4L2_PIX_FMT_NV12_16L16 v4l2_fourcc('H', 'M', '1', '2') /* 12  Y/CbCr 4:2:0 16x16 tiles */
