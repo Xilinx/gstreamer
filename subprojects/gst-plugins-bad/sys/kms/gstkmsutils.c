@@ -61,7 +61,7 @@ static const struct
   { DRM_FORMAT_##fourcc,GST_VIDEO_FORMAT_##fmt }
 
   /* Keep sorted by decreasing quality, refer to GST_VIDEO_FORMATS_ALL order
-   * if unsure */  
+   * if unsure */
 
   /* 32bits/p RGB with Alpha */
   DEF_FMT (ARGB8888, BGRA),
@@ -112,6 +112,32 @@ static const struct
   DEF_FMT (XV15, NV12_10LE32),
   DEF_FMT (XV20, NV16_10LE32),
 #endif
+
+  DEF_FMT (T5M8, T5M8),
+  DEF_FMT (T5MA, T5MA),
+  DEF_FMT (T5MC, T5MC),
+  DEF_FMT (T508, T508),
+  DEF_FMT (T50A, T50A),
+  DEF_FMT (T50C, T50C),
+  DEF_FMT (T528, T528),
+  DEF_FMT (T52A, T52A),
+  DEF_FMT (T52C, T52C),
+  DEF_FMT (T548, T548),
+  DEF_FMT (T54A, T54A),
+  DEF_FMT (T54C, T54C),
+
+  DEF_FMT (T6M8, T6M8),
+  DEF_FMT (T6MA, T6MA),
+  DEF_FMT (T6MC, T6MC),
+  DEF_FMT (T608, T608),
+  DEF_FMT (T60A, T60A),
+  DEF_FMT (T60C, T60C),
+  DEF_FMT (T628, T628),
+  DEF_FMT (T62A, T62A),
+  DEF_FMT (T62C, T62C),
+  DEF_FMT (T648, T648),
+  DEF_FMT (T64A, T64A),
+  DEF_FMT (T64C, T64C),
 
 #undef DEF_FMT
 };
@@ -184,6 +210,34 @@ gst_drm_bpp_from_drm (guint32 drmfmt)
     case DRM_FORMAT_RGB888:
       bpp = 24;
       break;
+    case DRM_FORMAT_T5M8:
+    case DRM_FORMAT_T6M8:
+    case DRM_FORMAT_T508:
+    case DRM_FORMAT_T608:
+    case DRM_FORMAT_T528:
+    case DRM_FORMAT_T628:
+    case DRM_FORMAT_T548:
+    case DRM_FORMAT_T648:
+      bpp = 8;
+      break;
+    case DRM_FORMAT_T5MA:
+    case DRM_FORMAT_T5MC:
+    case DRM_FORMAT_T6MA:
+    case DRM_FORMAT_T6MC:
+    case DRM_FORMAT_T50A:
+    case DRM_FORMAT_T50C:
+    case DRM_FORMAT_T60A:
+    case DRM_FORMAT_T60C:
+    case DRM_FORMAT_T52A:
+    case DRM_FORMAT_T52C:
+    case DRM_FORMAT_T62A:
+    case DRM_FORMAT_T62C:
+    case DRM_FORMAT_T54A:
+    case DRM_FORMAT_T54C:
+    case DRM_FORMAT_T64A:
+    case DRM_FORMAT_T64C:
+      bpp = 16;
+      break;
     case DRM_FORMAT_X403:
     default:
       bpp = 32;
@@ -217,6 +271,34 @@ gst_drm_width_from_drm (guint32 drmfmt, guint32 width)
       ret = gst_util_uint64_scale_round (width, 1, 3);
       break;
 #endif
+    case DRM_FORMAT_T5M8:
+    case DRM_FORMAT_T5MA:
+    case DRM_FORMAT_T5MC:
+    case DRM_FORMAT_T508:
+    case DRM_FORMAT_T50A:
+    case DRM_FORMAT_T50C:
+    case DRM_FORMAT_T528:
+    case DRM_FORMAT_T52A:
+    case DRM_FORMAT_T52C:
+    case DRM_FORMAT_T548:
+    case DRM_FORMAT_T54A:
+    case DRM_FORMAT_T54C:
+      ret = GST_ROUND_UP_N (width, 32);
+      break;
+    case DRM_FORMAT_T6M8:
+    case DRM_FORMAT_T6MA:
+    case DRM_FORMAT_T6MC:
+    case DRM_FORMAT_T608:
+    case DRM_FORMAT_T60A:
+    case DRM_FORMAT_T60C:
+    case DRM_FORMAT_T628:
+    case DRM_FORMAT_T62A:
+    case DRM_FORMAT_T62C:
+    case DRM_FORMAT_T648:
+    case DRM_FORMAT_T64A:
+    case DRM_FORMAT_T64C:
+      ret = GST_ROUND_UP_N (width, 64);
+      break;
     default:
       ret = width;
       break;
@@ -256,6 +338,40 @@ gst_drm_height_from_drm (guint32 drmfmt, guint32 height)
     case DRM_FORMAT_NV24:
       ret = height * 3;
       break;
+    case DRM_FORMAT_T5M8:
+    case DRM_FORMAT_T5MA:
+    case DRM_FORMAT_T5MC:
+    case DRM_FORMAT_T6M8:
+    case DRM_FORMAT_T6MA:
+    case DRM_FORMAT_T6MC:
+      ret = GST_ROUND_UP_64(height);
+      break;
+    case DRM_FORMAT_T508:
+    case DRM_FORMAT_T50A:
+    case DRM_FORMAT_T50C:
+    case DRM_FORMAT_T608:
+    case DRM_FORMAT_T60A:
+    case DRM_FORMAT_T60C:
+      ret = GST_ROUND_UP_64(height) * 3 / 2;
+      break;
+
+    case DRM_FORMAT_T528:
+    case DRM_FORMAT_T52A:
+    case DRM_FORMAT_T52C:
+    case DRM_FORMAT_T628:
+    case DRM_FORMAT_T62A:
+    case DRM_FORMAT_T62C:
+      ret = GST_ROUND_UP_64(height) * 2;
+      break;
+    case DRM_FORMAT_T548:
+    case DRM_FORMAT_T54A:
+    case DRM_FORMAT_T54C:
+    case DRM_FORMAT_T648:
+    case DRM_FORMAT_T64A:
+    case DRM_FORMAT_T64C:
+      ret = GST_ROUND_UP_64(height) * 3;
+      break;
+
     default:
       ret = height;
       break;
