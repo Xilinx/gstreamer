@@ -111,6 +111,9 @@ option('v4l2-probe', type : 'boolean', value : true, description : 'Probe v4l2 d
 option('v4l2-libv4l2', type : 'feature', value : 'auto', description : 'Use libv4l2 for some obscure format conversions')
 option('v4l2-gudev', type : 'feature', value : 'auto', description : 'Use libgudev for probing v4l2 devices')
 
+# xm2msc plugin options
+option('xm2msc', type : 'feature', value : 'auto', description : 'Build xm2msc plugin')
+
 # Common feature options
 option('examples', type : 'feature', value : 'auto', yield : true)
 option('tests', type : 'feature', value : 'auto', yield : true)

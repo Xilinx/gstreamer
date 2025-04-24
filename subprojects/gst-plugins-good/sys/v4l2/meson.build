@@ -42,6 +42,51 @@ v4l2_sources = [
   'tunernorm.c',
   'ext/xlnx-ll/xvfbsync.c',
 ]
+xm2msc_sources = [
+  'gstxm2msc.c',
+  'gstv4l2bconvert.c',
+  'gstv4l2allocator.c',
+  'gstv4l2object.c',
+  'gstv4l2bufferpool.c',
+  'v4l2_calls.c',
+  'v4l2-utils.c',
+  'ext/xlnx-ll/xvfbsync.c',
+  'edid-utils.c',
+  'gstv4l2element.c',
+  'gstv4l2codec.c',
+  'gstv4l2colorbalance.c',
+  'gstv4l2deviceprovider.c',
+  'gstv4l2capturebufferpool.c',
+  'gstv4l2media.c',
+  'gstv4l2sink.c',
+  'gstv4l2src.c',
+  'gstv4l2radio.c',
+  'gstv4l2tuner.c',
+  'gstv4l2transform.c',
+  'gstv4l2videodec.c',
+  'gstv4l2videoenc.c',
+  'gstv4l2fwhtenc.c',
+  'gstv4l2h263enc.c',
+  'gstv4l2h264codec.c',
+  'gstv4l2h264enc.c',
+  'gstv4l2h265codec.c',
+  'gstv4l2h265enc.c',
+  'gstv4l2jpegenc.c',
+  'gstv4l2mpeg2codec.c',
+  'gstv4l2mpeg4codec.c',
+  'gstv4l2mpeg4enc.c',
+  'gstv4l2vidorient.c',
+  'gstv4l2vp8codec.c',
+  'gstv4l2vp8enc.c',
+  'gstv4l2vp9codec.c',
+  'gstv4l2vp9enc.c',
+  'gstxilinxscd.c',
+  'gstxlnxabrscaler.c',
+  'subdev-utils.c',
+  'tuner.c',
+  'tunerchannel.c',
+  'tunernorm.c',
+]
 
 v4l2 = get_option('v4l2')
 if v4l2.disabled()
@@ -52,6 +97,14 @@ else
   if v4l2.enabled() and not have_v4l2
     error('V4L2 is requested but headers were not found')
   endif
+endif
+
+xm2msc = get_option('xm2msc')
+if xm2msc.disabled()
+  have_xm2msc = false
+  message('XM2MSC plugin is disabled')
+else
+  have_xm2msc = true
 endif
 
 cdata.set('GST_V4L2_ENABLE_PROBE', get_option('v4l2-probe'))
@@ -76,4 +129,17 @@ if have_v4l2
     install_dir : plugins_install_dir,
   )
   plugins += [gstv4l2]
+
+  if have_xm2msc
+    gstxm2msc = library('v4l2xm2msc',
+      xm2msc_sources,
+      c_args : gst_plugins_good_args,
+      include_directories : [configinc, libsinc],
+      dependencies : [gstbase_dep, gstvideo_dep, gstallocators_dep, gudev_dep, libv4l2_dep, dependency('threads')],
+      install : true,
+      install_dir : plugins_install_dir,
+    )
+    plugins += [gstxm2msc]
+  endif
+
 endif
