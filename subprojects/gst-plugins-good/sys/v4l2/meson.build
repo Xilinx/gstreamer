@@ -131,7 +131,7 @@ if have_v4l2
   plugins += [gstv4l2]
 
   if have_xm2msc
-    gstxm2msc = library('v4l2xm2msc',
+    gstxm2msc = library('gstv4l2xm2msc',
       xm2msc_sources,
       c_args : gst_plugins_good_args,
       include_directories : [configinc, libsinc],
