@@ -1486,6 +1486,8 @@ retry_find_plane:
   }
 
   if (self->primary_plane_id != -1) {
+    self->primary_plane_alpha = find_property_value_for_plane_id(self->fd,
+                                    self->primary_plane_id, "alpha");
     if (find_property_value_for_plane_id (self->fd,
             self->primary_plane_id, "fid_err") != -1) {
       self->fix_field_inversion = TRUE;
@@ -1618,7 +1620,7 @@ gst_kms_sink_stop (GstBaseSink * bsink)
 
   if (self->fullscreen_enabled && self->primary_plane_id != -1) {
     err = set_property_value_for_plane_id (self->fd, self->primary_plane_id,
-        "alpha", 255);
+        "alpha", self->primary_plane_alpha);
     if (!err)
       GST_ERROR_OBJECT (self, "Unable to reset alpha value of primary plane");
   }

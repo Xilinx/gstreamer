@@ -68,6 +68,7 @@ struct _GstKMSSink
   gint crtc_id;
   gint plane_id;
   gint primary_plane_id;
+  guint64 primary_plane_alpha;
   guint error_correction_margin;
   guint pipe;
 
