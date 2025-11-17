@@ -3953,6 +3953,9 @@ gst_v4l2_object_save_format (GstV4l2Object * v4l2object,
   align->padding_bottom =
       padded_height - GST_VIDEO_INFO_FIELD_HEIGHT (info) - align->padding_top;
 
+  if (GST_VIDEO_INFO_INTERLACE_MODE (info) == GST_VIDEO_INTERLACE_MODE_ALTERNATE)
+    align->padding_bottom *= 2;
+
   /* setup the strides and offset */
   if (V4L2_TYPE_IS_MULTIPLANAR (v4l2object->type)) {
     struct v4l2_pix_format_mplane *pix_mp = &format->fmt.pix_mp;
