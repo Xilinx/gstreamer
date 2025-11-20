@@ -75,11 +75,13 @@ static const struct
   DEF_FMT (X403, Y444_10LE32),
 
   /* 16bits/c YUV 4:2:0 */
-  DEF_FMT (P010, P010_10LE),
+  DEF_FMT (P010, P010_10BE),
 
   /* YUV 4:4:4 */
   DEF_FMT (NV24, NV24),
   DEF_FMT (YUV444, Y444),
+  DEF_FMT (S410, Y444_10LE),
+  DEF_FMT (S412, Y444_12LE),
 
   /* 32bits/p RGB opaque */
   DEF_FMT (XRGB8888, BGRx),
@@ -187,9 +189,6 @@ gst_drm_bpp_from_drm (guint32 drmfmt)
     case DRM_FORMAT_NV24:
       bpp = 8;
       break;
-    case DRM_FORMAT_P010:
-      bpp = 10;
-      break;
 #ifdef DRM_FORMAT_XV15
     case DRM_FORMAT_XV15:
     case DRM_FORMAT_XV20:
@@ -201,9 +200,12 @@ gst_drm_bpp_from_drm (guint32 drmfmt)
     case DRM_FORMAT_UYVY:
     case DRM_FORMAT_YUYV:
     case DRM_FORMAT_YVYU:
+    case DRM_FORMAT_P010:
     case DRM_FORMAT_P016:
     case DRM_FORMAT_RGB565:
     case DRM_FORMAT_BGR565:
+    case DRM_FORMAT_S410:
+    case DRM_FORMAT_S412:
       bpp = 16;
       break;
     case DRM_FORMAT_BGR888:
@@ -257,6 +259,8 @@ gst_drm_width_from_drm (guint32 drmfmt, guint32 width)
     case DRM_FORMAT_YVU420:
     case DRM_FORMAT_YUV422:
     case DRM_FORMAT_YUV444:
+    case DRM_FORMAT_S410:
+    case DRM_FORMAT_S412:
       if (is_dp)
         ret = GST_ROUND_UP_N (width, 512);
       else
@@ -336,6 +340,8 @@ gst_drm_height_from_drm (guint32 drmfmt, guint32 height)
     case DRM_FORMAT_YUV444:
     case DRM_FORMAT_X403:
     case DRM_FORMAT_NV24:
+    case DRM_FORMAT_S410:
+    case DRM_FORMAT_S412:
       ret = height * 3;
       break;
     case DRM_FORMAT_T5M8:
