@@ -1624,6 +1624,30 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
 
 #if defined(USE_OMX_TARGET_VERSAL_GEN2)
 static gboolean
+gst_omx_video_enc_set_src_sync (GstOMXVideoEnc * self)
+{
+  OMX_ERRORTYPE err;
+  OMX_ALG_PORT_PARAM_SYNCHRONIZATION src_sync;
+
+  GST_OMX_INIT_STRUCT (&src_sync);
+  src_sync.nPortIndex = self->enc_in_port->index;
+  err = gst_omx_component_get_parameter (self->enc,
+          (OMX_INDEXTYPE) OMX_ALG_IndexPortParamSynchronization,
+          &src_sync);
+  if (err == OMX_ErrorNone) {
+    src_sync.bEnableSrcSynchronization = self->src_sync;
+    err = gst_omx_component_set_parameter (self->enc,
+        (OMX_INDEXTYPE) OMX_ALG_IndexPortParamSynchronization,
+        &src_sync);
+    CHECK_ERR ("srcsync");
+    GST_DEBUG_OBJECT (self, "setting source synchronization to %d",
+        self->src_sync);
+  }
+
+  return TRUE;
+}
+
+static gboolean
 set_versalgen2_props (GstOMXVideoEnc * self)
 {
   OMX_ERRORTYPE err;
@@ -1748,28 +1772,8 @@ set_versalgen2_props (GstOMXVideoEnc * self)
     CHECK_ERR ("sei-rp");
   }
 
-  {
-    OMX_ERRORTYPE err;
-    OMX_ALG_PORT_PARAM_SYNCHRONIZATION src_sync;
-
-    GST_OMX_INIT_STRUCT (&src_sync);
-    src_sync.nPortIndex = self->enc_in_port->index;
-    err = gst_omx_component_get_parameter (self->enc,
-            (OMX_INDEXTYPE) OMX_ALG_IndexPortParamSynchronization,
-            &src_sync);
-    if (err == OMX_ErrorNone) {
-        src_sync.bEnableSrcSynchronization = self->src_sync;
-
-        GST_DEBUG_OBJECT (self, "setting source synchronization to %d",
-            self->prefetch_buffer);
-
-        err =
-            gst_omx_component_set_parameter (self->enc,
-            (OMX_INDEXTYPE) OMX_ALG_IndexPortParamSynchronization,
-            &src_sync);
-        CHECK_ERR ("srcsync");
-    }
-  }
+  if (!gst_omx_video_enc_set_src_sync (self))
+    return FALSE;
 
   return TRUE;
 }
@@ -2854,7 +2858,7 @@ gst_omx_video_enc_zynqmp_pre_push (GstVideoEncoder * encoder,
 {
   GstOMXVideoEnc *self = GST_OMX_VIDEO_ENC (encoder);
 
-  if (frame->system_frame_number == 0 && self->xlnx_ll) {
+  if (frame->system_frame_number == 0 && (self->xlnx_ll || self->xlnx_ll_eol)) {
     GstClockTime latency = GST_CLOCK_TIME_NONE;
 
     if (!GST_CLOCK_TIME_IS_VALID (self->xlnx_ll_start))
@@ -3106,7 +3110,7 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
         goto reconfigure_error;
 
 #if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
-      if (self->xlnx_ll && self->started && self->in_pool_used) {
+      if ((self->xlnx_ll || self->xlnx_ll_eol) && self->started && self->in_pool_used) {
         GstEvent *event;
 
         xlnx_ll_vcu_init_delay ();
@@ -3332,6 +3336,7 @@ gst_omx_video_enc_start (GstVideoEncoder * encoder)
   self->in_pool_used = FALSE;
 #if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   self->xlnx_ll = FALSE;
+  self->xlnx_ll_eol = FALSE;
   self->xlnx_ll_start = GST_CLOCK_TIME_NONE;
   self->xlnx_ll_end = GST_CLOCK_TIME_NONE;
 #endif
@@ -4510,7 +4515,24 @@ gst_omx_video_enc_set_format (GstVideoEncoder * encoder,
             GST_CAPS_FEATURE_MEMORY_XLNX_LL)) {
       GST_DEBUG_OBJECT (self, "Input is using XLNX-LowLatency");
       self->xlnx_ll = TRUE;
+      self->xlnx_ll_eol = FALSE;
     }
+#if defined(USE_OMX_TARGET_VERSAL_GEN2)
+    if (features
+        && gst_caps_features_contains (features,
+            GST_CAPS_FEATURE_MEMORY_XLNX_LL_EOL)) {
+      GST_DEBUG_OBJECT (self, "Input is using XLNX-LowLatency via EOL,EOF signals");
+      self->xlnx_ll = FALSE;
+      self->xlnx_ll_eol = TRUE;
+      /* Auto-enable src-sync for XLNXLLEOL mode */
+      if (!self->src_sync) {
+        GST_DEBUG_OBJECT (self, "Auto-enabling src-sync for XLNXLLEOL mode");
+        self->src_sync = TRUE;
+        if (!gst_omx_video_enc_set_src_sync (self))
+          return FALSE;
+      }
+    }
+#endif
   }
 #endif
 
@@ -5457,7 +5479,7 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
   gst_video_codec_frame_unref (frame);
 
 #if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
-  if (self->xlnx_ll && starting && !self->in_pool_used) {
+  if ((self->xlnx_ll || self->xlnx_ll_eol) && starting && !self->in_pool_used) {
     GstEvent *event;
 
     xlnx_ll_vcu_init_delay ();

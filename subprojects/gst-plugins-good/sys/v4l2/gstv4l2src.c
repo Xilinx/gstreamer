@@ -158,7 +158,7 @@ gst_v4l2src_class_init (GstV4l2SrcClass * klass)
   GstElementClass *element_class;
   GstBaseSrcClass *basesrc_class;
   GstPushSrcClass *pushsrc_class;
-  GstCaps *caps, *caps_xlnx_ll;
+  GstCaps *caps, *caps_xlnx_ll, *caps_xlnx_ll_eol;
   guint i;
 
   gobject_class = G_OBJECT_CLASS (klass);
@@ -277,12 +277,14 @@ gst_v4l2src_class_init (GstV4l2SrcClass * klass)
   /* We don't own caps */
   caps = gst_caps_copy (caps);
   caps_xlnx_ll = gst_caps_new_empty ();
+  caps_xlnx_ll_eol = gst_caps_new_empty ();
 
   for (i = 0; i < gst_caps_get_size (caps); i++) {
     GstStructure *s = gst_caps_get_structure (caps, i);
 
     if (gst_structure_has_name (s, "video/x-raw")) {
       GstCapsFeatures *features;
+      GstCapsFeatures *features_eol;
 
       features = gst_caps_get_features (caps, i);
       features = gst_caps_features_copy (features);
@@ -292,10 +294,20 @@ gst_v4l2src_class_init (GstV4l2SrcClass * klass)
 
       gst_caps_append_structure_full (caps_xlnx_ll, gst_structure_copy (s),
           features);
+
+      features_eol = gst_caps_get_features (caps, i);
+      features_eol = gst_caps_features_copy (features_eol);
+      gst_caps_features_remove (features_eol,
+          GST_CAPS_FEATURE_MEMORY_SYSTEM_MEMORY);
+      gst_caps_features_add (features_eol, GST_CAPS_FEATURE_MEMORY_XLNX_LL_EOL);
+
+      gst_caps_append_structure_full (caps_xlnx_ll_eol, gst_structure_copy (s),
+          features_eol);
     }
   }
 
   caps = gst_caps_merge (caps, caps_xlnx_ll);
+  caps = gst_caps_merge (caps, caps_xlnx_ll_eol);
 
   gst_element_class_add_pad_template
       (element_class,
@@ -2075,8 +2087,12 @@ start_xilinx_dma (GstV4l2Src * self)
           &control)) {
     GST_ERROR_OBJECT (self, "Failed to start DMA: %s", g_strerror (errno));
   } else {
-    self->v4l2object->xlnx_ll_dma_started = true;
-    GST_INFO_OBJECT (self, "XLNXLL: DMA started:");
+    if (self->v4l2object->xlnx_ll) {
+      self->v4l2object->xlnx_ll_dma_started = true;
+    } else if (self->v4l2object->xlnx_ll_eol) {
+      self->v4l2object->xlnx_ll_eol_dma_started = true;
+      GST_DEBUG_OBJECT (self, "XLNXLLEOL: DMA started");
+    }
   }
 }
 
@@ -2089,7 +2105,7 @@ gst_v4l2src_event (GstBaseSrc * basesrc, GstEvent * event)
     case GST_EVENT_CUSTOM_UPSTREAM:
     {
       if (gst_event_has_name (event, "xlnx-ll-consumer-ready")) {
-        if (self->v4l2object->xlnx_ll) {
+        if (self->v4l2object->xlnx_ll || self->v4l2object->xlnx_ll_eol) {
           GST_DEBUG_OBJECT (self, "XLNX-LowLatency consumer ready, start DMA");
           start_xilinx_dma (self);
         } else {

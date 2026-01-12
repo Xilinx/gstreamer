@@ -611,7 +611,9 @@ gst_v4l2_object_new (GstElement * element,
 
   v4l2object->sync_chan.enabled = FALSE;
   v4l2object->xlnx_ll = FALSE;
+  v4l2object->xlnx_ll_eol = FALSE;
   v4l2object->xlnx_ll_dma_started = FALSE;
+  v4l2object->xlnx_ll_eol_dma_started = FALSE;
 
   /* We now disable libv4l2 by default, but have an env to enable it. */
 #ifdef HAVE_LIBV4L2
@@ -3329,6 +3331,16 @@ dup_struct_with_xlnx_ll (GstCaps * caps, GstStructure * s)
 }
 
 static void
+dup_struct_with_xlnx_ll_eol (GstCaps * caps, GstStructure * s)
+{
+  GstStructure *copy;
+
+  copy = gst_structure_copy (s);
+  gst_caps_append_structure_full (caps, copy,
+      gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_XLNX_LL_EOL, NULL));
+}
+
+static void
 gst_v4l2_object_update_and_append (GstV4l2Object * v4l2object,
     guint32 format, GstCaps * caps, GstStructure * s)
 {
@@ -3372,12 +3384,17 @@ gst_v4l2_object_update_and_append (GstV4l2Object * v4l2object,
     check_alternate_and_append_struct (caps, alt_s);
   }
 
-  if ((v4l2object->type == V4L2_BUF_TYPE_VIDEO_CAPTURE
-          || v4l2object->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
-      && xlnx_ll_supported ()) {
-    dup_struct_with_xlnx_ll (caps, s);
+  if (v4l2object->type == V4L2_BUF_TYPE_VIDEO_CAPTURE
+      || v4l2object->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
+    if (xlnx_ll_supported ()) {
+      dup_struct_with_xlnx_ll (caps, s);
+      if (alt_s) {
+        dup_struct_with_xlnx_ll (caps, alt_s);
+      }
+    }
+    dup_struct_with_xlnx_ll_eol (caps, s);
     if (alt_s) {
-      dup_struct_with_xlnx_ll (caps, alt_s);
+      dup_struct_with_xlnx_ll_eol (caps, alt_s);
     }
   }
 }
@@ -4676,6 +4693,18 @@ done:
       GST_ERROR_OBJECT (v4l2object, "Driver failed to activate XLNX-LL");
       v4l2object->xlnx_ll = FALSE;
     }
+  } else if (features &&
+      gst_caps_features_contains (features, GST_CAPS_FEATURE_MEMORY_XLNX_LL_EOL)) {
+    GST_DEBUG_OBJECT (v4l2object->dbg_obj, "Found XLNX-LL-EOL memory feature");
+    v4l2object->xlnx_ll_eol = TRUE;
+    /* Set low latency mode for XLNX_LL_EOL - same low latency optimizations but no SyncIP */
+    if (!gst_v4l2_object_set_low_latency_capture_mode (v4l2object, FALSE))
+      GST_ERROR_OBJECT (v4l2object->dbg_obj, "Driver failed to deactivate XLNXLLEOL");
+    if (!gst_v4l2_object_set_low_latency_capture_mode (v4l2object, TRUE)) {
+      GST_ERROR_OBJECT (v4l2object->dbg_obj, "Driver failed to activate XLNXLLEOL");
+      v4l2object->xlnx_ll_eol = FALSE;
+    }
+    GST_DEBUG_OBJECT (v4l2object->dbg_obj, "XLNXLLEOL mode activated successfully");
   }
 
   /* add boolean return, so we can fail on drivers bugs */

@@ -711,7 +711,6 @@ gst_v4l2_buffer_pool_streamon (GstV4l2BufferPool * pool)
         intr_mask.cons_lfbdone = 1;
         intr_mask.cons_cfbdone = 1;
 
-
         if (xvfbsync_enc_sync_chan_enable (&obj->enc_sync_chan)) {
           GST_ERROR_OBJECT (pool, "Error with enabling sync ip");
           goto streamon_failed;
@@ -723,6 +722,8 @@ gst_v4l2_buffer_pool_streamon (GstV4l2BufferPool * pool)
           goto streamon_failed;
         }
 
+      } else if (obj->xlnx_ll_eol) {
+        GST_DEBUG_OBJECT (pool, "XLNXLLEOL mode for streaming");
       }
 
       pool->streaming = TRUE;
@@ -770,6 +771,8 @@ gst_v4l2_buffer_pool_streamoff (GstV4l2BufferPool * pool)
 
       if (pool->obj->xlnx_ll_dma_started)
         pool->obj->xlnx_ll_dma_started = FALSE;
+      if (pool->obj->xlnx_ll_eol_dma_started)
+        pool->obj->xlnx_ll_eol_dma_started = FALSE;
 
       if (pool->vallocator)
         gst_v4l2_allocator_flush (pool->vallocator);
@@ -828,6 +831,9 @@ gst_v4l2_buffer_pool_start (GstBufferPool * bpool)
     if (xvfbsync_enc_sync_chan_populate (&obj->enc_sync_chan, &obj->sync_chan,
             HORIZONTAL_ALIGNMENT, VERTICAL_ALIGNMENT))
       goto xvfbsync_chan_populate_failed;
+
+  } else if (obj->xlnx_ll_eol) {
+    GST_DEBUG_OBJECT (pool, "XLNXLLEOL mode: Bypassing SyncIP hardware initialization");
   }
 
   if (pool->other_pool) {
@@ -1154,6 +1160,9 @@ gst_v4l2_buffer_pool_flush_start (GstBufferPool * bpool)
   if (pool->obj->xlnx_ll) {
     pool->obj->xlnx_ll = FALSE;
   }
+  if (pool->obj->xlnx_ll_eol) {
+    pool->obj->xlnx_ll_eol = FALSE;
+  }
 }
 
 static void
@@ -1305,6 +1314,8 @@ gst_v4l2_buffer_pool_qbuf (GstV4l2BufferPool * pool, GstBuffer * buf,
     } else {
       pthread_mutex_unlock (&(channel_status->mutex));
     }
+  } else if (obj->xlnx_ll_eol) {
+    GST_DEBUG_OBJECT (pool, "XLNXLLEOL mode: Skipping SyncIP buffer registration");
   }
 
   if (!gst_v4l2_allocator_qbuf (pool->vallocator, group))
@@ -1687,8 +1698,9 @@ gst_v4l2_buffer_pool_complete_release_buffer (GstBufferPool * bpool,
             gst_v4l2_allocator_reset_group (pool->vallocator, group);
             /* queue back in the device */
             if (pool->other_pool) {
-              if (pool->streaming && pool->obj->xlnx_ll
-                  && !pool->obj->xlnx_ll_dma_started) {
+              if (pool->streaming &&
+                  ((pool->obj->xlnx_ll && !pool->obj->xlnx_ll_dma_started) ||
+                   (pool->obj->xlnx_ll_eol && !pool->obj->xlnx_ll_eol_dma_started))) {
                 GST_INFO_OBJECT (pool,
                     "Don't acquire from downstream as dma not started");
                 pclass->release_buffer (bpool, buffer);
@@ -1915,7 +1927,7 @@ gst_v4l2_buffer_pool_new (GstV4l2Object * obj, GstCaps * caps)
    * because min and max are not valid */
   gst_buffer_pool_set_config (GST_BUFFER_POOL_CAST (pool), config);
 
-  if (obj->xlnx_ll) {
+  if (obj->xlnx_ll || obj->xlnx_ll_eol) {
     GST_DEBUG_OBJECT (pool, "Disable CREATE_BUFS for low latency mode");
     /* Disable CREATE_BUFS in low latency mode */
     GST_OBJECT_FLAG_UNSET (pool->vallocator,

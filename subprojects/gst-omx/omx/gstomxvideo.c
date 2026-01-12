@@ -519,20 +519,33 @@ GstCaps *
 gst_omx_video_add_xlnx_ll_to_caps (GstCaps * caps, gboolean encoder)
 {
   GstCaps *xlnx_ll;
+  GstCaps *xlnx_ll_eol;
   guint i;
 
-  if (!xlnx_ll_supported (encoder))
+  if (xlnx_ll_supported (encoder)) {
+    xlnx_ll = gst_caps_copy (caps);
+    for (i = 0; i < gst_caps_get_size (xlnx_ll); i++) {
+      GstCapsFeatures *features;
+
+      features = gst_caps_get_features (xlnx_ll, i);
+      gst_caps_features_remove (features, GST_CAPS_FEATURE_MEMORY_SYSTEM_MEMORY);
+      gst_caps_features_add (features, GST_CAPS_FEATURE_MEMORY_XLNX_LL);
+    }
+    caps = gst_caps_merge (caps, xlnx_ll);
     return caps;
-
-  xlnx_ll = gst_caps_copy (caps);
-  for (i = 0; i < gst_caps_get_size (xlnx_ll); i++) {
-    GstCapsFeatures *features;
-
-    features = gst_caps_get_features (xlnx_ll, i);
-    gst_caps_features_remove (features, GST_CAPS_FEATURE_MEMORY_SYSTEM_MEMORY);
-    gst_caps_features_add (features, GST_CAPS_FEATURE_MEMORY_XLNX_LL);
   }
 
-  return gst_caps_merge (caps, xlnx_ll);
+  /* Add XLNXLLEOL caps (without SyncIP EOL,EOF signals) */
+  xlnx_ll_eol = gst_caps_copy (caps);
+  for (i = 0; i < gst_caps_get_size (xlnx_ll_eol); i++) {
+    GstCapsFeatures *features;
+
+    features = gst_caps_get_features (xlnx_ll_eol, i);
+    gst_caps_features_remove (features, GST_CAPS_FEATURE_MEMORY_SYSTEM_MEMORY);
+    gst_caps_features_add (features, GST_CAPS_FEATURE_MEMORY_XLNX_LL_EOL);
+  }
+  caps = gst_caps_merge (caps, xlnx_ll_eol);
+
+  return caps;
 }
 #endif

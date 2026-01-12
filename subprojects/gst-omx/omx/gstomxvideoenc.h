@@ -163,6 +163,8 @@ struct _GstOMXVideoEnc
 
   /* TRUE if encoder is receiving input using XLNX-LL */
   gboolean xlnx_ll;
+  /* TRUE if encoder is receiving input using XLNX-LL-EOL (EOL,EOF singnals) */
+  gboolean xlnx_ll_eol;
 
 #if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   GEnumClass *alg_roi_quality_enum_class;
