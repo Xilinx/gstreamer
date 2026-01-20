@@ -3388,31 +3388,56 @@ unpack_Y444_10LE32 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     gpointer dest, const gpointer data[GST_VIDEO_MAX_PLANES],
     const gint stride[GST_VIDEO_MAX_PLANES], gint x, gint y, gint width)
 {
-  int i;
-  guint16 *restrict sy = GET_Y_LINE (y);
-  guint16 *restrict su = GET_U_LINE (y);
-  guint16 *restrict sv = GET_V_LINE (y);
-  guint16 *restrict d = dest, Y, U, V;
+  gint i;
+  const guint32 *restrict sy = GET_Y_LINE (y);
+  const guint32 *restrict su = GET_U_LINE (y);
+  const guint32 *restrict sv = GET_V_LINE (y);
+  guint16 *restrict d = dest;
+  gint num_words = (width + 2) / 3;
 
-  sy += x;
-  su += x;
-  sv += x;
+  /* Y, U, V data are each packed into little endian 32bit words, with the
+   * 2 MSB being padding. There is only 1 pattern.
+   * -> padding | C0 | C1 | C2
+   */
 
-  for (i = 0; i < width; i++) {
-    Y = GST_READ_UINT16_LE (sy + i) << 6;
-    U = GST_READ_UINT16_LE (su + i) << 6;
-    V = GST_READ_UINT16_LE (sv + i) << 6;
+  for (i = 0; i < num_words; i++) {
+    gint num_comps = MIN (3, width - i * 3);
+    guint pix = i * 3;
+    gsize doff = pix * 4;
+    gint c;
+    guint32 Y, U, V;
 
-    if (!(flags & GST_VIDEO_PACK_FLAG_TRUNCATE_RANGE)) {
-      Y |= (Y >> 10);
-      U |= (U >> 10);
-      V |= (V >> 10);
+    Y = GST_READ_UINT32_LE (sy + i);
+    U = GST_READ_UINT32_LE (su + i);
+    V = GST_READ_UINT32_LE (sv + i);
+
+    for (c = 0; c < num_comps; c++) {
+      guint16 Yn, Un, Vn;
+
+      /* Extract 10 bits and shift to 16-bit range */
+      Yn = (Y & 0x03ff) << 6;
+      Un = (U & 0x03ff) << 6;
+      Vn = (V & 0x03ff) << 6;
+      Y >>= 10;
+      U >>= 10;
+      V >>= 10;
+
+      if (G_UNLIKELY (pix + c < (guint) x))
+        continue;
+
+      if (!(flags & GST_VIDEO_PACK_FLAG_TRUNCATE_RANGE)) {
+        Yn |= Yn >> 10;
+        Un |= Un >> 10;
+        Vn |= Vn >> 10;
+      }
+
+      d[doff + 0] = 0xffff;
+      d[doff + 1] = Yn;
+      d[doff + 2] = Un;
+      d[doff + 3] = Vn;
+
+      doff += 4;
     }
-
-    d[i * 4 + 0] = 0xffff;
-    d[i * 4 + 1] = Y;
-    d[i * 4 + 2] = U;
-    d[i * 4 + 3] = V;
   }
 }
 
@@ -3422,21 +3447,38 @@ pack_Y444_10LE32 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     const gint stride[GST_VIDEO_MAX_PLANES], GstVideoChromaSite chroma_site,
     gint y, gint width)
 {
-  int i;
-  guint16 *restrict dy = GET_Y_LINE (y);
-  guint16 *restrict du = GET_U_LINE (y);
-  guint16 *restrict dv = GET_V_LINE (y);
-  guint16 Y, U, V;
+  gint i;
+  guint32 *restrict dy = GET_Y_LINE (y);
+  guint32 *restrict du = GET_U_LINE (y);
+  guint32 *restrict dv = GET_V_LINE (y);
   const guint16 *restrict s = src;
+  gint num_words = (width + 2) / 3;
 
-  for (i = 0; i < width; i++) {
-    Y = (s[i * 4 + 1]) >> 6;
-    U = (s[i * 4 + 2]) >> 6;
-    V = (s[i * 4 + 3]) >> 6;
+  for (i = 0; i < num_words; i++) {
+    gint num_comps = MIN (3, width - i * 3);
+    guint pix = i * 3;
+    gsize soff = pix * 4;
+    gint c;
+    guint32 Y = 0, U = 0, V = 0;
 
-    GST_WRITE_UINT16_LE (dy + i, Y);
-    GST_WRITE_UINT16_LE (du + i, U);
-    GST_WRITE_UINT16_LE (dv + i, V);
+    for (c = 0; c < num_comps; c++) {
+      guint16 Yn, Un, Vn;
+
+      Yn = s[soff + 1] >> 6;
+      Un = s[soff + 2] >> 6;
+      Vn = s[soff + 3] >> 6;
+
+      /* Pack 10-bit values into 32-bit word: C0 in bits 0-9, C1 in bits 10-19, C2 in bits 20-29 */
+      Y |= (Yn & 0x03ff) << (c * 10);
+      U |= (Un & 0x03ff) << (c * 10);
+      V |= (Vn & 0x03ff) << (c * 10);
+
+      soff += 4;
+    }
+
+    GST_WRITE_UINT32_LE (dy + i, Y);
+    GST_WRITE_UINT32_LE (du + i, U);
+    GST_WRITE_UINT32_LE (dv + i, V);
   }
 }
 
