@@ -1152,6 +1152,12 @@ gst_v4l2_bconvert_class_init (GstV4l2BConvertClass * klass)
   element_class->change_state =
       GST_DEBUG_FUNCPTR (gst_v4l2_bconvert_change_state);
 
+  /* property for dynamic xm2msc device selection */
+  g_object_class_install_property (gobject_class, PROP_DEVICE,
+      g_param_spec_string ("device", "Device", "Device location",
+          DEFAULT_PROP_DEVICE,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
   gst_v4l2_object_install_m2m_properties_helper (gobject_class);
 
   g_object_class_install_property (gobject_class, PROP_DISABLE_PASSTHROUGH,
