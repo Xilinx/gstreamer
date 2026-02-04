@@ -573,8 +573,10 @@ find_property_value_for_plane_id (gint fd, gint plane_id, const char *prop_name)
       drmModeFreeObjectProperties (properties);
       return prop_value;
     }
+    drmModeFreeProperty (property);
   }
 
+  drmModeFreeObjectProperties (properties);
   return -1;
 
 }
