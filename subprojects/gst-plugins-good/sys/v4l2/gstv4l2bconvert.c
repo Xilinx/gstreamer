@@ -37,6 +37,9 @@
 #include <glib/gi18n-lib.h>
 
 #define DEFAULT_PROP_DEVICE "/dev/video10"
+#define DEFAULT_PROP_DEVICE_NAME NULL
+#define DEFAULT_PROP_DEVICE_FD -1
+#define DEFAULT_PROP_IO_MODE GST_V4L2_IO_AUTO
 #define DEFAULT_PROP_IMPORT_BUFFER_ALIG FALSE
 
 #define V4L2_BCONVERT_QUARK \
@@ -44,6 +47,29 @@
 
 GST_DEBUG_CATEGORY_STATIC (gst_v4l2_bconvert_debug);
 #define GST_CAT_DEFAULT gst_v4l2_bconvert_debug
+
+/* enum type for xm2msc plugin to avoid GType conflicts with main v4l2 plugin */
+#define GST_TYPE_V4L2_BCONVERT_IO_MODE (gst_v4l2_bconvert_io_mode_get_type ())
+static GType
+gst_v4l2_bconvert_io_mode_get_type (void)
+{
+  static gsize io_mode_type = 0;
+
+  if (g_once_init_enter (&io_mode_type)) {
+    static const GEnumValue io_modes[] = {
+      {GST_V4L2_IO_AUTO, "GST_V4L2_IO_AUTO", "auto"},
+      {GST_V4L2_IO_RW, "GST_V4L2_IO_RW", "rw"},
+      {GST_V4L2_IO_MMAP, "GST_V4L2_IO_MMAP", "mmap"},
+      {GST_V4L2_IO_USERPTR, "GST_V4L2_IO_USERPTR", "userptr"},
+      {GST_V4L2_IO_DMABUF, "GST_V4L2_IO_DMABUF", "dmabuf"},
+      {GST_V4L2_IO_DMABUF_IMPORT, "GST_V4L2_IO_DMABUF_IMPORT", "dmabuf-import"},
+      {0, NULL, NULL}
+    };
+    GType type = g_enum_register_static ("GstV4l2BConvertIOMode", io_modes);
+    g_once_init_leave (&io_mode_type, type);
+  }
+  return io_mode_type;
+}
 
 
 enum
@@ -1152,13 +1178,37 @@ gst_v4l2_bconvert_class_init (GstV4l2BConvertClass * klass)
   element_class->change_state =
       GST_DEBUG_FUNCPTR (gst_v4l2_bconvert_change_state);
 
-  /* property for dynamic xm2msc device selection */
+  /* Install m2m properties */
   g_object_class_install_property (gobject_class, PROP_DEVICE,
       g_param_spec_string ("device", "Device", "Device location",
-          DEFAULT_PROP_DEVICE,
+          NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_DEVICE_NAME,
+      g_param_spec_string ("device-name", "Device name",
+          "Name of the device", DEFAULT_PROP_DEVICE_NAME,
+          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_DEVICE_FD,
+      g_param_spec_int ("device-fd", "File descriptor",
+          "File descriptor of the device", -1, G_MAXINT, DEFAULT_PROP_DEVICE_FD,
+          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_OUTPUT_IO_MODE,
+      g_param_spec_enum ("output-io-mode", "Output IO mode",
+          "Output side I/O mode (matches sink pad)",
+          GST_TYPE_V4L2_BCONVERT_IO_MODE, DEFAULT_PROP_IO_MODE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_v4l2_object_install_m2m_properties_helper (gobject_class);
+  g_object_class_install_property (gobject_class, PROP_CAPTURE_IO_MODE,
+      g_param_spec_enum ("capture-io-mode", "Capture IO mode",
+          "Capture I/O mode (matches src pad)",
+          GST_TYPE_V4L2_BCONVERT_IO_MODE, DEFAULT_PROP_IO_MODE,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_EXTRA_CONTROLS,
+      g_param_spec_boxed ("extra-controls", "Extra Controls",
+          "Extra v4l2 controls (CIDs) for the device",
+          GST_TYPE_STRUCTURE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property (gobject_class, PROP_DISABLE_PASSTHROUGH,
       g_param_spec_boolean ("disable-passthrough", "Disable Passthrough",
@@ -1232,7 +1282,10 @@ gst_v4l2_bconvert_register (GstPlugin * plugin, const gchar * basename,
   type_info.class_data = cdata;
   type_info.instance_init = gst_v4l2_bconvert_subinstance_init;
 
-  type_name = g_strdup ("v4l2xm2msc");
+  if (g_type_from_name ("v4l2xm2msc") != 0)
+    type_name = g_strdup_printf ("v4l2%sxm2msc", basename);
+  else
+    type_name = g_strdup ("v4l2xm2msc");
   subtype = g_type_register_static (type, type_name, &type_info, 0);
 
   if (!gst_element_register (plugin, type_name, GST_RANK_NONE, subtype))
