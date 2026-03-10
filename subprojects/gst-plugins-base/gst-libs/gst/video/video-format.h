@@ -321,6 +321,42 @@ typedef enum {
   GST_VIDEO_FORMAT_BGRP,
 
   /**
+   * GST_VIDEO_FORMAT_RGBX8_C4:
+   *
+   * Packed 4-channel RGBA, 8-bit integer per channel (HCWNC4 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_RGBX8_C4,
+
+  /**
+   * GST_VIDEO_FORMAT_RGBX_BF16_C4:
+   *
+   * Packed 4-channel RGBA, BFloat16 per channel (HCWNC4 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_RGBX_BF16_C4,
+
+  /**
+   * GST_VIDEO_FORMAT_RGBX_FP16_C4:
+   *
+   * Packed 4-channel RGBA, FP16 per channel (HCWNC4 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_RGBX_FP16_C4,
+
+  /**
+   * GST_VIDEO_FORMAT_RGBX_FLOAT_C4:
+   *
+   * Packed 4-channel RGBA, IEEE 754 FP32 per channel (HCWNC4 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_RGBX_FLOAT_C4,
+
+  /**
    * GST_VIDEO_FORMAT_AV12:
    *
    * Planar 4:2:0 YUV with interleaved UV plane with alpha as
