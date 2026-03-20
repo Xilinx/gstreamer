@@ -136,6 +136,19 @@ static const GstV4L2FormatDesc gst_v4l2_formats[] = {
   {V4L2_PIX_FMT_BGRA_FP64, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_BGRA32323232, TRUE, GST_V4L2_RAW},
 
+  {V4L2_PIX_FMT_BGR24M, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGR_BF48M, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGR_FP48M, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGR323232M, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGRA32M, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGRA_BF16161616M, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGRA_FP16161616M, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGRA32323232M, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGR_24M_4_3, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGR_BF48M_4_3, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGR_FP48M_4_3, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGR_323232M_4_3, TRUE, GST_V4L2_RAW},
+
   /* Deprecated Packed RGB Image Formats (alpha ambiguity) */
   {V4L2_PIX_FMT_RGB444, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_RGB555, TRUE, GST_V4L2_RAW},
@@ -1246,6 +1259,18 @@ gst_v4l2_object_format_get_rank (const struct v4l2_fmtdesc *fmt)
     case V4L2_PIX_FMT_BGRA_BF64:
     case V4L2_PIX_FMT_BGRA_FP64:
     case V4L2_PIX_FMT_BGRA32323232:
+    case V4L2_PIX_FMT_BGR24M:
+    case V4L2_PIX_FMT_BGR_BF48M:
+    case V4L2_PIX_FMT_BGR_FP48M:
+    case V4L2_PIX_FMT_BGR323232M:
+    case V4L2_PIX_FMT_BGRA32M:
+    case V4L2_PIX_FMT_BGRA_BF16161616M:
+    case V4L2_PIX_FMT_BGRA_FP16161616M:
+    case V4L2_PIX_FMT_BGRA32323232M:
+    case V4L2_PIX_FMT_BGR_24M_4_3:
+    case V4L2_PIX_FMT_BGR_BF48M_4_3:
+    case V4L2_PIX_FMT_BGR_FP48M_4_3:
+    case V4L2_PIX_FMT_BGR_323232M_4_3:
       rank = RGB_BASE_RANK;
       break;
 
@@ -1654,6 +1679,34 @@ gst_v4l2_object_v4l2fourcc_to_video_format (guint32 fourcc)
     case V4L2_PIX_FMT_BGRA32323232:
       format = GST_VIDEO_FORMAT_BGRA_FLOAT;
       break;
+    case V4L2_PIX_FMT_BGR24M:
+    case V4L2_PIX_FMT_BGR_24M_4_3:
+      format = GST_VIDEO_FORMAT_BGR8P;
+      break;
+    case V4L2_PIX_FMT_BGR_BF48M:
+    case V4L2_PIX_FMT_BGR_BF48M_4_3:
+      format = GST_VIDEO_FORMAT_BGR_BF16P;
+      break;
+    case V4L2_PIX_FMT_BGR_FP48M:
+    case V4L2_PIX_FMT_BGR_FP48M_4_3:
+      format = GST_VIDEO_FORMAT_BGR_FP16P;
+      break;
+    case V4L2_PIX_FMT_BGR323232M:
+    case V4L2_PIX_FMT_BGR_323232M_4_3:
+      format = GST_VIDEO_FORMAT_BGR_FLOATP;
+      break;
+    case V4L2_PIX_FMT_BGRA32M:
+      format = GST_VIDEO_FORMAT_BGRA8P;
+      break;
+    case V4L2_PIX_FMT_BGRA_BF16161616M:
+      format = GST_VIDEO_FORMAT_BGRA_BF16P;
+      break;
+    case V4L2_PIX_FMT_BGRA_FP16161616M:
+      format = GST_VIDEO_FORMAT_BGRA_FP16P;
+      break;
+    case V4L2_PIX_FMT_BGRA32323232M:
+      format = GST_VIDEO_FORMAT_BGRA_FLOATP;
+      break;
     case V4L2_PIX_FMT_HCWNC4_BF16_4_4:
       format = GST_VIDEO_FORMAT_RGBA_BF16_C4;
       break;
@@ -1900,6 +1953,18 @@ gst_v4l2_object_v4l2fourcc_is_rgb (guint32 fourcc)
     case V4L2_PIX_FMT_BGRA_BF64:
     case V4L2_PIX_FMT_BGRA_FP64:
     case V4L2_PIX_FMT_BGRA32323232:
+    case V4L2_PIX_FMT_BGR24M:
+    case V4L2_PIX_FMT_BGR_BF48M:
+    case V4L2_PIX_FMT_BGR_FP48M:
+    case V4L2_PIX_FMT_BGR323232M:
+    case V4L2_PIX_FMT_BGRA32M:
+    case V4L2_PIX_FMT_BGRA_BF16161616M:
+    case V4L2_PIX_FMT_BGRA_FP16161616M:
+    case V4L2_PIX_FMT_BGRA32323232M:
+    case V4L2_PIX_FMT_BGR_24M_4_3:
+    case V4L2_PIX_FMT_BGR_BF48M_4_3:
+    case V4L2_PIX_FMT_BGR_FP48M_4_3:
+    case V4L2_PIX_FMT_BGR_323232M_4_3:
     case V4L2_PIX_FMT_SBGGR8:
     case V4L2_PIX_FMT_SGBRG8:
     case V4L2_PIX_FMT_SGRBG8:
@@ -2100,6 +2165,18 @@ gst_v4l2_object_v4l2fourcc_to_bare_struct (guint32 fourcc)
     case V4L2_PIX_FMT_BGRA_BF64:
     case V4L2_PIX_FMT_BGRA_FP64:
     case V4L2_PIX_FMT_BGRA32323232:
+    case V4L2_PIX_FMT_BGR24M:
+    case V4L2_PIX_FMT_BGR_BF48M:
+    case V4L2_PIX_FMT_BGR_FP48M:
+    case V4L2_PIX_FMT_BGR323232M:
+    case V4L2_PIX_FMT_BGRA32M:
+    case V4L2_PIX_FMT_BGRA_BF16161616M:
+    case V4L2_PIX_FMT_BGRA_FP16161616M:
+    case V4L2_PIX_FMT_BGRA32323232M:
+    case V4L2_PIX_FMT_BGR_24M_4_3:
+    case V4L2_PIX_FMT_BGR_BF48M_4_3:
+    case V4L2_PIX_FMT_BGR_FP48M_4_3:
+    case V4L2_PIX_FMT_BGR_323232M_4_3:
     {
       GstVideoFormat format;
       format = gst_v4l2_object_v4l2fourcc_to_video_format (fourcc);
@@ -2413,7 +2490,7 @@ gst_v4l2_object_get_caps_info (GstV4l2Object * v4l2object, GstCaps * caps,
     struct v4l2_fmtdesc **format, GstVideoInfo * info)
 {
   GstStructure *structure;
-  guint32 fourcc = 0, fourcc_nc = 0;
+  guint32 fourcc = 0, fourcc_nc = 0, fourcc_alt = 0;
   const gchar *mimetype;
   struct v4l2_fmtdesc *fmt = NULL;
 
@@ -2702,6 +2779,34 @@ gst_v4l2_object_get_caps_info (GstV4l2Object * v4l2object, GstCaps * caps,
       case GST_VIDEO_FORMAT_BGRA_FLOAT:
         fourcc = V4L2_PIX_FMT_BGRA32323232;
         break;
+      case GST_VIDEO_FORMAT_BGR8P:
+        fourcc = V4L2_PIX_FMT_BGR24M;
+        fourcc_alt = V4L2_PIX_FMT_BGR_24M_4_3;
+        break;
+      case GST_VIDEO_FORMAT_BGR_BF16P:
+        fourcc = V4L2_PIX_FMT_BGR_BF48M;
+        fourcc_alt = V4L2_PIX_FMT_BGR_BF48M_4_3;
+        break;
+      case GST_VIDEO_FORMAT_BGR_FP16P:
+        fourcc = V4L2_PIX_FMT_BGR_FP48M;
+        fourcc_alt = V4L2_PIX_FMT_BGR_FP48M_4_3;
+        break;
+      case GST_VIDEO_FORMAT_BGR_FLOATP:
+        fourcc = V4L2_PIX_FMT_BGR323232M;
+        fourcc_alt = V4L2_PIX_FMT_BGR_323232M_4_3;
+        break;
+      case GST_VIDEO_FORMAT_BGRA8P:
+        fourcc = V4L2_PIX_FMT_BGRA32M;
+        break;
+      case GST_VIDEO_FORMAT_BGRA_BF16P:
+        fourcc = V4L2_PIX_FMT_BGRA_BF16161616M;
+        break;
+      case GST_VIDEO_FORMAT_BGRA_FP16P:
+        fourcc = V4L2_PIX_FMT_BGRA_FP16161616M;
+        break;
+      case GST_VIDEO_FORMAT_BGRA_FLOATP:
+        fourcc = V4L2_PIX_FMT_BGRA32323232M;
+        break;
       case GST_VIDEO_FORMAT_RGBA_BF16_C4:
         fourcc = V4L2_PIX_FMT_HCWNC4_BF16_4_4;
         break;
@@ -2828,7 +2933,9 @@ gst_v4l2_object_get_caps_info (GstV4l2Object * v4l2object, GstCaps * caps,
     fmt = gst_v4l2_object_get_format_from_fourcc (v4l2object, fourcc);
   else if (fourcc == 0)
     goto unhandled_format;
-
+  if (fmt == NULL && fourcc_alt) { // explicit for planar AI layout formats.
+    fmt = gst_v4l2_object_get_format_from_fourcc (v4l2object, fourcc_alt);
+  }
   if (fmt == NULL) {
     fmt = gst_v4l2_object_get_format_from_fourcc (v4l2object, fourcc_nc);
     v4l2object->prefered_non_contiguous = TRUE;

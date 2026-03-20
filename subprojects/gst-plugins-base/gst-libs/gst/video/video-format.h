@@ -538,6 +538,70 @@ typedef enum {
    * Since: 1.26
    */
   GST_VIDEO_FORMAT_BGRA_FLOAT,
+  /**
+   * GST_VIDEO_FORMAT_BGR8P
+   *
+   * Planar 3-channel BGR, 8 bits per channel
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGR8P,
+  /**
+   * GST_VIDEO_FORMAT_BGR_BF16P
+   *
+   * Planar 3-channel BGR, BFloat16 per channel
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGR_BF16P,
+  /**
+   * GST_VIDEO_FORMAT_BGR_FP16P
+   *
+   * Planar 3-channel BGR, FP16 per channel
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGR_FP16P,
+  /**
+   * GST_VIDEO_FORMAT_BGR_FLOATP
+   *
+   * Planar 3-channel BGR, FLOAT per channel
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGR_FLOATP,
+  /**
+   * GST_VIDEO_FORMAT_BGRA8P
+   *
+   * Planar 4-channel BGRA, 8 bits per channel
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGRA8P,
+  /**
+   * GST_VIDEO_FORMAT_BGRA_BF16P
+   *
+   * Planar 4-channel BGRA, BFloat16 per channel
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGRA_BF16P,
+  /**
+   * GST_VIDEO_FORMAT_BGRA_FP16P
+   *
+   * Planar 4-channel BGRA, FP16 per channel
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGRA_FP16P,
+  /**
+   * GST_VIDEO_FORMAT_BGRA_FLOATP
+   *
+   * Planar 4-channel BGRA, FLOAT per channel
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGRA_FLOATP,
 
   /**
    * GST_VIDEO_FORMAT_AV12:
