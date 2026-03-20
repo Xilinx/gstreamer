@@ -567,6 +567,14 @@ struct v4l2_pix_format {
 #define V4L2_PIX_FMT_HCWNC8_BF16_4_4 v4l2_fourcc('H', 'B', '8', '6') /* 128 HCWNC8-BF16-BF16-BF16-BF16 */
 #define V4L2_PIX_FMT_HCWNC8_FP16_4_4 v4l2_fourcc('H', 'F', '8', '6') /* 128 HCWNC8-FP16-FP16-FP16-FP16 */
 #define V4L2_PIX_FMT_HCWNC8_FP32_4_4 v4l2_fourcc('H', '8', '3', '2') /* 256 HCWNC8-FP32-FP32-FP32-FP32 */
+#define V4L2_PIX_FMT_HCWNC8_8_4_3   v4l2_fourcc('H', 'C', '8', '3') /* 64  HCWNC8-8-8-8-8 */
+#define V4L2_PIX_FMT_HCWNC8_BF16_4_3 v4l2_fourcc('H', 'B', '8', '3') /* 128 HCWNC8-BF16-BF16-BF16-BF16 */
+#define V4L2_PIX_FMT_HCWNC8_FP16_4_3 v4l2_fourcc('H', 'F', '8', '3') /* 128 HCWNC8-FP16-FP16-FP16-FP16 */
+#define V4L2_PIX_FMT_HCWNC8_FP32_4_3 v4l2_fourcc('H', '8', '3', '3') /* 256 HCWNC8-FP32-FP32-FP32-FP32 */
+#define V4L2_PIX_FMT_HCWNC8_8_3_3   v4l2_fourcc('H', 'C', '8', '4') /* 64  HCWNC8-8-8-8-8 */
+#define V4L2_PIX_FMT_HCWNC8_BF16_3_3 v4l2_fourcc('H', 'B', '8', '4') /* 128 HCWNC8-BF16-BF16-BF16-BF16 */
+#define V4L2_PIX_FMT_HCWNC8_FP16_3_3 v4l2_fourcc('H', 'F', '8', '4') /* 128 HCWNC8-FP16-FP16-FP16-FP16 */
+#define V4L2_PIX_FMT_HCWNC8_FP32_3_3 v4l2_fourcc('H', '8', '3', '4') /* 256 HCWNC8-FP32-FP32-FP32-FP32 */
 
 /* Grey formats */
 #define V4L2_PIX_FMT_GREY    v4l2_fourcc('G', 'R', 'E', 'Y') /*  8  Greyscale     */
