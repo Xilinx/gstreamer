@@ -118,6 +118,9 @@ static const GstV4L2FormatDesc gst_v4l2_formats[] = {
 
   /* Grey formats */
   {V4L2_PIX_FMT_GREY, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_GRAY_BF16, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_GRAY_FP16, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_GRAY_FP32, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_Y4, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_Y6, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_Y10, TRUE, GST_V4L2_RAW},
@@ -1193,6 +1196,9 @@ gst_v4l2_object_format_get_rank (const struct v4l2_fmtdesc *fmt)
       break;
 
     case V4L2_PIX_FMT_GREY:    /*  8  Greyscale     */
+    case V4L2_PIX_FMT_GRAY_BF16:
+    case V4L2_PIX_FMT_GRAY_FP16:
+    case V4L2_PIX_FMT_GRAY_FP32:
       rank = GREY_BASE_RANK;
       break;
 
@@ -1479,6 +1485,15 @@ gst_v4l2_object_v4l2fourcc_to_video_format (guint32 fourcc)
   switch (fourcc) {
     case V4L2_PIX_FMT_GREY:    /*  8  Greyscale     */
       format = GST_VIDEO_FORMAT_GRAY8;
+      break;
+    case V4L2_PIX_FMT_GRAY_BF16:
+      format = GST_VIDEO_FORMAT_GRAY_BF16;
+      break;
+    case V4L2_PIX_FMT_GRAY_FP16:
+      format = GST_VIDEO_FORMAT_GRAY_FP16;
+      break;
+    case V4L2_PIX_FMT_GRAY_FP32:
+      format = GST_VIDEO_FORMAT_GRAY_FLOAT;
       break;
     case V4L2_PIX_FMT_Y16:
       format = GST_VIDEO_FORMAT_GRAY16_LE;
@@ -1908,7 +1923,11 @@ gst_v4l2_object_v4l2fourcc_to_bare_struct (guint32 fourcc)
     case V4L2_PIX_FMT_HCWNC4_8_4_4:
     case V4L2_PIX_FMT_HCWNC4_BF16_4_4:
     case V4L2_PIX_FMT_HCWNC4_FP16_4_4:
-    case V4L2_PIX_FMT_HCWNC4_FP32_4_4: {
+    case V4L2_PIX_FMT_HCWNC4_FP32_4_4:
+    case V4L2_PIX_FMT_GRAY_BF16:
+    case V4L2_PIX_FMT_GRAY_FP16:
+    case V4L2_PIX_FMT_GRAY_FP32:
+    {
       GstVideoFormat format;
       format = gst_v4l2_object_v4l2fourcc_to_video_format (fourcc);
       if (format != GST_VIDEO_FORMAT_UNKNOWN)
@@ -2433,6 +2452,15 @@ gst_v4l2_object_get_caps_info (GstV4l2Object * v4l2object, GstCaps * caps,
         break;
       case GST_VIDEO_FORMAT_GRAY8:
         fourcc = V4L2_PIX_FMT_GREY;
+        break;
+      case GST_VIDEO_FORMAT_GRAY_BF16:
+        fourcc = V4L2_PIX_FMT_GRAY_BF16;
+        break;
+      case GST_VIDEO_FORMAT_GRAY_FP16:
+        fourcc = V4L2_PIX_FMT_GRAY_FP16;
+        break;
+      case GST_VIDEO_FORMAT_GRAY_FLOAT:
+        fourcc = V4L2_PIX_FMT_GRAY_FP32;
         break;
       case GST_VIDEO_FORMAT_GRAY16_LE:
         fourcc = V4L2_PIX_FMT_Y16;

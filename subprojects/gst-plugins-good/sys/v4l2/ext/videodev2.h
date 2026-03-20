@@ -558,6 +558,9 @@ struct v4l2_pix_format {
 
 /* Grey formats */
 #define V4L2_PIX_FMT_GREY    v4l2_fourcc('G', 'R', 'E', 'Y') /*  8  Greyscale     */
+#define V4L2_PIX_FMT_GRAY_BF16 v4l2_fourcc('B', 'F', '1', '6') /* 16  Greyscale BF16 */
+#define V4L2_PIX_FMT_GRAY_FP16 v4l2_fourcc('F', 'P', '1', '6') /* 16  Greyscale FP16 */
+#define V4L2_PIX_FMT_GRAY_FP32 v4l2_fourcc('G', '0', '3', '2') /* 32  Greyscale FP32 */
 #define V4L2_PIX_FMT_Y4      v4l2_fourcc('Y', '0', '4', ' ') /*  4  Greyscale     */
 #define V4L2_PIX_FMT_Y6      v4l2_fourcc('Y', '0', '6', ' ') /*  6  Greyscale     */
 #define V4L2_PIX_FMT_Y10     v4l2_fourcc('Y', '1', '0', ' ') /* 10  Greyscale     */

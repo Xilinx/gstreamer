@@ -321,6 +321,32 @@ typedef enum {
   GST_VIDEO_FORMAT_BGRP,
 
   /**
+   * GST_VIDEO_FORMAT_GRAY_BF16:
+   *
+   * 16-bit grayscale (BFloat16)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_GRAY_BF16,
+
+  /**
+   * GST_VIDEO_FORMAT_GRAY_FP16:
+   *
+   * 16-bit grayscale (FP16)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_GRAY_FP16,
+
+    /**
+    * GST_VIDEO_FORMAT_GRAY_FLOAT:
+    *
+    * 32-bit grayscale (FLOAT)
+    *
+    * Since: 1.26
+    */
+  GST_VIDEO_FORMAT_GRAY_FLOAT,
+  /**
    * GST_VIDEO_FORMAT_RGBX8_C4:
    *
    * Packed 4-channel RGBA, 8-bit integer per channel (HCWNC4 layout)
