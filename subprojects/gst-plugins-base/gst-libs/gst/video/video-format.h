@@ -417,7 +417,38 @@ typedef enum {
    * Since: 1.26
    */
   GST_VIDEO_FORMAT_RGBX_FLOAT_C4,
-
+  /**
+   * GST_VIDEO_FORMAT_RGBX8_C8
+   *
+   * HCWNC8-8-8-8-8 layout
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_RGBA8_C8,
+  /**
+   * GST_VIDEO_FORMAT_RGBA_FP16_C8
+   *
+   * Packed 4-channel RGBA, FP16 per channel (HCWNC8 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_RGBA_FP16_C8,
+  /**
+   * GST_VIDEO_FORMAT_RGBX_BF16_C8
+   *
+   * Packed 4-channel RGBX, BFloat16 per channel (HCWNC8 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_RGBA_BF16_C8,
+  /**
+   * GST_VIDEO_FORMAT_RGBA_FLOAT_C8
+   *
+   * Packed 4-channel RGBA, FLOAT per channel (HCWNC8 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_RGBA_FLOAT_C8,
   /**
    * GST_VIDEO_FORMAT_AV12:
    *
@@ -608,7 +639,8 @@ typedef struct _GstVideoFormatInfo GstVideoFormatInfo;
  *   in the last plane.
  * @GST_VIDEO_FORMAT_FLAG_SUBTILES: The tile size varies per plane
  *   according to the subsampling. (Since: 1.22)
- *
+ * @GST_VIDEO_FORMAT_FLAG_AI_LAYOUT: The video format uses an AI-specific layout.
+ *   (Since: 1.22)
  * The different video flags that a format info can have.
  */
 typedef enum
@@ -629,7 +661,8 @@ typedef enum
    *
    * Since: 1.22
    */
-  GST_VIDEO_FORMAT_FLAG_SUBTILES = (1 << 9)
+  GST_VIDEO_FORMAT_FLAG_SUBTILES = (1 << 9),
+  GST_VIDEO_FORMAT_FLAG_AI_LAYOUT = (1 << 10)
 } GstVideoFormatFlags;
 
 /* YUV components */
@@ -841,6 +874,7 @@ struct _GstVideoFormatInfo {
 #define GST_VIDEO_FORMAT_INFO_HAS_PALETTE(info)  (((info)->flags & GST_VIDEO_FORMAT_FLAG_PALETTE) != 0)
 #define GST_VIDEO_FORMAT_INFO_IS_COMPLEX(info)   (((info)->flags & GST_VIDEO_FORMAT_FLAG_COMPLEX) != 0)
 #define GST_VIDEO_FORMAT_INFO_IS_TILED(info)     (((info)->flags & GST_VIDEO_FORMAT_FLAG_TILED) != 0)
+#define GST_VIDEO_FORMAT_INFO_IS_AI_LAYOUT(info) (((info)->flags & GST_VIDEO_FORMAT_FLAG_AI_LAYOUT) != 0)
 /**
  * GST_VIDEO_FORMAT_INFO_HAS_SUBTILES:
  * @info: a #GstVideoFormatInfo
