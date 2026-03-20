@@ -108,6 +108,14 @@ static const GstV4L2FormatDesc gst_v4l2_formats[] = {
   {V4L2_PIX_FMT_HCWNC4_BF16_4_4, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_HCWNC4_FP16_4_4, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_HCWNC4_FP32_4_4, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_HCWNC4_8_4_3, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_HCWNC4_BF16_4_3, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_HCWNC4_FP16_4_3, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_HCWNC4_FP32_4_3, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_HCWNC4_8_3_3, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_HCWNC4_BF16_3_3, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_HCWNC4_FP16_3_3, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_HCWNC4_FP32_3_3, TRUE, GST_V4L2_RAW},
 
   /* Deprecated Packed RGB Image Formats (alpha ambiguity) */
   {V4L2_PIX_FMT_RGB444, TRUE, GST_V4L2_RAW},
@@ -1192,6 +1200,14 @@ gst_v4l2_object_format_get_rank (const struct v4l2_fmtdesc *fmt)
     case V4L2_PIX_FMT_HCWNC4_BF16_4_4:
     case V4L2_PIX_FMT_HCWNC4_FP16_4_4:
     case V4L2_PIX_FMT_HCWNC4_FP32_4_4:
+    case V4L2_PIX_FMT_HCWNC4_8_4_3:
+    case V4L2_PIX_FMT_HCWNC4_BF16_4_3:
+    case V4L2_PIX_FMT_HCWNC4_FP16_4_3:
+    case V4L2_PIX_FMT_HCWNC4_FP32_4_3:
+    case V4L2_PIX_FMT_HCWNC4_8_3_3:
+    case V4L2_PIX_FMT_HCWNC4_BF16_3_3:
+    case V4L2_PIX_FMT_HCWNC4_FP16_3_3:
+    case V4L2_PIX_FMT_HCWNC4_FP32_3_3:
       rank = RGB_BASE_RANK;
       break;
 
@@ -1545,15 +1561,31 @@ gst_v4l2_object_v4l2fourcc_to_video_format (guint32 fourcc)
       format = GST_VIDEO_FORMAT_ARGB;
       break;
     case V4L2_PIX_FMT_HCWNC4_8_4_4:
+      format = GST_VIDEO_FORMAT_RGBA8_C4;
+      break;
+    case V4L2_PIX_FMT_HCWNC4_8_4_3:
+    case V4L2_PIX_FMT_HCWNC4_8_3_3:
       format = GST_VIDEO_FORMAT_RGBX8_C4;
       break;
     case V4L2_PIX_FMT_HCWNC4_BF16_4_4:
+      format = GST_VIDEO_FORMAT_RGBA_BF16_C4;
+      break;
+    case V4L2_PIX_FMT_HCWNC4_BF16_4_3:
+    case V4L2_PIX_FMT_HCWNC4_BF16_3_3:
       format = GST_VIDEO_FORMAT_RGBX_BF16_C4;
       break;
     case V4L2_PIX_FMT_HCWNC4_FP16_4_4:
+      format = GST_VIDEO_FORMAT_RGBA_FP16_C4;
+      break;
+    case V4L2_PIX_FMT_HCWNC4_FP16_4_3:
+    case V4L2_PIX_FMT_HCWNC4_FP16_3_3:
       format = GST_VIDEO_FORMAT_RGBX_FP16_C4;
       break;
     case V4L2_PIX_FMT_HCWNC4_FP32_4_4:
+      format = GST_VIDEO_FORMAT_RGBA_FLOAT_C4;
+      break;
+    case V4L2_PIX_FMT_HCWNC4_FP32_4_3:
+    case V4L2_PIX_FMT_HCWNC4_FP32_3_3:
       format = GST_VIDEO_FORMAT_RGBX_FLOAT_C4;
       break;
     case V4L2_PIX_FMT_NV12:
@@ -1754,6 +1786,14 @@ gst_v4l2_object_v4l2fourcc_is_rgb (guint32 fourcc)
     case V4L2_PIX_FMT_HCWNC4_BF16_4_4:
     case V4L2_PIX_FMT_HCWNC4_FP16_4_4:
     case V4L2_PIX_FMT_HCWNC4_FP32_4_4:
+    case V4L2_PIX_FMT_HCWNC4_8_4_3:
+    case V4L2_PIX_FMT_HCWNC4_BF16_4_3:
+    case V4L2_PIX_FMT_HCWNC4_FP16_4_3:
+    case V4L2_PIX_FMT_HCWNC4_FP32_4_3:
+    case V4L2_PIX_FMT_HCWNC4_8_3_3:
+    case V4L2_PIX_FMT_HCWNC4_BF16_3_3:
+    case V4L2_PIX_FMT_HCWNC4_FP16_3_3:
+    case V4L2_PIX_FMT_HCWNC4_FP32_3_3:
     case V4L2_PIX_FMT_SBGGR8:
     case V4L2_PIX_FMT_SGBRG8:
     case V4L2_PIX_FMT_SGRBG8:
@@ -1924,6 +1964,14 @@ gst_v4l2_object_v4l2fourcc_to_bare_struct (guint32 fourcc)
     case V4L2_PIX_FMT_HCWNC4_BF16_4_4:
     case V4L2_PIX_FMT_HCWNC4_FP16_4_4:
     case V4L2_PIX_FMT_HCWNC4_FP32_4_4:
+    case V4L2_PIX_FMT_HCWNC4_8_4_3:
+    case V4L2_PIX_FMT_HCWNC4_BF16_4_3:
+    case V4L2_PIX_FMT_HCWNC4_FP16_4_3:
+    case V4L2_PIX_FMT_HCWNC4_FP32_4_3:
+    case V4L2_PIX_FMT_HCWNC4_8_3_3:
+    case V4L2_PIX_FMT_HCWNC4_BF16_3_3:
+    case V4L2_PIX_FMT_HCWNC4_FP16_3_3:
+    case V4L2_PIX_FMT_HCWNC4_FP32_3_3:
     case V4L2_PIX_FMT_GRAY_BF16:
     case V4L2_PIX_FMT_GRAY_FP16:
     case V4L2_PIX_FMT_GRAY_FP32:
@@ -2472,17 +2520,33 @@ gst_v4l2_object_get_caps_info (GstV4l2Object * v4l2object, GstCaps * caps,
         fourcc = V4L2_PIX_FMT_RGB555X;
         fourcc_nc = V4L2_PIX_FMT_XRGB555X;
         break;
-      case GST_VIDEO_FORMAT_RGBX8_C4:
+      case GST_VIDEO_FORMAT_RGBA8_C4:
         fourcc = V4L2_PIX_FMT_HCWNC4_8_4_4;
         break;
-      case GST_VIDEO_FORMAT_RGBX_BF16_C4:
+      case GST_VIDEO_FORMAT_RGBX8_C4:
+        fourcc = V4L2_PIX_FMT_HCWNC4_8_4_3;
+        fourcc_nc = V4L2_PIX_FMT_HCWNC4_8_3_3;
+        break;
+      case GST_VIDEO_FORMAT_RGBA_BF16_C4:
         fourcc = V4L2_PIX_FMT_HCWNC4_BF16_4_4;
         break;
-      case GST_VIDEO_FORMAT_RGBX_FP16_C4:
+      case GST_VIDEO_FORMAT_RGBX_BF16_C4:
+        fourcc = V4L2_PIX_FMT_HCWNC4_BF16_4_3;
+        fourcc_nc = V4L2_PIX_FMT_HCWNC4_BF16_3_3;
+        break;
+      case GST_VIDEO_FORMAT_RGBA_FP16_C4:
         fourcc = V4L2_PIX_FMT_HCWNC4_FP16_4_4;
         break;
-      case GST_VIDEO_FORMAT_RGBX_FLOAT_C4:
+      case GST_VIDEO_FORMAT_RGBX_FP16_C4:
+        fourcc = V4L2_PIX_FMT_HCWNC4_FP16_4_3;
+        fourcc_nc = V4L2_PIX_FMT_HCWNC4_FP16_3_3;
+        break;
+      case GST_VIDEO_FORMAT_RGBA_FLOAT_C4:
         fourcc = V4L2_PIX_FMT_HCWNC4_FP32_4_4;
+        break;
+      case GST_VIDEO_FORMAT_RGBX_FLOAT_C4:
+        fourcc = V4L2_PIX_FMT_HCWNC4_FP32_4_3;
+        fourcc_nc = V4L2_PIX_FMT_HCWNC4_FP32_3_3;
         break;
       default:
         break;

@@ -7275,10 +7275,10 @@ pack_GRAY_FLOAT (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
   }
 }
 
-/* RGBX8_C4 (HCWNC4 8-bit RGBX, 4 channels) */
-#define PACK_RGBX8_C4 GST_VIDEO_FORMAT_ARGB, unpack_RGBX8_C4, 1, pack_RGBX8_C4
+/* RGBA8_C4 (HCWNC4 8-bit RGBA, 4 channels) */
+#define PACK_RGBA8_C4 GST_VIDEO_FORMAT_ARGB, unpack_RGBA8_C4, 1, pack_RGBA8_C4
 static void
-unpack_RGBX8_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
+unpack_RGBA8_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     gpointer dest, const gpointer data[GST_VIDEO_MAX_PLANES],
     const gint stride[GST_VIDEO_MAX_PLANES], gint x, gint y, gint width)
 {
@@ -7297,7 +7297,7 @@ unpack_RGBX8_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
 }
 
 static void
-pack_RGBX8_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
+pack_RGBA8_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     const gpointer src, gint sstride, gpointer data[GST_VIDEO_MAX_PLANES],
     const gint stride[GST_VIDEO_MAX_PLANES], GstVideoChromaSite chroma_site,
     gint y, gint width)
@@ -7314,10 +7314,10 @@ pack_RGBX8_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
   }
 }
 
-/* RGBX_BF16_C4 (HCWNC4 BFloat16 RGBX, 4 channels) */
-#define PACK_RGBX_BF16_C4 GST_VIDEO_FORMAT_ARGB, unpack_RGBX_BF16_C4, 1, pack_RGBX_BF16_C4
+/* RGBA_BF16_C4 (HCWNC4 BFloat16 RGBA, 4 channels) */
+#define PACK_RGBA_BF16_C4 GST_VIDEO_FORMAT_ARGB, unpack_RGBA_BF16_C4, 1, pack_RGBA_BF16_C4
 static void
-unpack_RGBX_BF16_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
+unpack_RGBA_BF16_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     gpointer dest, const gpointer data[GST_VIDEO_MAX_PLANES],
     const gint stride[GST_VIDEO_MAX_PLANES], gint x, gint y, gint width)
 {
@@ -7340,7 +7340,7 @@ unpack_RGBX_BF16_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
 }
 
 static void
-pack_RGBX_BF16_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
+pack_RGBA_BF16_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     const gpointer src, gint sstride, gpointer data[GST_VIDEO_MAX_PLANES],
     const gint stride[GST_VIDEO_MAX_PLANES], GstVideoChromaSite chroma_site,
     gint y, gint width)
@@ -7359,10 +7359,10 @@ pack_RGBX_BF16_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
   }
 }
 
-/* RGBX_FP16_C4 (HCWNC4 FLOAT RGBX, 4 channels) */
-#define PACK_RGBX_FP16_C4 GST_VIDEO_FORMAT_ARGB, unpack_RGBX_FP16_C4, 1, pack_RGBX_FP16_C4
+/* RGBA_FP16_C4 (HCWNC4 FLOAT RGBA, 4 channels) */
+#define PACK_RGBA_FP16_C4 GST_VIDEO_FORMAT_ARGB, unpack_RGBA_FP16_C4, 1, pack_RGBA_FP16_C4
 static void
-unpack_RGBX_FP16_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
+unpack_RGBA_FP16_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     gpointer dest, const gpointer data[GST_VIDEO_MAX_PLANES],
     const gint stride[GST_VIDEO_MAX_PLANES], gint x, gint y, gint width)
 {
@@ -7385,7 +7385,7 @@ unpack_RGBX_FP16_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
 }
 
 static void
-pack_RGBX_FP16_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
+pack_RGBA_FP16_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     const gpointer src, gint sstride, gpointer data[GST_VIDEO_MAX_PLANES],
     const gint stride[GST_VIDEO_MAX_PLANES], GstVideoChromaSite chroma_site,
     gint y, gint width)
@@ -7404,10 +7404,10 @@ pack_RGBX_FP16_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
   }
 }
 
-/* RGBX_FLOAT_C4 (HCWNC4 FLOAT RGBX, 4 channels) */
-#define PACK_RGBX_FLOAT_C4 GST_VIDEO_FORMAT_ARGB64, unpack_RGBX_FLOAT_C4, 1, pack_RGBX_FLOAT_C4
+/* RGBA_FLOAT_C4 (HCWNC4 FLOAT RGBA, 4 channels) */
+#define PACK_RGBA_FLOAT_C4 GST_VIDEO_FORMAT_ARGB64, unpack_RGBA_FLOAT_C4, 1, pack_RGBA_FLOAT_C4
 static void
-unpack_RGBX_FLOAT_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
+unpack_RGBA_FLOAT_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     gpointer dest, const gpointer data[GST_VIDEO_MAX_PLANES],
     const gint stride[GST_VIDEO_MAX_PLANES], gint x, gint y, gint width)
 {
@@ -7430,7 +7430,7 @@ unpack_RGBX_FLOAT_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
 }
 
 static void
-pack_RGBX_FLOAT_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
+pack_RGBA_FLOAT_C4 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     const gpointer src, gint sstride, gpointer data[GST_VIDEO_MAX_PLANES],
     const gint stride[GST_VIDEO_MAX_PLANES], GstVideoChromaSite chroma_site,
     gint y, gint width)
@@ -8750,14 +8750,22 @@ static const VideoFormat formats[] = {
      PACK_GRAY_FP16),
   MAKE_GRAY_FORMAT (GRAY_FLOAT, "raw video", DPTH32, PSTR4, PLANE0, OFFS0, SUB4,
      PACK_GRAY_FLOAT),
+  MAKE_RGBA_FORMAT (RGBA8_C4, "raw video", DPTH8888, PSTR4444,
+      PLANE0, OFFS0123, SUB4444, PACK_RGBA8_C4),
   MAKE_RGBA_FORMAT (RGBX8_C4, "raw video", DPTH8888, PSTR4444,
-      PLANE0, OFFS0123, SUB4444, PACK_RGBX8_C4),
+      PLANE0, OFFS0123, SUB4444, PACK_RGBA8_C4),
+  MAKE_RGBA_FORMAT (RGBA_BF16_C4, "raw video", DPTH16_16_16_16, PSTR8888,
+      PLANE0, OFFS0123, SUB4444, PACK_RGBA_BF16_C4),
   MAKE_RGBA_FORMAT (RGBX_BF16_C4, "raw video", DPTH16_16_16_16, PSTR8888,
-      PLANE0, OFFS0123, SUB4444, PACK_RGBX_BF16_C4),
+      PLANE0, OFFS0123, SUB4444, PACK_RGBA_BF16_C4),
+  MAKE_RGBA_FORMAT (RGBA_FP16_C4, "raw video", DPTH16_16_16_16, PSTR8888,
+      PLANE0, OFFS0123, SUB4444, PACK_RGBA_FP16_C4),
   MAKE_RGBA_FORMAT (RGBX_FP16_C4, "raw video", DPTH16_16_16_16, PSTR8888,
-      PLANE0, OFFS0123, SUB4444, PACK_RGBX_FP16_C4),
+      PLANE0, OFFS0123, SUB4444, PACK_RGBA_FP16_C4),
+  MAKE_RGBA_FORMAT (RGBA_FLOAT_C4, "raw video", DPTH32_32_32_32, PSTR16161616,
+      PLANE0, OFFS0123, SUB4444, PACK_RGBA_FLOAT_C4),
   MAKE_RGBA_FORMAT (RGBX_FLOAT_C4, "raw video", DPTH32_32_32_32, PSTR16161616,
-      PLANE0, OFFS0123, SUB4444, PACK_RGBX_FLOAT_C4),
+      PLANE0, OFFS0123, SUB4444, PACK_RGBA_FLOAT_C4),
   MAKE_YUV_FORMAT (AV12, "raw video", GST_MAKE_FOURCC ('A', 'V', '1', '2'),
       DPTH8888, PSTR1221, PLANE0112, OFFS001, SUB4204, PACK_AV12),
   MAKE_RGBA_LE_FORMAT (ARGB64_LE, "raw video", DPTH16_16_16_16, PSTR8888,
