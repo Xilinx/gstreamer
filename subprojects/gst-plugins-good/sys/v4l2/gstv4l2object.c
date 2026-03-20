@@ -128,6 +128,13 @@ static const GstV4L2FormatDesc gst_v4l2_formats[] = {
   {V4L2_PIX_FMT_HCWNC8_BF16_3_3, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_HCWNC8_FP16_3_3, TRUE, GST_V4L2_RAW},
   {V4L2_PIX_FMT_HCWNC8_FP32_3_3, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGR_BF48, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGR_FP48, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGR_323232, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGRA32, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGRA_BF64, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGRA_FP64, TRUE, GST_V4L2_RAW},
+  {V4L2_PIX_FMT_BGRA32323232, TRUE, GST_V4L2_RAW},
 
   /* Deprecated Packed RGB Image Formats (alpha ambiguity) */
   {V4L2_PIX_FMT_RGB444, TRUE, GST_V4L2_RAW},
@@ -1232,6 +1239,13 @@ gst_v4l2_object_format_get_rank (const struct v4l2_fmtdesc *fmt)
     case V4L2_PIX_FMT_HCWNC8_BF16_3_3:
     case V4L2_PIX_FMT_HCWNC8_FP16_3_3:
     case V4L2_PIX_FMT_HCWNC8_FP32_3_3:
+    case V4L2_PIX_FMT_BGR_BF48:
+    case V4L2_PIX_FMT_BGR_FP48:
+    case V4L2_PIX_FMT_BGR_323232:
+    case V4L2_PIX_FMT_BGRA8888:
+    case V4L2_PIX_FMT_BGRA_BF64:
+    case V4L2_PIX_FMT_BGRA_FP64:
+    case V4L2_PIX_FMT_BGRA32323232:
       rank = RGB_BASE_RANK;
       break;
 
@@ -1619,6 +1633,27 @@ gst_v4l2_object_v4l2fourcc_to_video_format (guint32 fourcc)
     case V4L2_PIX_FMT_HCWNC8_FP32_3_3:
       format = GST_VIDEO_FORMAT_RGBX_FLOAT_C8;
       break;
+    case V4L2_PIX_FMT_BGR_FP48:
+      format = GST_VIDEO_FORMAT_BGR_FP16;
+      break;
+    case V4L2_PIX_FMT_BGR_BF48:
+      format = GST_VIDEO_FORMAT_BGR_BF16;
+      break;
+    case V4L2_PIX_FMT_BGR_323232:
+      format = GST_VIDEO_FORMAT_BGR_FLOAT;
+      break;
+    case V4L2_PIX_FMT_BGRA8888:
+      format = GST_VIDEO_FORMAT_BGRA8;
+      break;
+    case V4L2_PIX_FMT_BGRA_BF64:
+      format = GST_VIDEO_FORMAT_BGRA_BF16;
+      break;
+    case V4L2_PIX_FMT_BGRA_FP64:
+      format = GST_VIDEO_FORMAT_BGRA_FP16;
+      break;
+    case V4L2_PIX_FMT_BGRA32323232:
+      format = GST_VIDEO_FORMAT_BGRA_FLOAT;
+      break;
     case V4L2_PIX_FMT_HCWNC4_BF16_4_4:
       format = GST_VIDEO_FORMAT_RGBA_BF16_C4;
       break;
@@ -1858,6 +1893,13 @@ gst_v4l2_object_v4l2fourcc_is_rgb (guint32 fourcc)
     case V4L2_PIX_FMT_HCWNC8_BF16_3_3:
     case V4L2_PIX_FMT_HCWNC8_FP16_3_3:
     case V4L2_PIX_FMT_HCWNC8_FP32_3_3:
+    case V4L2_PIX_FMT_BGR_BF48:
+    case V4L2_PIX_FMT_BGR_FP48:
+    case V4L2_PIX_FMT_BGR_323232:
+    case V4L2_PIX_FMT_BGRA8888:
+    case V4L2_PIX_FMT_BGRA_BF64:
+    case V4L2_PIX_FMT_BGRA_FP64:
+    case V4L2_PIX_FMT_BGRA32323232:
     case V4L2_PIX_FMT_SBGGR8:
     case V4L2_PIX_FMT_SGBRG8:
     case V4L2_PIX_FMT_SGRBG8:
@@ -2051,6 +2093,13 @@ gst_v4l2_object_v4l2fourcc_to_bare_struct (guint32 fourcc)
     case V4L2_PIX_FMT_HCWNC8_BF16_3_3:
     case V4L2_PIX_FMT_HCWNC8_FP16_3_3:
     case V4L2_PIX_FMT_HCWNC8_FP32_3_3:
+    case V4L2_PIX_FMT_BGR_BF48:
+    case V4L2_PIX_FMT_BGR_FP48:
+    case V4L2_PIX_FMT_BGR_323232:
+    case V4L2_PIX_FMT_BGRA8888:
+    case V4L2_PIX_FMT_BGRA_BF64:
+    case V4L2_PIX_FMT_BGRA_FP64:
+    case V4L2_PIX_FMT_BGRA32323232:
     {
       GstVideoFormat format;
       format = gst_v4l2_object_v4l2fourcc_to_video_format (fourcc);
@@ -2632,7 +2681,27 @@ gst_v4l2_object_get_caps_info (GstV4l2Object * v4l2object, GstCaps * caps,
         fourcc = V4L2_PIX_FMT_HCWNC8_FP32_4_3;
         fourcc_nc = V4L2_PIX_FMT_HCWNC8_FP32_3_3;
         break;
-
+      case GST_VIDEO_FORMAT_BGR_FP16:
+        fourcc = V4L2_PIX_FMT_BGR_FP48;
+        break;
+      case GST_VIDEO_FORMAT_BGR_BF16:
+        fourcc = V4L2_PIX_FMT_BGR_BF48;
+        break;
+      case GST_VIDEO_FORMAT_BGR_FLOAT:
+        fourcc = V4L2_PIX_FMT_BGR_323232;
+        break;
+      case GST_VIDEO_FORMAT_BGRA8:
+        fourcc = V4L2_PIX_FMT_BGRA8888;
+        break;
+      case GST_VIDEO_FORMAT_BGRA_BF16:
+        fourcc = V4L2_PIX_FMT_BGRA_BF64;
+        break;
+      case GST_VIDEO_FORMAT_BGRA_FP16:
+        fourcc = V4L2_PIX_FMT_BGRA_FP64;
+        break;
+      case GST_VIDEO_FORMAT_BGRA_FLOAT:
+        fourcc = V4L2_PIX_FMT_BGRA32323232;
+        break;
       case GST_VIDEO_FORMAT_RGBA_BF16_C4:
         fourcc = V4L2_PIX_FMT_HCWNC4_BF16_4_4;
         break;

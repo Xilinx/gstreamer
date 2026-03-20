@@ -955,14 +955,28 @@ fill_planes (GstVideoInfo * info, gsize plane_size[GST_VIDEO_MAX_PLANES])
       info->offset[2] = info->offset[1] * 2;
       info->size = info->stride[0] * height * 3;
       break;
+    case GST_VIDEO_FORMAT_BGR_BF16:
+    case GST_VIDEO_FORMAT_BGR_FP16:
+      info->stride[0] = GST_ROUND_UP_4 (width * 6);
+      info->offset[0] = 0;
+      info->size = info->stride[0] * height;
+      break;
+    case GST_VIDEO_FORMAT_BGR_FLOAT:
+      info->stride[0] = GST_ROUND_UP_4 (width * 12);
+      info->offset[0] = 0;
+      info->size = info->stride[0] * height;
+      break;
     case GST_VIDEO_FORMAT_RGBA8_C4:
     case GST_VIDEO_FORMAT_RGBX8_C4:
+    case GST_VIDEO_FORMAT_BGRA8:
       info->stride[0] = GST_ROUND_UP_4 (width * 4);
       info->offset[0] = 0;
       info->size = info->stride[0] * height;
       break;
     case GST_VIDEO_FORMAT_RGBA8_C8:
     case GST_VIDEO_FORMAT_RGBX8_C8:
+    case GST_VIDEO_FORMAT_BGRA_BF16:
+    case GST_VIDEO_FORMAT_BGRA_FP16:
       info->stride[0] = GST_ROUND_UP_4 (width * 8);
       info->offset[0] = 0;
       info->size = info->stride[0] * height;
@@ -987,6 +1001,7 @@ fill_planes (GstVideoInfo * info, gsize plane_size[GST_VIDEO_MAX_PLANES])
     case GST_VIDEO_FORMAT_RGBA_BF16_C8:
     case GST_VIDEO_FORMAT_RGBX_FP16_C8:
     case GST_VIDEO_FORMAT_RGBX_BF16_C8:
+    case GST_VIDEO_FORMAT_BGRA_FLOAT:
       info->stride[0] = GST_ROUND_UP_4 (width * 16);
       info->offset[0] = 0;
       info->size = info->stride[0] * height;

@@ -481,6 +481,63 @@ typedef enum {
    * Since: 1.26
    */
   GST_VIDEO_FORMAT_RGBX_FLOAT_C8,
+  /**
+   * GST_VIDEO_FORMAT_BGR_BF16
+   *
+   * Packed 3-channel BGR, BFloat16 per channel (HCWNC3 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGR_BF16,
+  /**
+   * GST_VIDEO_FORMAT_BGR_FP16
+   *
+   * Packed 3-channel BGR, FP16 per channel (HCWNC3 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGR_FP16,
+  /**
+   * GST_VIDEO_FORMAT_BGR_FLOAT
+   *
+   * Packed 3-channel BGR, 32-bit floating point per channel (HCWNC3 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGR_FLOAT,
+  /**
+   * GST_VIDEO_FORMAT_BGRA8
+   *
+   * Packed 4-channel BGRA, 8-bit integer per channel (HCWNC4 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGRA8,
+  /**
+   * GST_VIDEO_FORMAT_BGRA_BF16
+   *
+   * Packed 4-channel BGRA, BFloat16 per channel (HCWNC4 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGRA_BF16,
+  /**
+   * GST_VIDEO_FORMAT_BGRA_FP16
+   *
+   * Packed 4-channel BGRA, FP16 per channel (HCWNC4 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGRA_FP16,
+
+  /**
+   * GST_VIDEO_FORMAT_BGRA_FLOAT
+   *
+   * Packed 4-channel BGRA, FLOAT per channel (HCWNC4 layout)
+   *
+   * Since: 1.26
+   */
+  GST_VIDEO_FORMAT_BGRA_FLOAT,
 
   /**
    * GST_VIDEO_FORMAT_AV12:
