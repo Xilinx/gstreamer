@@ -605,12 +605,17 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
   g_object_class_install_property (gobject_class, PROP_NUM_SLICES,
       g_param_spec_uint ("num-slices", "Number of slices",
           "Number of slices produced for each frame. Each slice contains one or more complete macroblock/CTU row(s). "
-          "Slices are distributed over the frame as regularly as possible. If slice-size is defined as well more slices "
-          "may be produced to fit the slice-size requirement (0xffffffff=component default)",
+          "Slices are distributed over the frame as regularly as possible."
+#ifndef USE_OMX_TARGET_VERSAL_GEN2
+          " If slice-size is defined as well more slices "
+          "may be produced to fit the slice-size requirement"
+#endif
+          " (0xffffffff=component default)",
           1, G_MAXUINT, GST_OMX_VIDEO_ENC_NUM_SLICES_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
 
+#ifndef USE_OMX_TARGET_VERSAL_GEN2
   g_object_class_install_property (gobject_class, PROP_SLICE_SIZE,
       g_param_spec_uint ("slice-size", "Target slice size",
           "Target slice size (in bytes) that the encoder uses to "
@@ -618,6 +623,7 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
           0, 65535, GST_OMX_VIDEO_ENC_SLICE_SIZE_DEFAULT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
+#endif
 
   g_object_class_install_property (gobject_class, PROP_DEPENDENT_SLICE,
       g_param_spec_boolean ("dependent-slice", "Dependent slice",
@@ -883,7 +889,9 @@ gst_omx_video_enc_init (GstOMXVideoEnc * self)
   self->aspect_ratio = GST_OMX_VIDEO_ENC_ASPECT_RATIO_DEFAULT;
   self->filler_data = GST_OMX_VIDEO_ENC_FILLER_DATA_DEFAULT;
   self->num_slices = GST_OMX_VIDEO_ENC_NUM_SLICES_DEFAULT;
+#ifndef USE_OMX_TARGET_VERSAL_GEN2
   self->slice_size = GST_OMX_VIDEO_ENC_SLICE_SIZE_DEFAULT;
+#endif
   self->dependent_slice = GST_OMX_VIDEO_ENC_DEPENDENT_SLICE_DEFAULT;
   self->default_roi_quality = GST_OMX_VIDEO_ENC_DEFAULT_ROI_QUALITY;
   self->prefetch_buffer = GST_OMX_VIDEO_ENC_PREFETCH_BUFFER_DEFAULT;
@@ -1386,8 +1394,11 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
     CHECK_ERR ("filler-data");
   }
 
-  if (self->num_slices != GST_OMX_VIDEO_ENC_NUM_SLICES_DEFAULT ||
-      self->slice_size != GST_OMX_VIDEO_ENC_SLICE_SIZE_DEFAULT) {
+  if (self->num_slices != GST_OMX_VIDEO_ENC_NUM_SLICES_DEFAULT
+#ifndef USE_OMX_TARGET_VERSAL_GEN2
+      || self->slice_size != GST_OMX_VIDEO_ENC_SLICE_SIZE_DEFAULT
+#endif
+      ) {
     OMX_ALG_VIDEO_PARAM_SLICES slices;
 
     GST_OMX_INIT_STRUCT (&slices);
@@ -1408,11 +1419,13 @@ set_zynqultrascaleplus_props (GstOMXVideoEnc * self)
           self->num_slices, self->dependent_slice);
     }
 
+#ifndef USE_OMX_TARGET_VERSAL_GEN2
     if (self->slice_size != GST_OMX_VIDEO_ENC_SLICE_SIZE_DEFAULT) {
       slices.nSlicesSize = self->slice_size;
       GST_DEBUG_OBJECT (self, "setting slice size to %d (dependent slices: %d)",
           self->slice_size, self->dependent_slice);
     }
+#endif
 
     slices.bDependentSlices = self->dependent_slice;
 
@@ -2127,9 +2140,11 @@ gst_omx_video_enc_set_property (GObject * object, guint prop_id,
     case PROP_NUM_SLICES:
       self->num_slices = g_value_get_uint (value);
       break;
+#ifndef USE_OMX_TARGET_VERSAL_GEN2
     case PROP_SLICE_SIZE:
       self->slice_size = g_value_get_uint (value);
       break;
+#endif
     case PROP_DEPENDENT_SLICE:
       self->dependent_slice = g_value_get_boolean (value);
       break;
@@ -2431,9 +2446,11 @@ gst_omx_video_enc_get_property (GObject * object, guint prop_id, GValue * value,
     case PROP_NUM_SLICES:
       g_value_set_uint (value, self->num_slices);
       break;
+#ifndef USE_OMX_TARGET_VERSAL_GEN2
     case PROP_SLICE_SIZE:
       g_value_set_uint (value, self->slice_size);
       break;
+#endif
     case PROP_DEPENDENT_SLICE:
       g_value_set_boolean (value, self->dependent_slice);
       break;

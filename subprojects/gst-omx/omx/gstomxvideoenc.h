@@ -93,7 +93,9 @@ struct _GstOMXVideoEnc
   guint32 aspect_ratio;
   gboolean filler_data;
   guint32 num_slices;
+#ifndef USE_OMX_TARGET_VERSAL_GEN2
   guint32 slice_size;
+#endif
   gboolean dependent_slice;
   gint default_roi_quality;
   gboolean prefetch_buffer;
