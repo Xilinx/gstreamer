@@ -4737,8 +4737,7 @@ gst_omx_video_enc_copy_plane (GstOMXVideoEnc * self, guint i,
     width = 2 * GST_VIDEO_FRAME_COMP_WIDTH (frame, i);
 
   /* for Allegro tiled formats, src_stride and dest_stride are for 4 lines */
-  if (finfo->format >= GST_VIDEO_FORMAT_T5M8 &&
-      finfo->format <= GST_VIDEO_FORMAT_T64C ) {
+  if (GST_VIDEO_FORMAT_INFO_IS_XLNX_TILE (finfo)) {
     src_stride *= 4;
     width = src_stride;
     height /= 4;

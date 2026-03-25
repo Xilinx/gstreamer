@@ -9123,6 +9123,8 @@ typedef struct
  { fourcc, {GST_VIDEO_FORMAT_ ##name, G_STRINGIFY(name), desc, GST_VIDEO_FORMAT_FLAG_YUV | GST_VIDEO_FORMAT_FLAG_COMPLEX | GST_VIDEO_FORMAT_FLAG_TILED, depth, pstride, plane, offs, sub, pack, tile } }
 #define MAKE_YUV_ST_FORMAT(name, desc, fourcc, depth, pstride, plane, offs, sub, pack, tile) \
  { fourcc, {GST_VIDEO_FORMAT_ ##name, G_STRINGIFY(name), desc, GST_VIDEO_FORMAT_FLAG_YUV | GST_VIDEO_FORMAT_FLAG_COMPLEX | GST_VIDEO_FORMAT_FLAG_TILED | GST_VIDEO_FORMAT_FLAG_SUBTILES, depth, pstride, plane, offs, sub, pack, tile } }
+#define MAKE_YUV_XT_FORMAT(name, desc, fourcc, depth, pstride, plane, offs, sub, pack ) \
+ { fourcc, {GST_VIDEO_FORMAT_ ##name, G_STRINGIFY(name), desc, GST_VIDEO_FORMAT_FLAG_YUV | GST_VIDEO_FORMAT_FLAG_XLNX_TILED, depth, pstride, plane, offs, sub, pack } }
 
 #define MAKE_RGB_FORMAT(name, desc, depth, pstride, plane, offs, sub, pack) \
  { 0x00000000, {GST_VIDEO_FORMAT_ ##name, G_STRINGIFY(name), desc, GST_VIDEO_FORMAT_FLAG_RGB, depth, pstride, plane, offs, sub, pack } }
@@ -9498,54 +9500,54 @@ static const VideoFormat formats[] = {
       SUB4, PACK_GRAY10_LE),
   MAKE_GRAY_C_LE_FORMAT (GRAY12_LE, "raw video", DPTH12, PSTR2, PLANE0, OFFS0,
       SUB4, PACK_GRAY12_LE),
-  MAKE_YUV_FORMAT (T5M8, "raw video", GST_MAKE_FOURCC ('T', '5', 'M', '8'),
+  MAKE_YUV_XT_FORMAT (T5M8, "raw video", GST_MAKE_FOURCC ('T', '5', 'M', '8'),
       DPTH8, PSTR1, PLANE0, OFFS0, SUB4, PACK_T_400OR420),
-  MAKE_YUV_FORMAT (T5MA, "raw video", GST_MAKE_FOURCC ('T', '5', 'M', 'A'),
+  MAKE_YUV_XT_FORMAT (T5MA, "raw video", GST_MAKE_FOURCC ('T', '5', 'M', 'A'),
       DPTH8, PSTR1, PLANE0, OFFS0, SUB4, PACK_T_400OR420_10OR12),
-  MAKE_YUV_FORMAT (T5MC, "raw video", GST_MAKE_FOURCC ('T', '5', 'M', 'C'),
+  MAKE_YUV_XT_FORMAT (T5MC, "raw video", GST_MAKE_FOURCC ('T', '5', 'M', 'C'),
       DPTH8, PSTR1, PLANE0, OFFS0, SUB4, PACK_T_400OR420_10OR12),
-  MAKE_YUV_FORMAT (T508, "raw video", GST_MAKE_FOURCC ('T', '5', '0', '8'),
+  MAKE_YUV_XT_FORMAT (T508, "raw video", GST_MAKE_FOURCC ('T', '5', '0', '8'),
       DPTH888, PSTR122, PLANE011, OFFS001, SUB420, PACK_T_400OR420),
   /* treat T50A bit depth same as T508, 8 bits, since pixels are packed */
-  MAKE_YUV_FORMAT (T50A, "raw video", GST_MAKE_FOURCC ('T', '5', '0', 'A'),
+  MAKE_YUV_XT_FORMAT (T50A, "raw video", GST_MAKE_FOURCC ('T', '5', '0', 'A'),
       DPTH888, PSTR122, PLANE011, OFFS001, SUB420, PACK_T_400OR420_10OR12),
-  MAKE_YUV_FORMAT (T50C, "raw video", GST_MAKE_FOURCC ('T', '5', '0', 'C'),
+  MAKE_YUV_XT_FORMAT (T50C, "raw video", GST_MAKE_FOURCC ('T', '5', '0', 'C'),
       DPTH888, PSTR122, PLANE011, OFFS001, SUB420, PACK_T_400OR420_10OR12),
-  MAKE_YUV_FORMAT (T528, "raw video", GST_MAKE_FOURCC ('T', '5', '2', '8'),
+  MAKE_YUV_XT_FORMAT (T528, "raw video", GST_MAKE_FOURCC ('T', '5', '2', '8'),
       DPTH888, PSTR122, PLANE011, OFFS001, SUB422, PACK_T_422),
-  MAKE_YUV_FORMAT (T52A, "raw video", GST_MAKE_FOURCC ('T', '5', '2', 'A'),
+  MAKE_YUV_XT_FORMAT (T52A, "raw video", GST_MAKE_FOURCC ('T', '5', '2', 'A'),
       DPTH888, PSTR122, PLANE011, OFFS001, SUB422, PACK_T_422_10OR12),
-  MAKE_YUV_FORMAT (T52C, "raw video", GST_MAKE_FOURCC ('T', '5', '2', 'C'),
+  MAKE_YUV_XT_FORMAT (T52C, "raw video", GST_MAKE_FOURCC ('T', '5', '2', 'C'),
       DPTH888, PSTR122, PLANE011, OFFS001, SUB422, PACK_T_422_10OR12),
-  MAKE_YUV_FORMAT (T548, "raw video", GST_MAKE_FOURCC ('T', '5', '4', '8'),
+  MAKE_YUV_XT_FORMAT (T548, "raw video", GST_MAKE_FOURCC ('T', '5', '4', '8'),
       DPTH888, PSTR111, PLANE012, OFFS0, SUB444, PACK_T_444),
-  MAKE_YUV_FORMAT (T54A, "raw video", GST_MAKE_FOURCC ('T', '5', '4', 'A'),
+  MAKE_YUV_XT_FORMAT (T54A, "raw video", GST_MAKE_FOURCC ('T', '5', '4', 'A'),
       DPTH888, PSTR111, PLANE012, OFFS0, SUB444, PACK_T_444_10OR12),
-  MAKE_YUV_FORMAT (T54C, "raw video", GST_MAKE_FOURCC ('T', '5', '4', 'C'),
+  MAKE_YUV_XT_FORMAT (T54C, "raw video", GST_MAKE_FOURCC ('T', '5', '4', 'C'),
       DPTH888, PSTR111, PLANE012, OFFS0, SUB444, PACK_T_444_10OR12),
-  MAKE_YUV_FORMAT (T6M8, "raw video", GST_MAKE_FOURCC ('T', '6', 'M', '8'),
+  MAKE_YUV_XT_FORMAT (T6M8, "raw video", GST_MAKE_FOURCC ('T', '6', 'M', '8'),
       DPTH8, PSTR1, PLANE0, OFFS0, SUB4, PACK_T_400OR420),
-  MAKE_YUV_FORMAT (T6MA, "raw video", GST_MAKE_FOURCC ('T', '6', 'M', 'A'),
+  MAKE_YUV_XT_FORMAT (T6MA, "raw video", GST_MAKE_FOURCC ('T', '6', 'M', 'A'),
       DPTH8, PSTR1, PLANE0, OFFS0, SUB4, PACK_T_400OR420_10OR12),
-  MAKE_YUV_FORMAT (T6MC, "raw video", GST_MAKE_FOURCC ('T', '6', 'M', 'C'),
+  MAKE_YUV_XT_FORMAT (T6MC, "raw video", GST_MAKE_FOURCC ('T', '6', 'M', 'C'),
       DPTH8, PSTR1, PLANE0, OFFS0, SUB4, PACK_T_400OR420_10OR12),
-  MAKE_YUV_FORMAT (T608, "raw video", GST_MAKE_FOURCC ('T', '6', '0', '8'),
+  MAKE_YUV_XT_FORMAT (T608, "raw video", GST_MAKE_FOURCC ('T', '6', '0', '8'),
       DPTH888, PSTR122, PLANE011, OFFS001, SUB420, PACK_T_400OR420),
-  MAKE_YUV_FORMAT (T60A, "raw video", GST_MAKE_FOURCC ('T', '6', '0', 'A'),
+  MAKE_YUV_XT_FORMAT (T60A, "raw video", GST_MAKE_FOURCC ('T', '6', '0', 'A'),
       DPTH888, PSTR122, PLANE011, OFFS001, SUB420, PACK_T_400OR420_10OR12),
-  MAKE_YUV_FORMAT (T60C, "raw video", GST_MAKE_FOURCC ('T', '6', '0', 'C'),
+  MAKE_YUV_XT_FORMAT (T60C, "raw video", GST_MAKE_FOURCC ('T', '6', '0', 'C'),
       DPTH888, PSTR122, PLANE011, OFFS001, SUB420, PACK_T_400OR420_10OR12),
-  MAKE_YUV_FORMAT (T628, "raw video", GST_MAKE_FOURCC ('T', '6', '2', '8'),
+  MAKE_YUV_XT_FORMAT (T628, "raw video", GST_MAKE_FOURCC ('T', '6', '2', '8'),
       DPTH888, PSTR122, PLANE011, OFFS001, SUB422, PACK_T_422),
-  MAKE_YUV_FORMAT (T62A, "raw video", GST_MAKE_FOURCC ('T', '6', '2', 'A'),
+  MAKE_YUV_XT_FORMAT (T62A, "raw video", GST_MAKE_FOURCC ('T', '6', '2', 'A'),
       DPTH888, PSTR122, PLANE011, OFFS001, SUB422, PACK_T_422_10OR12),
-  MAKE_YUV_FORMAT (T62C, "raw video", GST_MAKE_FOURCC ('T', '6', '2', 'C'),
+  MAKE_YUV_XT_FORMAT (T62C, "raw video", GST_MAKE_FOURCC ('T', '6', '2', 'C'),
       DPTH888, PSTR122, PLANE011, OFFS001, SUB422, PACK_T_422_10OR12),
-  MAKE_YUV_FORMAT (T648, "raw video", GST_MAKE_FOURCC ('T', '6', '4', '8'),
+  MAKE_YUV_XT_FORMAT (T648, "raw video", GST_MAKE_FOURCC ('T', '6', '4', '8'),
       DPTH888, PSTR111, PLANE012, OFFS0, SUB444, PACK_T_444),
-  MAKE_YUV_FORMAT (T64A, "raw video", GST_MAKE_FOURCC ('T', '6', '4', 'A'),
+  MAKE_YUV_XT_FORMAT (T64A, "raw video", GST_MAKE_FOURCC ('T', '6', '4', 'A'),
       DPTH888, PSTR111, PLANE012, OFFS0, SUB444, PACK_T_444_10OR12),
-  MAKE_YUV_FORMAT (T64C, "raw video", GST_MAKE_FOURCC ('T', '6', '4', 'C'),
+  MAKE_YUV_XT_FORMAT (T64C, "raw video", GST_MAKE_FOURCC ('T', '6', '4', 'C'),
       DPTH888, PSTR111, PLANE012, OFFS0, SUB444, PACK_T_444_10OR12),
 };
 
@@ -9838,7 +9840,7 @@ gst_video_format_from_fourcc (guint32 fourcc)
     case GST_MAKE_FOURCC ( 'T', '5', '4', 'C'):
       return GST_VIDEO_FORMAT_T54C;
     case GST_MAKE_FOURCC ( 'T', '6', 'M', '8'):
-      return GST_VIDEO_FORMAT_T5M8;
+      return GST_VIDEO_FORMAT_T6M8;
     case GST_MAKE_FOURCC ( 'T', '6', 'M', 'A'):
       return GST_VIDEO_FORMAT_T6MA;
     case GST_MAKE_FOURCC ( 'T', '6', 'M', 'C'):

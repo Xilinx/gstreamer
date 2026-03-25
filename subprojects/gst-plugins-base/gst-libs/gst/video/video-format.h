@@ -793,6 +793,8 @@ typedef struct _GstVideoFormatInfo GstVideoFormatInfo;
  *   in the last plane.
  * @GST_VIDEO_FORMAT_FLAG_SUBTILES: The tile size varies per plane
  *   according to the subsampling. (Since: 1.22)
+ * @GST_VIDEO_FORMAT_FLAG_XLNX_TILED: The format is xilinx specific tiled, where
+ *   respective fourcc code represents tiling information. (Since: 1.22)
  * @GST_VIDEO_FORMAT_FLAG_AI_LAYOUT: The video format uses an AI-specific layout.
  *   (Since: 1.22)
  * The different video flags that a format info can have.
@@ -816,7 +818,8 @@ typedef enum
    * Since: 1.22
    */
   GST_VIDEO_FORMAT_FLAG_SUBTILES = (1 << 9),
-  GST_VIDEO_FORMAT_FLAG_AI_LAYOUT = (1 << 10)
+  GST_VIDEO_FORMAT_FLAG_XLNX_TILED = (1 << 10),
+  GST_VIDEO_FORMAT_FLAG_AI_LAYOUT = (1 << 11)
 } GstVideoFormatFlags;
 
 /* YUV components */
@@ -1028,6 +1031,7 @@ struct _GstVideoFormatInfo {
 #define GST_VIDEO_FORMAT_INFO_HAS_PALETTE(info)  (((info)->flags & GST_VIDEO_FORMAT_FLAG_PALETTE) != 0)
 #define GST_VIDEO_FORMAT_INFO_IS_COMPLEX(info)   (((info)->flags & GST_VIDEO_FORMAT_FLAG_COMPLEX) != 0)
 #define GST_VIDEO_FORMAT_INFO_IS_TILED(info)     (((info)->flags & GST_VIDEO_FORMAT_FLAG_TILED) != 0)
+#define GST_VIDEO_FORMAT_INFO_IS_XLNX_TILE(info) (((info)->flags & GST_VIDEO_FORMAT_FLAG_XLNX_TILED) != 0)
 #define GST_VIDEO_FORMAT_INFO_IS_AI_LAYOUT(info) (((info)->flags & GST_VIDEO_FORMAT_FLAG_AI_LAYOUT) != 0)
 /**
  * GST_VIDEO_FORMAT_INFO_HAS_SUBTILES:
