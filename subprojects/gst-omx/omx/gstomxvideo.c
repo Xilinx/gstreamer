@@ -398,8 +398,13 @@ gst_omx_video_get_port_padding (GstOMXPort * port, GstVideoInfo * info_orig,
     return FALSE;
   }
 
-  nstride = port->port_def.format.video.nStride;
-  nslice_height = port->port_def.format.video.nSliceHeight;
+  if (GST_VIDEO_FORMAT_INFO_IS_XLNX_TILE (info.finfo)) {
+    nstride = port->port_def.format.video.nStride / 4;
+    nslice_height = port->port_def.format.video.nSliceHeight * 4;
+  } else {
+    nstride = port->port_def.format.video.nStride;
+    nslice_height = port->port_def.format.video.nSliceHeight;
+  }
 
   if (nstride > GST_VIDEO_INFO_PLANE_STRIDE (&info, 0)) {
     align->padding_right = nstride - GST_VIDEO_INFO_PLANE_STRIDE (&info, 0);
