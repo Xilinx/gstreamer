@@ -1120,7 +1120,7 @@ gst_v4l2src_query (GstBaseSrc * bsrc, GstQuery * query)
       else
         max_latency = num_buffers * min_latency;
 
-      if (src->v4l2object->xlnx_ll)
+      if (src->v4l2object->xlnx_ll || src->v4l2object->xlnx_ll_eol)
         min_latency = GST_MSECOND;
 
       GST_DEBUG_OBJECT (bsrc,
