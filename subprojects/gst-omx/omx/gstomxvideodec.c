@@ -1748,6 +1748,19 @@ gst_omx_video_dec_set_output_state (GstOMXVideoDec * self, GstVideoFormat fmt)
       (self), fmt, interlace_mode,
       port_def.format.video.nFrameWidth, frame_height, self->input_state);
 
+  /* At preroll input_state is NULL so the base class leaves framerate at
+   * 0/1, which blocks kmssink from selecting an interlaced DRM mode. If
+   * preallocate() stashed a real framerate from prealloc-caps, stamp it
+   * here so the preroll caps carry a valid refresh. */
+  if (self->input_state == NULL && self->prealloc_fps_n > 0
+      && state->info.fps_n == 0) {
+    state->info.fps_n = self->prealloc_fps_n;
+    state->info.fps_d = self->prealloc_fps_d;
+    GST_INFO_OBJECT (self,
+        "modeset-at-preroll: stamped prealloc framerate %d/%d on output caps",
+        self->prealloc_fps_n, self->prealloc_fps_d);
+  }
+
   if (self->xlnx_ll) {
     state->caps = gst_video_info_to_caps (&state->info);
     add_caps_memory_feature (state->caps, GST_CAPS_FEATURE_MEMORY_XLNX_LL);
@@ -3598,6 +3611,7 @@ gst_omx_video_dec_preallocate (GstOMXVideoDec * self)
   gint width = 0, height = 0;
   gint fps_n = 0, fps_d = 1;
   gboolean ret = FALSE;
+  gboolean prealloc_interlaced = FALSE;
   gint64 prealloc_start_time;
 
   if (!self->prealloc_caps || self->prealloc_caps[0] == '\0')
@@ -3642,11 +3656,34 @@ gst_omx_video_dec_preallocate (GstOMXVideoDec * self)
   port_def.format.video.nFrameWidth = width;
   port_def.format.video.nFrameHeight = height;
 
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
+  /* For interlaced content the decoder always outputs alternate fields, so the
+   * OMX input frame height must be the (rounded) field height, exactly as the
+   * normal set_format() path does. Detect it from the prealloc-caps
+   * interlace-mode so we can also switch the VCU sequence picture mode to FIELD
+   * below; otherwise the component stays in FRAME mode and the first real
+   * (interlaced) frame forces a full decoder recreate (no prealloc benefit). */
+  {
+    const gchar *prealloc_imode =
+        gst_structure_get_string (s, "interlace-mode");
+    prealloc_interlaced = (prealloc_imode != NULL
+        && (g_str_equal (prealloc_imode, "alternate")
+            || g_str_equal (prealloc_imode, "interleaved")));
+    if (prealloc_interlaced)
+      port_def.format.video.nFrameHeight = GST_ROUND_UP_2 (height / 2);
+  }
+#endif
+
   if (gst_structure_get_fraction (s, "framerate", &fps_n, &fps_d) && fps_d > 0)
     port_def.format.video.xFramerate =
         gst_util_uint64_scale_int (1 << 16, fps_n, fps_d);
   else
     port_def.format.video.xFramerate = 0;
+
+  /* Remember the prealloc framerate so set_output_state() can stamp it
+   * on the preroll output caps. */
+  self->prealloc_fps_n = (fps_d > 0) ? fps_n : 0;
+  self->prealloc_fps_d = (fps_d > 0) ? fps_d : 1;
 
   if (klass->cdata.hacks & GST_OMX_HACK_PASS_COLOR_FORMAT_TO_DECODER) {
     const gchar *chroma_format;
@@ -3676,6 +3713,22 @@ gst_omx_video_dec_preallocate (GstOMXVideoDec * self)
     GST_WARNING_OBJECT (self, "Subclass failed to set prealloc format");
     goto done;
   }
+
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
+  /* Mirror the normal set_format() path: switch the VCU sequence picture mode
+   * to FIELD for interlaced prealloc-caps so the Allegro decoder preallocates
+   * field buffers that match the real interlaced stream. Progressive content
+   * keeps the default FRAME mode (no call needed, leaving the proven
+   * progressive prealloc path untouched). */
+  if (prealloc_interlaced) {
+    GstVideoInfo prealloc_vinfo;
+    gst_video_info_init (&prealloc_vinfo);
+    prealloc_vinfo.interlace_mode = GST_VIDEO_INTERLACE_MODE_ALTERNATE;
+    if (!gst_omx_video_dec_set_interlacing_parameters (self, &prealloc_vinfo))
+      GST_WARNING_OBJECT (self,
+          "Failed to set interlacing parameters during preallocation");
+  }
+#endif
 
   if (gst_omx_port_update_port_definition (self->dec_out_port,
           NULL) != OMX_ErrorNone)
@@ -3782,7 +3835,8 @@ gst_omx_video_dec_preallocate (GstOMXVideoDec * self)
     }
   }
 
-  if (gst_omx_component_set_state (self->dec,
+  if ((!prealloc_interlaced || self->prealloc_fps_n > 0)
+      && gst_omx_component_set_state (self->dec,
           OMX_StateExecuting) == OMX_ErrorNone
       && gst_omx_component_get_state (self->dec,
           GST_CLOCK_TIME_NONE) == OMX_StateExecuting
@@ -3804,9 +3858,16 @@ gst_omx_video_dec_preallocate (GstOMXVideoDec * self)
   }
 
   if (!self->fully_preallocated) {
-    GST_WARNING_OBJECT (self,
-        "Full output preallocation failed/unsupported; output will be set up "
-        "on the first frame (decoder still preallocated to Idle)");
+    if (prealloc_interlaced)
+      GST_INFO_OBJECT (self,
+          "Interlaced prealloc-caps: decoder buffers preallocated to Idle; "
+          "output negotiation + kmssink modeset intentionally deferred to the "
+          "first frame (the preroll modeset cannot select an interlaced display "
+          "mode without a real framerate)");
+    else
+      GST_WARNING_OBJECT (self,
+          "Full output preallocation failed/unsupported; output will be set up "
+          "on the first frame (decoder still preallocated to Idle)");
     /* Roll back: re-flush the ports and return to Idle so the normal
      * first-frame enable() path is valid. */
     gst_omx_port_set_flushing (self->dec_in_port, 5 * GST_SECOND, TRUE);
@@ -3943,6 +4004,22 @@ gst_omx_video_dec_prealloc_caps_match (GstOMXVideoDec * self,
     pstr = gst_structure_get_string (ps, "level");
     rstr = gst_structure_get_string (rs, "level");
     if (pstr && rstr && g_strcmp0 (pstr, rstr) != 0)
+      match = FALSE;
+  }
+
+  /* interlace-mode: progressive vs interlaced changes the whole buffer geometry
+   * (field vs frame) and the VCU sequence picture mode. Treat
+   * "alternate"/"interleaved" as interlaced and a missing field as progressive
+   * on both sides; a mismatch forces a recreate so we never retain frame-mode
+   * buffers for an interlaced stream (or vice versa). */
+  if (match) {
+    const gchar *pim = gst_structure_get_string (ps, "interlace-mode");
+    const gchar *rim = gst_structure_get_string (rs, "interlace-mode");
+    gboolean p_interlaced = (pim != NULL
+        && (g_str_equal (pim, "alternate") || g_str_equal (pim, "interleaved")));
+    gboolean r_interlaced = (rim != NULL
+        && (g_str_equal (rim, "alternate") || g_str_equal (rim, "interleaved")));
+    if (p_interlaced != r_interlaced)
       match = FALSE;
   }
 

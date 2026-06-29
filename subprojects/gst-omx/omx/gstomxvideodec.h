@@ -110,6 +110,10 @@ struct _GstOMXVideoDec
   gint32 output_position_y;
   gboolean disable_realtime;
   gchar *prealloc_caps;
+  /* Framerate parsed from prealloc-caps, used by set_output_state to stamp the
+   * preroll output caps (input_state NULL). */
+  gint prealloc_fps_n;
+  gint prealloc_fps_d;
   gboolean preallocated;
   /* TRUE when preallocate() also performed the output-side setup at preroll
    * (Executing + downstream negotiation + output buffers allocated), so the
