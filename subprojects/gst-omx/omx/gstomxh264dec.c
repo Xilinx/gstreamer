@@ -35,6 +35,8 @@ static gboolean gst_omx_h264_dec_is_format_change (GstOMXVideoDec * dec,
     GstOMXPort * port, GstVideoCodecState * state);
 static gboolean gst_omx_h264_dec_set_format (GstOMXVideoDec * dec,
     GstOMXPort * port, GstVideoCodecState * state);
+static gboolean gst_omx_h264_dec_set_prealloc_format (GstOMXVideoDec * dec,
+    GstOMXPort * port, GstCaps * caps);
 
 enum
 {
@@ -82,6 +84,8 @@ gst_omx_h264_dec_class_init (GstOMXH264DecClass * klass)
   videodec_class->is_format_change =
       GST_DEBUG_FUNCPTR (gst_omx_h264_dec_is_format_change);
   videodec_class->set_format = GST_DEBUG_FUNCPTR (gst_omx_h264_dec_set_format);
+  videodec_class->set_prealloc_format =
+      GST_DEBUG_FUNCPTR (gst_omx_h264_dec_set_prealloc_format);
 
   videodec_class->cdata.default_sink_template_caps = SINK_CAPS;
 
@@ -136,7 +140,7 @@ gst_omx_h264_dec_is_format_change (GstOMXVideoDec * dec,
 }
 
 static gboolean
-set_profile_and_level (GstOMXH264Dec * self, GstVideoCodecState * state)
+set_profile_and_level (GstOMXH264Dec * self, GstCaps * caps)
 {
   OMX_ERRORTYPE err;
   OMX_VIDEO_PARAM_PROFILELEVELTYPE param;
@@ -148,7 +152,7 @@ set_profile_and_level (GstOMXH264Dec * self, GstVideoCodecState * state)
 
   /* Pass profile and level to the decoder if we have both info from the
    * caps. */
-  s = gst_caps_get_structure (state->caps, 0);
+  s = gst_caps_get_structure (caps, 0);
   profile_string = gst_structure_get_string (s, "profile");
   if (!profile_string)
     return TRUE;
@@ -212,7 +216,7 @@ gst_omx_h264_dec_set_format (GstOMXVideoDec * dec, GstOMXPort * port,
     return FALSE;
 
   if (klass->cdata.hacks & GST_OMX_HACK_PASS_PROFILE_TO_DECODER) {
-    if (!set_profile_and_level (GST_OMX_H264_DEC (dec), state))
+    if (!set_profile_and_level (GST_OMX_H264_DEC (dec), state->caps))
       return FALSE;
   }
 
@@ -221,6 +225,30 @@ gst_omx_h264_dec_set_format (GstOMXVideoDec * dec, GstOMXPort * port,
   if (!g_strcmp0 (gst_structure_get_string (s, "alignment"), "nal")
       && gst_omx_port_set_subframe (dec->dec_in_port, TRUE)) {
     gst_video_decoder_set_subframe_mode (GST_VIDEO_DECODER (dec), TRUE);
+  }
+
+  return TRUE;
+}
+
+/* Configure the input port for early preallocation from a plain caps
+ * description, without a GstVideoCodecState. */
+static gboolean
+gst_omx_h264_dec_set_prealloc_format (GstOMXVideoDec * dec, GstOMXPort * port,
+    GstCaps * caps)
+{
+  GstOMXVideoDecClass *klass = GST_OMX_VIDEO_DEC_GET_CLASS (dec);
+  OMX_PARAM_PORTDEFINITIONTYPE port_def;
+  OMX_ERRORTYPE err;
+
+  gst_omx_port_get_port_definition (port, &port_def);
+  port_def.format.video.eCompressionFormat = OMX_VIDEO_CodingAVC;
+  err = gst_omx_port_update_port_definition (port, &port_def);
+  if (err != OMX_ErrorNone)
+    return FALSE;
+
+  if (klass->cdata.hacks & GST_OMX_HACK_PASS_PROFILE_TO_DECODER) {
+    if (!set_profile_and_level (GST_OMX_H264_DEC (dec), caps))
+      return FALSE;
   }
 
   return TRUE;

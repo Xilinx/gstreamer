@@ -109,6 +109,19 @@ struct _GstOMXVideoDec
   gint32 output_position_x;
   gint32 output_position_y;
   gboolean disable_realtime;
+  gchar *prealloc_caps;
+  gboolean preallocated;
+  /* TRUE when preallocate() also performed the output-side setup at preroll
+   * (Executing + downstream negotiation + output buffers allocated), so the
+   * first frame skips enable() entirely. Implies preallocated == TRUE. */
+  gboolean fully_preallocated;
+  /* Set in set_format() when a fully-preallocated component is RETAINED (the
+   * real caps matched the prealloc hint). The output was negotiated at preroll
+   * from the app thread; this asks the srcpad loop to run one streaming-thread
+   * gst_video_decoder_negotiate() before pushing the first frame so downstream
+   * negotiation is re-established (otherwise the first finish_frame would fail
+   * with not-negotiated). Consumed once by the loop. */
+  gboolean retain_negotiate_pending;
 #ifdef USE_OMX_TARGET_VERSAL
   gchar *device;
 #endif
@@ -125,8 +138,12 @@ struct _GstOMXVideoDecClass
   GstOMXClassData cdata;
 
   GMutex mutex;
-  gboolean (*is_format_change) (GstOMXVideoDec * self, GstOMXPort * port, GstVideoCodecState * state);
-  gboolean (*set_format)       (GstOMXVideoDec * self, GstOMXPort * port, GstVideoCodecState * state);
+    gboolean (*is_format_change) (GstOMXVideoDec * self, GstOMXPort * port,
+      GstVideoCodecState * state);
+    gboolean (*set_format) (GstOMXVideoDec * self, GstOMXPort * port,
+      GstVideoCodecState * state);
+    gboolean (*set_prealloc_format) (GstOMXVideoDec * self, GstOMXPort * port,
+      GstCaps * caps);
 };
 
 GType gst_omx_video_dec_get_type (void);

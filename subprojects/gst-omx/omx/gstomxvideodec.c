@@ -89,6 +89,12 @@ static OMX_ERRORTYPE gst_omx_video_dec_allocate_output_buffers (GstOMXVideoDec *
 static gboolean gst_omx_video_dec_deallocate_output_buffers (GstOMXVideoDec
     * self);
 
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+static gboolean gst_omx_video_dec_preallocate (GstOMXVideoDec * self);
+static gboolean gst_omx_video_dec_get_uint_field (const GstStructure * s,
+    const gchar * field, guint * val);
+#endif
+
 enum
 {
   PROP_0,
@@ -102,6 +108,7 @@ enum
 #ifdef USE_OMX_TARGET_VERSAL_GEN2
   PROP_STORAGE_MODE,
 #endif
+  PROP_PREALLOC_CAPS,
 };
 
 #define GST_OMX_VIDEO_DEC_INTERNAL_ENTROPY_BUFFERS_DEFAULT (5)
@@ -113,6 +120,7 @@ enum
 #define GST_OMX_VIDEO_DEC_DEVICE_DEFAULT                   ("/dev/allegroDecodeIP0")
 #define GST_OMX_VIDEO_DEC_DISABLE_REALTIME_DEFAULT         (FALSE)
 #define GST_OMX_VIDEO_DEC_STORAGE_MODE_DEFAULT             (0)
+#define GST_OMX_VIDEO_DEC_PREALLOC_CAPS_DEFAULT            (NULL)
 
 #if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 #define LATENCY_MODE_LOW_DEPRECATION_MESSAGE \
@@ -215,6 +223,10 @@ gst_omx_video_dec_set_property (GObject * object, guint prop_id,
     case PROP_DISABLE_REALTIME:
       self->disable_realtime = g_value_get_boolean (value);
       break;
+    case PROP_PREALLOC_CAPS:
+      g_free (self->prealloc_caps);
+      self->prealloc_caps = g_value_dup_string (value);
+      break;
 #ifdef USE_OMX_TARGET_VERSAL
     case PROP_DEVICE:
       self->device = g_strdup (g_value_get_string (value));
@@ -256,6 +268,9 @@ gst_omx_video_dec_get_property (GObject * object, guint prop_id,
       break;
     case PROP_DISABLE_REALTIME:
       g_value_set_boolean (value, self->disable_realtime);
+      break;
+    case PROP_PREALLOC_CAPS:
+      g_value_set_string (value, self->prealloc_caps);
       break;
 #ifdef USE_OMX_TARGET_VERSAL
     case PROP_DEVICE:
@@ -328,6 +343,18 @@ gst_omx_video_dec_class_init (GstOMXVideoDecClass * klass)
               "Position coordinates x and y in output video buffer",
               0, G_MAXINT, 0, G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS),
           G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+
+
+  g_object_class_install_property (gobject_class, PROP_PREALLOC_CAPS,
+      g_param_spec_string ("prealloc-caps", "Preallocation caps",
+          "Caps string describing the stream to preallocate the decoder buffers "
+          "for at preroll, before the real caps arrive (e.g. "
+          "'video/x-h264,width=1920,height=1080,framerate=60/1,profile=high,"
+          "level=(string)4.1,chroma-format=(string)4:2:0,bit-depth-luma=8,"
+          "bit-depth-chroma=8'). Must match the actual stream to avoid a "
+          "reconfiguration when decoding starts. Empty disables early preallocation.",
+          GST_OMX_VIDEO_DEC_PREALLOC_CAPS_DEFAULT,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_MUTABLE_READY));
 
 #ifdef USE_OMX_TARGET_ZYNQ_USCALE_PLUS
   g_object_class_install_property (gobject_class, PROP_DISABLE_REALTIME,
@@ -731,6 +758,9 @@ gst_omx_video_dec_close (GstVideoDecoder * decoder)
 #endif
 
   self->started = FALSE;
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+  self->fully_preallocated = FALSE;
+#endif
 
   GST_DEBUG_OBJECT (self, "Closed decoder");
 
@@ -744,6 +774,9 @@ gst_omx_video_dec_finalize (GObject * object)
 
   g_mutex_clear (&self->drain_lock);
   g_cond_clear (&self->drain_cond);
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+  g_free (self->prealloc_caps);
+#endif
 #ifdef USE_OMX_TARGET_VERSAL
   g_free (self->device);
 #endif
@@ -803,6 +836,18 @@ gst_omx_video_dec_change_state (GstElement * element, GstStateChange transition)
   switch (transition) {
     case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
       break;
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+    case GST_STATE_CHANGE_READY_TO_PAUSED:
+      /* Preallocate the decoder buffers now (at preroll), before the real caps
+       * arrive, if the user provided a 'prealloc-caps' description. On failure
+       * we fall back to the normal lazy allocation at the first frame. */
+      if (self->prealloc_caps && self->prealloc_caps[0] != '\0') {
+        if (!gst_omx_video_dec_preallocate (self))
+          GST_WARNING_OBJECT (self,
+              "Preallocation failed, falling back to lazy allocation");
+      }
+      break;
+#endif
     case GST_STATE_CHANGE_PAUSED_TO_READY:
       self->downstream_flow_ret = GST_FLOW_FLUSHING;
       self->started = FALSE;
@@ -2240,6 +2285,28 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
     goto eos;
   }
 
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+  /* Fully-preallocated retain path: the output port was negotiated and its
+   * buffers allocated at preroll from the app thread, so the normal first-frame
+   * streaming-thread negotiation (via reconfigure_output_port) never ran. Run a
+   * one-shot gst_video_decoder_negotiate() here, before the first finish_frame,
+   * to re-establish downstream negotiation in the streaming thread. This does
+   * NOT touch the already-allocated OMX output buffers (the port keeps its
+   * reconfigured state); it only re-pushes caps and re-runs decide_allocation
+   * so the first finish_frame does not fail with not-negotiated. */
+  if (self->retain_negotiate_pending
+      && acq_return == GST_OMX_ACQUIRE_BUFFER_OK) {
+    self->retain_negotiate_pending = FALSE;
+    GST_INFO_OBJECT (self,
+        "Retain path: streaming-thread negotiate before first output buffer");
+    if (!gst_video_decoder_negotiate (GST_VIDEO_DECODER (self))) {
+      if (buf)
+        gst_omx_port_release_buffer (port, buf);
+      goto caps_failed;
+    }
+  }
+#endif
+
   if (!gst_pad_has_current_caps (GST_VIDEO_DECODER_SRC_PAD (self)) ||
       acq_return == GST_OMX_ACQUIRE_BUFFER_RECONFIGURE) {
     gboolean disable_port = FALSE, reconfigure_port = FALSE;
@@ -2655,6 +2722,7 @@ gst_omx_video_dec_stop (GstVideoDecoder * decoder)
 
   self->downstream_flow_ret = GST_FLOW_FLUSHING;
   self->started = FALSE;
+  self->retain_negotiate_pending = FALSE;
 
   g_mutex_lock (&self->drain_lock);
   self->draining = FALSE;
@@ -3039,6 +3107,11 @@ gst_omx_video_dec_pick_input_allocation_mode (GstOMXVideoDec * self,
   if (!gst_omx_is_dynamic_allocation_supported ())
     return GST_OMX_BUFFER_ALLOCATION_ALLOCATE_BUFFER;
 
+  /* No input buffer available yet (e.g. preallocation at preroll): let the
+   * component allocate its own input buffers. */
+  if (!inbuf)
+    return GST_OMX_BUFFER_ALLOCATION_ALLOCATE_BUFFER;
+
   if (can_use_dynamic_buffer_mode (self, inbuf)) {
 #if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     if (self->split_input) {
@@ -3131,40 +3204,54 @@ gst_omx_video_dec_enable (GstOMXVideoDec * self, GstBuffer * input)
     if (!gst_omx_video_dec_negotiate (self))
       GST_LOG_OBJECT (self, "Negotiation failed, will get output format later");
 
-    if (!gst_omx_video_dec_ensure_nb_in_buffers (self))
-      return FALSE;
-
-    if (!(klass->cdata.hacks & GST_OMX_HACK_NO_DISABLE_OUTPORT)) {
-      /* Disable output port */
-      if (gst_omx_port_set_enabled (self->dec_out_port, FALSE) != OMX_ErrorNone)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+    /* If the decoder was preallocated at preroll it is already in the Idle
+     * state with its input buffers allocated and its output port disabled.
+     * Skip the Loaded->Idle setup and only perform the Idle->Executing
+     * transition below. */
+    if (self->preallocated
+        && gst_omx_component_get_state (self->dec, 0) == OMX_StateIdle) {
+      GST_INFO_OBJECT (self,
+          "First frame: reusing preallocated decoder (Idle->Executing only)");
+    } else
+#endif
+    {
+      if (!gst_omx_video_dec_ensure_nb_in_buffers (self))
         return FALSE;
 
-      if (gst_omx_port_wait_enabled (self->dec_out_port,
-              1 * GST_SECOND) != OMX_ErrorNone)
-        return FALSE;
+      if (!(klass->cdata.hacks & GST_OMX_HACK_NO_DISABLE_OUTPORT)) {
+        /* Disable output port */
+        if (gst_omx_port_set_enabled (self->dec_out_port,
+                FALSE) != OMX_ErrorNone)
+          return FALSE;
 
-      if (gst_omx_component_set_state (self->dec,
-              OMX_StateIdle) != OMX_ErrorNone)
-        return FALSE;
+        if (gst_omx_port_wait_enabled (self->dec_out_port,
+                1 * GST_SECOND) != OMX_ErrorNone)
+          return FALSE;
 
-      /* Need to allocate buffers to reach Idle state */
-      if (!gst_omx_video_dec_allocate_in_buffers (self))
-        return FALSE;
-    } else {
-      if (gst_omx_component_set_state (self->dec,
-              OMX_StateIdle) != OMX_ErrorNone)
-        return FALSE;
+        if (gst_omx_component_set_state (self->dec,
+                OMX_StateIdle) != OMX_ErrorNone)
+          return FALSE;
 
-      /* Need to allocate buffers to reach Idle state */
-      if (!gst_omx_video_dec_allocate_in_buffers (self))
-        return FALSE;
-      if (gst_omx_port_allocate_buffers (self->dec_out_port) != OMX_ErrorNone)
+        /* Need to allocate buffers to reach Idle state */
+        if (!gst_omx_video_dec_allocate_in_buffers (self))
+          return FALSE;
+      } else {
+        if (gst_omx_component_set_state (self->dec,
+                OMX_StateIdle) != OMX_ErrorNone)
+          return FALSE;
+
+        /* Need to allocate buffers to reach Idle state */
+        if (!gst_omx_video_dec_allocate_in_buffers (self))
+          return FALSE;
+        if (gst_omx_port_allocate_buffers (self->dec_out_port) != OMX_ErrorNone)
+          return FALSE;
+      }
+
+      if (gst_omx_component_get_state (self->dec,
+              GST_CLOCK_TIME_NONE) != OMX_StateIdle)
         return FALSE;
     }
-
-    if (gst_omx_component_get_state (self->dec,
-            GST_CLOCK_TIME_NONE) != OMX_StateIdle)
-      return FALSE;
 
     if (gst_omx_component_set_state (self->dec,
             OMX_StateExecuting) != OMX_ErrorNone)
@@ -3488,6 +3575,382 @@ zynq_seamless_input_transition (GstOMXVideoDec * self,
 }
 #endif
 
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+/* Preallocate the decoder's buffers at preroll, before the real caps arrive,
+ * using the 'prealloc-caps' property. This drives the OMX component to the Idle
+ * state (where the Allegro decoder preallocates its internal buffers) and on to
+ * Executing, so that no allocation is needed when the first frame arrives.
+ *
+ * The component is configured from a plain caps description (resolution, frame
+ * rate, color format, profile and level). If the property matches the real
+ * stream, gst_omx_video_dec_set_format() detects no format change and keeps the
+ * preallocated buffers; otherwise it falls back to the normal reconfiguration
+ * path. The output port is left disabled (and not negotiated) so that nothing
+ * is pushed downstream during preroll, exactly as in the normal first-frame
+ * path. */
+static gboolean
+gst_omx_video_dec_preallocate (GstOMXVideoDec * self)
+{
+  GstOMXVideoDecClass *klass = GST_OMX_VIDEO_DEC_GET_CLASS (self);
+  GstCaps *caps;
+  GstStructure *s;
+  OMX_PARAM_PORTDEFINITIONTYPE port_def;
+  gint width = 0, height = 0;
+  gint fps_n = 0, fps_d = 1;
+  gboolean ret = FALSE;
+  gint64 prealloc_start_time;
+
+  if (!self->prealloc_caps || self->prealloc_caps[0] == '\0')
+    return TRUE;                /* nothing to do */
+
+  if (!self->dec || !self->dec_in_port || !self->dec_out_port) {
+    GST_WARNING_OBJECT (self, "Can't preallocate: decoder not opened");
+    return FALSE;
+  }
+
+  if (gst_omx_component_get_state (self->dec, 0) != OMX_StateLoaded) {
+    GST_WARNING_OBJECT (self,
+        "Can't preallocate: component not in Loaded state");
+    return FALSE;
+  }
+
+  caps = gst_caps_from_string (self->prealloc_caps);
+  if (!caps || gst_caps_is_empty (caps)) {
+    GST_WARNING_OBJECT (self, "Invalid prealloc-caps '%s', ignoring",
+        self->prealloc_caps);
+    if (caps)
+      gst_caps_unref (caps);
+    return FALSE;
+  }
+
+  s = gst_caps_get_structure (caps, 0);
+  if (!gst_structure_get_int (s, "width", &width)
+      || !gst_structure_get_int (s, "height", &height)
+      || width <= 0 || height <= 0) {
+    GST_WARNING_OBJECT (self,
+        "prealloc-caps '%s' has no valid width/height, ignoring",
+        self->prealloc_caps);
+    gst_caps_unref (caps);
+    return FALSE;
+  }
+
+  prealloc_start_time = g_get_monotonic_time ();
+  GST_INFO_OBJECT (self,
+      "Preallocation START (READY->PAUSED preroll) for %" GST_PTR_FORMAT, caps);
+
+  gst_omx_port_get_port_definition (self->dec_in_port, &port_def);
+  port_def.format.video.nFrameWidth = width;
+  port_def.format.video.nFrameHeight = height;
+
+  if (gst_structure_get_fraction (s, "framerate", &fps_n, &fps_d) && fps_d > 0)
+    port_def.format.video.xFramerate =
+        gst_util_uint64_scale_int (1 << 16, fps_n, fps_d);
+  else
+    port_def.format.video.xFramerate = 0;
+
+  if (klass->cdata.hacks & GST_OMX_HACK_PASS_COLOR_FORMAT_TO_DECODER) {
+    const gchar *chroma_format;
+    guint bit_depth_luma = 0, bit_depth_chroma = 0;
+
+    chroma_format = gst_structure_get_string (s, "chroma-format");
+    if (chroma_format
+        && gst_omx_video_dec_get_uint_field (s, "bit-depth-luma",
+            &bit_depth_luma)
+        && gst_omx_video_dec_get_uint_field (s, "bit-depth-chroma",
+            &bit_depth_chroma)) {
+      OMX_COLOR_FORMATTYPE color_format =
+          get_color_format_from_chroma (chroma_format, bit_depth_luma,
+          bit_depth_chroma);
+      if (color_format != OMX_COLOR_FormatUnused)
+        port_def.format.video.eColorFormat = color_format;
+    }
+  }
+
+  if (gst_omx_port_update_port_definition (self->dec_in_port,
+          &port_def) != OMX_ErrorNone)
+    goto done;
+
+  /* Codec-specific configuration (compression format, profile and level). */
+  if (klass->set_prealloc_format
+      && !klass->set_prealloc_format (self, self->dec_in_port, caps)) {
+    GST_WARNING_OBJECT (self, "Subclass failed to set prealloc format");
+    goto done;
+  }
+
+  if (gst_omx_port_update_port_definition (self->dec_out_port,
+          NULL) != OMX_ErrorNone)
+    goto done;
+  if (gst_omx_port_update_port_definition (self->dec_in_port,
+          NULL) != OMX_ErrorNone)
+    goto done;
+
+  /* Drive the component from Loaded to Executing so that the Allegro decoder
+   * preallocates its buffers now (at the Loaded->Idle transition). */
+  self->input_allocation = GST_OMX_BUFFER_ALLOCATION_ALLOCATE_BUFFER;
+
+  if (!gst_omx_video_dec_ensure_nb_in_buffers (self))
+    goto done;
+
+  if (!(klass->cdata.hacks & GST_OMX_HACK_NO_DISABLE_OUTPORT)) {
+    /* Keep the output port disabled until the resolution is reported. */
+    if (gst_omx_port_set_enabled (self->dec_out_port, FALSE) != OMX_ErrorNone)
+      goto done;
+    if (gst_omx_port_wait_enabled (self->dec_out_port,
+            1 * GST_SECOND) != OMX_ErrorNone)
+      goto done;
+
+    if (gst_omx_component_set_state (self->dec, OMX_StateIdle) != OMX_ErrorNone)
+      goto done;
+    /* Need to allocate buffers to reach Idle state */
+    if (!gst_omx_video_dec_allocate_in_buffers (self))
+      goto done;
+  } else {
+    if (gst_omx_component_set_state (self->dec, OMX_StateIdle) != OMX_ErrorNone)
+      goto done;
+    if (!gst_omx_video_dec_allocate_in_buffers (self))
+      goto done;
+    if (gst_omx_port_allocate_buffers (self->dec_out_port) != OMX_ErrorNone)
+      goto done;
+  }
+
+  if (gst_omx_component_get_state (self->dec,
+          GST_CLOCK_TIME_NONE) != OMX_StateIdle)
+    goto done;
+
+  /* Stop at Idle. The Allegro decoder preallocates its buffers at the
+   * Loaded->Idle transition, which has now happened. We deliberately do NOT go
+   * to Executing nor unset port flushing here: the first frame goes through the
+   * normal handle_frame()->enable() path, which completes Idle->Executing and
+   * performs the downstream negotiation we skipped. Keeping the component
+   * quiescent at Idle also lets a caps mismatch be recovered cleanly in
+   * set_format() (by recreating the decoder) instead of corrupting a running
+   * pipeline. */
+  if (gst_omx_component_get_last_error (self->dec) != OMX_ErrorNone) {
+    GST_ERROR_OBJECT (self,
+        "Component in error state after preallocation: %s (0x%08x)",
+        gst_omx_component_get_last_error_string (self->dec),
+        gst_omx_component_get_last_error (self->dec));
+    goto done;
+  }
+
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+  /* Plan A "full preallocation": at this point the Allegro decoder already
+   * reports a valid output port definition (resolution + color format derived
+   * from prealloc-caps), so the entire output-side setup that normally happens
+   * lazily on the first frame can be done now, during preroll, overlapping the
+   * idle window before the first data arrives:
+   *   - drive the component Idle->Executing (VCU core bring-up),
+   *   - negotiate the output color format with downstream,
+   *   - push the output caps + allocate the output buffers (this triggers the
+   *     downstream kmssink DRM modeset), and
+   *   - unset port flushing so data can flow.
+   * handle_frame() gates enable() on the output port being flushing, so once
+   * flushing is cleared the first frame skips enable() entirely and is decoded
+   * directly. If any step fails we roll the component back to Idle and leave
+   * fully_preallocated FALSE, so the normal first-frame path still runs (no
+   * worse than the Idle-only preallocation). */
+  self->fully_preallocated = FALSE;
+
+  /* The first output negotiation below pushes a CAPS event on the src pad.
+   * gst_omx_video_dec_negotiate() itself calls gst_video_decoder_negotiate()
+   * which does gst_pad_set_caps() -> pushes CAPS. We run on the change_state
+   * thread during preroll, which can race ahead of the upstream STREAM_START
+   * being forwarded to the src pad; pushing caps before stream-start triggers a
+   * "sticky event misordering, got 'caps' before 'stream-start'" warning and,
+   * crucially, the CAPS event is dropped and never reaches downstream. Because
+   * the caps then equal the src pad's current caps, the later reconfigure /
+   * re-negotiate short-circuits gst_pad_set_caps() and never re-pushes them, so
+   * kmssink ends up with NO caps and rejects the first buffer with
+   * not-negotiated. Emit a STREAM_START ourselves FIRST (before negotiating) if
+   * none has reached the src pad yet, so the CAPS event is correctly ordered
+   * and forwarded to kmssink during preroll. When the real upstream
+   * STREAM_START arrives later the base class only drains and forwards it (no
+   * flush/reset), so the preallocated component state is unaffected and the
+   * caps are unchanged. */
+  {
+    GstPad *srcpad = GST_VIDEO_DECODER_SRC_PAD (self);
+    GstEvent *stream_start =
+        gst_pad_get_sticky_event (srcpad, GST_EVENT_STREAM_START, 0);
+
+    if (stream_start) {
+      gst_event_unref (stream_start);
+    } else {
+      gchar *stream_id =
+          gst_pad_create_stream_id (srcpad, GST_ELEMENT_CAST (self), NULL);
+      gst_pad_push_event (srcpad, gst_event_new_stream_start (stream_id));
+      g_free (stream_id);
+    }
+  }
+
+  if (gst_omx_component_set_state (self->dec,
+          OMX_StateExecuting) == OMX_ErrorNone
+      && gst_omx_component_get_state (self->dec,
+          GST_CLOCK_TIME_NONE) == OMX_StateExecuting
+      && gst_omx_video_dec_negotiate (self)) {
+    /* Unset flushing BEFORE reconfiguring the output port: the port population
+     * done at the end of reconfigure_output_port() (OMX_FillThisBuffer on each
+     * output buffer) is rejected with "Incorrect state operation" while the
+     * port is still flushing. In the normal first-frame path enable() likewise
+     * clears flushing before the loop runs reconfigure_output_port(). */
+    gst_omx_port_set_flushing (self->dec_in_port, 5 * GST_SECOND, FALSE);
+    gst_omx_port_set_flushing (self->dec_out_port, 5 * GST_SECOND, FALSE);
+
+    if (gst_omx_video_dec_reconfigure_output_port (self) == OMX_ErrorNone) {
+      self->fully_preallocated = TRUE;
+      GST_INFO_OBJECT (self,
+          "Full preallocation DONE: output negotiated + buffers allocated, "
+          "component Executing (first-frame output setup moved to preroll)");
+    }
+  }
+
+  if (!self->fully_preallocated) {
+    GST_WARNING_OBJECT (self,
+        "Full output preallocation failed/unsupported; output will be set up "
+        "on the first frame (decoder still preallocated to Idle)");
+    /* Roll back: re-flush the ports and return to Idle so the normal
+     * first-frame enable() path is valid. */
+    gst_omx_port_set_flushing (self->dec_in_port, 5 * GST_SECOND, TRUE);
+    gst_omx_port_set_flushing (self->dec_out_port, 5 * GST_SECOND, TRUE);
+    if (gst_omx_component_get_state (self->dec, 0) == OMX_StateExecuting) {
+      gst_omx_component_set_state (self->dec, OMX_StateIdle);
+      gst_omx_component_get_state (self->dec, GST_CLOCK_TIME_NONE);
+    }
+  }
+#endif
+
+  self->preallocated = TRUE;
+  ret = TRUE;
+  GST_INFO_OBJECT (self,
+      "Preallocation DONE: decoder buffers allocated (Idle), took %"
+      G_GINT64_FORMAT " us (this latency is now moved off the first frame)",
+      g_get_monotonic_time () - prealloc_start_time);
+
+done:
+  gst_caps_unref (caps);
+  return ret;
+}
+
+/* Read an unsigned integer field that may have been stored as either uint or
+ * int (caps coming from different sources use different types, e.g. h264parse
+ * emits bit-depth as uint while a hand-written prealloc-caps string parses as
+ * int). */
+static gboolean
+gst_omx_video_dec_get_uint_field (const GstStructure * s, const gchar * field,
+    guint * val)
+{
+  gint iv;
+
+  if (gst_structure_get_uint (s, field, val))
+    return TRUE;
+  if (gst_structure_get_int (s, field, &iv) && iv >= 0) {
+    *val = (guint) iv;
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/* Decide whether the real stream caps are compatible with the prealloc-caps
+ * the decoder was preallocated for. We can't rely on the generic
+ * is_format_change() check in that case because, while the component sits at
+ * Idle (before any data is parsed), the OMX input port does not report back the
+ * resolution we configured, so that check always sees a spurious change. We
+ * therefore compare the buffer-geometry-determining fields (resolution, chroma,
+ * bit depth, profile and level) directly against the stored prealloc-caps.
+ * Fields absent from the prealloc-caps are not penalised so a minimal hint
+ * (e.g. only width/height) still matches a stream with the default format. */
+static gboolean
+gst_omx_video_dec_prealloc_caps_match (GstOMXVideoDec * self,
+    GstVideoCodecState * state)
+{
+  GstCaps *pcaps;
+  GstStructure *ps, *rs;
+  gboolean match = TRUE;
+  gint pw, ph;
+  const gchar *pstr, *rstr;
+  guint pu, ru;
+
+  if (!self->prealloc_caps || self->prealloc_caps[0] == '\0')
+    return FALSE;
+
+  pcaps = gst_caps_from_string (self->prealloc_caps);
+  if (!pcaps)
+    return FALSE;
+
+  ps = gst_caps_get_structure (pcaps, 0);
+  rs = gst_caps_get_structure (state->caps, 0);
+
+  /* Resolution must match the output BUFFER geometry, not the exact display
+   * size. The VCU rounds width/height up when sizing its buffers (the OMX-IL
+   * module does RoundUp(_, 16)), so a hint given as either the display size
+   * (e.g. 1080) or the VCU-aligned size (e.g. 1088) describes the very same
+   * preallocated buffers. Compare the dimensions rounded up to that alignment
+   * so 1080 and 1088 are treated as equal; genuinely different resolutions
+   * still mismatch. */
+#define GST_OMX_PREALLOC_DIM_ALIGN 16
+#define GST_OMX_PREALLOC_ALIGN_UP(v) \
+  (((v) + (GST_OMX_PREALLOC_DIM_ALIGN - 1)) & ~(GST_OMX_PREALLOC_DIM_ALIGN - 1))
+  if (!gst_structure_get_int (ps, "width", &pw)
+      || GST_OMX_PREALLOC_ALIGN_UP (pw)
+      != GST_OMX_PREALLOC_ALIGN_UP (GST_VIDEO_INFO_WIDTH (&state->info)))
+    match = FALSE;
+  if (match && (!gst_structure_get_int (ps, "height", &ph)
+          || GST_OMX_PREALLOC_ALIGN_UP (ph)
+          != GST_OMX_PREALLOC_ALIGN_UP (GST_VIDEO_INFO_HEIGHT (&state->info))))
+    match = FALSE;
+#undef GST_OMX_PREALLOC_ALIGN_UP
+#undef GST_OMX_PREALLOC_DIM_ALIGN
+
+  /* chroma-format determines the decoded pixel format. When the prealloc-caps
+   * omits it, preallocation used the decoder default (4:2:0), so compare the
+   * real stream against that default instead of skipping the check. Otherwise a
+   * minimal width/height-only hint would "match" a non-4:2:0 stream and retain
+   * wrongly-formatted buffers (which fail to negotiate downstream -> blank). */
+  if (match) {
+    pstr = gst_structure_get_string (ps, "chroma-format");
+    if (!pstr)
+      pstr = "4:2:0";
+    rstr = gst_structure_get_string (rs, "chroma-format");
+    if (rstr && g_strcmp0 (pstr, rstr) != 0)
+      match = FALSE;
+  }
+
+  /* bit depth: same reasoning. Default to 8 when the prealloc-caps omits it,
+   * matching the decoder's default output format. */
+  if (match) {
+    if (!gst_omx_video_dec_get_uint_field (ps, "bit-depth-luma", &pu))
+      pu = 8;
+    if (gst_omx_video_dec_get_uint_field (rs, "bit-depth-luma", &ru)
+        && pu != ru)
+      match = FALSE;
+  }
+  if (match) {
+    if (!gst_omx_video_dec_get_uint_field (ps, "bit-depth-chroma", &pu))
+      pu = 8;
+    if (gst_omx_video_dec_get_uint_field (rs, "bit-depth-chroma", &ru)
+        && pu != ru)
+      match = FALSE;
+  }
+
+  /* profile / level: affect the decoder configuration and DPB sizing. Compare
+   * only when both sides provide them. */
+  if (match) {
+    pstr = gst_structure_get_string (ps, "profile");
+    rstr = gst_structure_get_string (rs, "profile");
+    if (pstr && rstr && g_strcmp0 (pstr, rstr) != 0)
+      match = FALSE;
+  }
+  if (match) {
+    pstr = gst_structure_get_string (ps, "level");
+    rstr = gst_structure_get_string (rs, "level");
+    if (pstr && rstr && g_strcmp0 (pstr, rstr) != 0)
+      match = FALSE;
+  }
+
+  gst_caps_unref (pcaps);
+  return match;
+}
+#endif
+
 static gboolean
 gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
     GstVideoCodecState * state)
@@ -3539,6 +4002,19 @@ gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
   needs_disable =
       gst_omx_component_get_state (self->dec,
       GST_CLOCK_TIME_NONE) != OMX_StateLoaded;
+
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+  /* When the decoder was preallocated at preroll it sits at Idle with no data
+   * parsed yet, so the OMX input port does not echo back the resolution we
+   * configured and the generic is_format_change detection above is unreliable.
+   * Decide retain-vs-recreate from the stored prealloc-caps instead: a match
+   * keeps the preallocated buffers (is_format_change = FALSE -> retain path
+   * below), a mismatch forces a full recreate (is_format_change = TRUE ->
+   * recreate path below). */
+  if (self->preallocated)
+    is_format_change = !gst_omx_video_dec_prealloc_caps_match (self, state);
+#endif
+
   /* If the component is not in Loaded state and a real format change happens
    * we have to disable the port and re-allocate all buffers. If no real
    * format change happened we can just exit here.
@@ -3546,6 +4022,18 @@ gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
   if (needs_disable && !is_format_change) {
     GST_DEBUG_OBJECT (self,
         "Already running and caps did not change the format");
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+    if (self->preallocated)
+      GST_INFO_OBJECT (self,
+          "prealloc-caps matched real caps: preallocated buffers RETAINED "
+          "(no reallocation on first caps)");
+    /* The output was negotiated at preroll from the app thread. Ask the srcpad
+     * loop to run one streaming-thread negotiate before pushing the first frame
+     * so downstream negotiation is re-established (otherwise the very first
+     * finish_frame fails with not-negotiated). */
+    if (self->fully_preallocated)
+      self->retain_negotiate_pending = TRUE;
+#endif
     if (self->input_state)
       gst_video_codec_state_unref (self->input_state);
     self->input_state = gst_video_codec_state_ref (state);
@@ -3553,12 +4041,38 @@ gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
   }
 
   if (needs_disable && is_format_change) {
-    if (!gst_omx_video_dec_disable (self))
-      return FALSE;
-
-    if (!self->disabled) {
-      /* The local port_def is now obsolete so get it again. */
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+    if (self->preallocated) {
+      /* The component was preallocated at preroll: the Allegro decoder has
+       * already been created with the (wrong) guessed parameters at the
+       * Loaded->Idle transition, and a simple port disable cannot reconfigure
+       * it. Fully recreate the component (back to a pristine Loaded state, with
+       * the Zynq/Versal properties reapplied) so it is configured from the real
+       * caps. This costs the preallocation we did, but keeps decoding correct. */
+      GST_WARNING_OBJECT (self,
+          "prealloc-caps did NOT match real caps: recreating decoder from real "
+          "caps (no latency benefit this run)");
+      self->preallocated = FALSE;
+      self->fully_preallocated = FALSE;
+      gst_omx_port_set_flushing (self->dec_in_port, 5 * GST_SECOND, TRUE);
+      gst_omx_port_set_flushing (self->dec_out_port, 5 * GST_SECOND, TRUE);
+      if (!gst_omx_video_dec_close (GST_VIDEO_DECODER (self)))
+        return FALSE;
+      if (!gst_omx_video_dec_open (GST_VIDEO_DECODER (self)))
+        return FALSE;
+      /* Back to a pristine Loaded component: configure it as a fresh start. */
+      needs_disable = FALSE;
       gst_omx_port_get_port_definition (self->dec_in_port, &port_def);
+    } else
+#endif
+    {
+      if (!gst_omx_video_dec_disable (self))
+        return FALSE;
+
+      if (!self->disabled) {
+        /* The local port_def is now obsolete so get it again. */
+        gst_omx_port_get_port_definition (self->dec_in_port, &port_def);
+      }
     }
   }
 
@@ -3656,6 +4170,18 @@ gst_omx_video_dec_flush (GstVideoDecoder * decoder)
 
   if (gst_omx_component_get_state (self->dec, 0) == OMX_StateLoaded)
     return TRUE;
+
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+  /* If the decoder was preallocated at preroll it is sitting at Idle with its
+   * output port still disabled (the real resolution is not known yet) and no
+   * data in flight. There is nothing to flush; doing so would prematurely drive
+   * the component to Executing and try to populate the disabled output port
+   * (harmless 0x80001018 error). Skip until the first frame has been handled. */
+  if (self->preallocated && !self->started) {
+    GST_DEBUG_OBJECT (self, "Preallocated and not started yet, nothing to flush");
+    return TRUE;
+  }
+#endif
 
   /* 0) Pause the components */
   if (gst_omx_component_get_state (self->dec, 0) == OMX_StateExecuting) {
@@ -3778,6 +4304,13 @@ gst_omx_video_dec_handle_frame (GstVideoDecoder * decoder,
       if (!gst_omx_video_dec_enable (self, frame->input_buffer))
         goto enable_error;
     }
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+    else if (self->fully_preallocated) {
+      GST_INFO_OBJECT (self,
+          "First frame: fully preallocated at preroll, skipping enable() "
+          "(output already negotiated + buffers allocated, decoder Executing)");
+    }
+#endif
 
     GST_DEBUG_OBJECT (self, "Starting task");
     gst_pad_start_task (GST_VIDEO_DECODER_SRC_PAD (self),
