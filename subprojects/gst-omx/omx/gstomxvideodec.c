@@ -3854,6 +3854,13 @@ gst_omx_video_dec_preallocate (GstOMXVideoDec * self)
       GST_INFO_OBJECT (self,
           "Full preallocation DONE: output negotiated + buffers allocated, "
           "component Executing (first-frame output setup moved to preroll)");
+      /* The component is Executing and configured with the real stream
+       * geometry, so its reported latency is now valid. Publish it here so the
+       * pipeline latency query at the end of preroll sees the real value
+       * instead of the GstVideoDecoder default of 0 (the normal first-frame
+       * set_latency() at the end of set_format() is skipped on the prealloc
+       * retain path). */
+      gst_omx_video_dec_set_latency (self);
     }
   }
 
@@ -4110,6 +4117,8 @@ gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
      * finish_frame fails with not-negotiated). */
     if (self->fully_preallocated)
       self->retain_negotiate_pending = TRUE;
+    if (self->preallocated)
+      gst_omx_video_dec_set_latency (self);
 #endif
     if (self->input_state)
       gst_video_codec_state_unref (self->input_state);
