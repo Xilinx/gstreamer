@@ -89,7 +89,7 @@ static OMX_ERRORTYPE gst_omx_video_dec_allocate_output_buffers (GstOMXVideoDec *
 static gboolean gst_omx_video_dec_deallocate_output_buffers (GstOMXVideoDec
     * self);
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 static gboolean gst_omx_video_dec_preallocate (GstOMXVideoDec * self);
 static gboolean gst_omx_video_dec_get_uint_field (const GstStructure * s,
     const gchar * field, guint * val);
@@ -758,7 +758,7 @@ gst_omx_video_dec_close (GstVideoDecoder * decoder)
 #endif
 
   self->started = FALSE;
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   self->fully_preallocated = FALSE;
 #endif
 
@@ -774,7 +774,7 @@ gst_omx_video_dec_finalize (GObject * object)
 
   g_mutex_clear (&self->drain_lock);
   g_cond_clear (&self->drain_cond);
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   g_free (self->prealloc_caps);
 #endif
 #ifdef USE_OMX_TARGET_VERSAL
@@ -836,7 +836,7 @@ gst_omx_video_dec_change_state (GstElement * element, GstStateChange transition)
   switch (transition) {
     case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
       break;
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     case GST_STATE_CHANGE_READY_TO_PAUSED:
       /* Preallocate the decoder buffers now (at preroll), before the real caps
        * arrive, if the user provided a 'prealloc-caps' description. On failure
@@ -2298,7 +2298,7 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
     goto eos;
   }
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   /* Fully-preallocated retain path: the output port was negotiated and its
    * buffers allocated at preroll from the app thread, so the normal first-frame
    * streaming-thread negotiation (via reconfigure_output_port) never ran. Run a
@@ -3217,7 +3217,7 @@ gst_omx_video_dec_enable (GstOMXVideoDec * self, GstBuffer * input)
     if (!gst_omx_video_dec_negotiate (self))
       GST_LOG_OBJECT (self, "Negotiation failed, will get output format later");
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     /* If the decoder was preallocated at preroll it is already in the Idle
      * state with its input buffers allocated and its output port disabled.
      * Skip the Loaded->Idle setup and only perform the Idle->Executing
@@ -3588,7 +3588,7 @@ zynq_seamless_input_transition (GstOMXVideoDec * self,
 }
 #endif
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
 /* Preallocate the decoder's buffers at preroll, before the real caps arrive,
  * using the 'prealloc-caps' property. This drives the OMX component to the Idle
  * state (where the Allegro decoder preallocates its internal buffers) and on to
@@ -3695,9 +3695,16 @@ gst_omx_video_dec_preallocate (GstOMXVideoDec * self)
             &bit_depth_luma)
         && gst_omx_video_dec_get_uint_field (s, "bit-depth-chroma",
             &bit_depth_chroma)) {
-      OMX_COLOR_FORMATTYPE color_format =
+      OMX_COLOR_FORMATTYPE color_format;
+#ifdef USE_OMX_TARGET_VERSAL_GEN2
+      color_format =
+          get_color_format_from_chroma (chroma_format, bit_depth_luma,
+          bit_depth_chroma, self->storage_mode);
+#else
+      color_format =
           get_color_format_from_chroma (chroma_format, bit_depth_luma,
           bit_depth_chroma);
+#endif
       if (color_format != OMX_COLOR_FormatUnused)
         port_def.format.video.eColorFormat = color_format;
     }
@@ -3786,7 +3793,7 @@ gst_omx_video_dec_preallocate (GstOMXVideoDec * self)
     goto done;
   }
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   /* Plan A "full preallocation": at this point the Allegro decoder already
    * reports a valid output port definition (resolution + color format derived
    * from prealloc-caps), so the entire output-side setup that normally happens
@@ -4087,7 +4094,7 @@ gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
       gst_omx_component_get_state (self->dec,
       GST_CLOCK_TIME_NONE) != OMX_StateLoaded;
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   /* When the decoder was preallocated at preroll it sits at Idle with no data
    * parsed yet, so the OMX input port does not echo back the resolution we
    * configured and the generic is_format_change detection above is unreliable.
@@ -4106,7 +4113,7 @@ gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
   if (needs_disable && !is_format_change) {
     GST_DEBUG_OBJECT (self,
         "Already running and caps did not change the format");
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     if (self->preallocated)
       GST_INFO_OBJECT (self,
           "prealloc-caps matched real caps: preallocated buffers RETAINED "
@@ -4127,7 +4134,7 @@ gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
   }
 
   if (needs_disable && is_format_change) {
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     if (self->preallocated) {
       /* The component was preallocated at preroll: the Allegro decoder has
        * already been created with the (wrong) guessed parameters at the
@@ -4257,7 +4264,7 @@ gst_omx_video_dec_flush (GstVideoDecoder * decoder)
   if (gst_omx_component_get_state (self->dec, 0) == OMX_StateLoaded)
     return TRUE;
 
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
   /* If the decoder was preallocated at preroll it is sitting at Idle with its
    * output port still disabled (the real resolution is not known yet) and no
    * data in flight. There is nothing to flush; doing so would prematurely drive
@@ -4390,7 +4397,7 @@ gst_omx_video_dec_handle_frame (GstVideoDecoder * decoder,
       if (!gst_omx_video_dec_enable (self, frame->input_buffer))
         goto enable_error;
     }
-#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL)
+#if defined(USE_OMX_TARGET_ZYNQ_USCALE_PLUS) || defined(USE_OMX_TARGET_VERSAL) || defined(USE_OMX_TARGET_VERSAL_GEN2)
     else if (self->fully_preallocated) {
       GST_INFO_OBJECT (self,
           "First frame: fully preallocated at preroll, skipping enable() "
